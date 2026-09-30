@@ -12,6 +12,8 @@
  *   - مطب با ردیفِ `services`ِ جامانده همچنان مطب است، بی‌خدمت
  *   - کلیدِ ناشناخته/تکراری/JSONِ خراب هرگز به بیرون نمی‌رسد
  *   - کلاینت با mockِ قدیمی (فقط `vertical`) همان پروفایلِ سرور را می‌سازد
+ *   - ردیفِ غایبِ ماژول به پلانِ همین نصب ساخته می‌شود و ترتیبِ «ساختن» و «عوض‌کردنِ نوع»
+ *     حالتِ نهایی را عوض نمی‌کند (global-07: «چینشِ نیروها» در لانچرِ مطب)
  *  نباید بیفتد:
  *   - `ionm`/`implant` بی‌ردیف ← شرکتی با همان یک خدمت (نصب‌های فعلی)
  *   - بستهٔ دوخدمته به ترتیبِ ثابت، و نورومانیتورینگ خدمتِ اصلی (تصمیمِ واژگانِ مالک)
@@ -104,6 +106,40 @@ ok(ch.some((c) => c.key === 'dispatch' && c.action === 'enable') && ch.some((c) 
 ch = S.featureChanges(P('company', ['ionm']), P('clinic', []), rows(ionm).concat([{ key: 'legacy_x', minLevel: 3, enabled: true }]));
 ok(!ch.some((c) => c.key === 'legacy_x'), 'ماژولی که در هیچ پلانی نیست دست نمی‌خورد');
 ok(['dispatch', 'tech', 'inventory', 'transport'].every((k) => ch.some((c) => c.key === k && c.action === 'disable')), 'شرکت ← مطب: ماژول‌های شرکتی خاموش');
+
+console.log('\n۸) ساختِ ردیف‌های غایب به پروفایلِ نصب — ترتیب مهم نیست (global-07)');
+/* رجیستری: هر کلیدِ هر پلان (سطحِ سراسریِ عمداً متفاوت، تا اگر ساختن سطحِ پلان را نادیده بگیرد دیده شود). */
+const REG = [...new Set([...Object.keys(both), ...Object.keys(clinic)])].map((key) => ({ key, defaultLevel: 6 }));
+const seedInto = (m, prof) => { for (const r of S.featureSeedRows(prof, REG)) if (!m.has(r.key)) m.set(r.key, { ...r }); };
+/* آینهٔ `setProfile`: اول ردیف‌های غایب به پروفایلِ قبلی، بعد گذار روی ردیف‌های واقعی. */
+const switchTo = (m, before, after) => {
+  seedInto(m, before);
+  for (const c of S.featureChanges(before, after, [...m.values()])) {
+    const r = m.get(c.key);
+    if (c.action === 'create') m.set(c.key, { key: c.key, minLevel: c.minLevel, enabled: true });
+    else if (c.action === 'enable') Object.assign(r, { minLevel: c.minLevel, enabled: true });
+    else if (c.action === 'relevel') r.minLevel = c.minLevel;
+    else r.enabled = false;
+  }
+};
+/* حالتِ مؤثر: روشن/خاموش، و سطح فقط برای ماژولِ روشن (سطحِ ماژولِ خاموش جایی خوانده نمی‌شود و
+   عمداً حفظ می‌شود تا برگشت همان تنظیم را پس بدهد). */
+const snap = (m) => JSON.stringify([...m.values()].sort((x, y) => x.key.localeCompare(y.key))
+  .map((r) => (r.enabled ? `${r.key}:${r.minLevel}` : `${r.key}:off`)));
+const CO = P('company', ['ionm']), CL = P('clinic', []), BOTH = P('company', ['ionm', 'implant']);
+const openFirst = new Map(); seedInto(openFirst, CO); switchTo(openFirst, CO, CL);
+const switchFirst = new Map(); switchTo(switchFirst, CO, CL); seedInto(switchFirst, CL);
+const freshClinic = new Map(); seedInto(freshClinic, CL);
+ok(snap(openFirst) === snap(switchFirst), '**ترتیب مهم نیست**: «اول لانچر بعد مطب» و «اول مطب بعد لانچر» یک حالت می‌دهند');
+ok(snap(switchFirst) === snap(freshClinic), '… و همان حالتِ نصبِ تازهٔ مطب است');
+ok(['dispatch', 'tech', 'inventory', 'transport'].every((k) => switchFirst.get(k)?.enabled === false),
+  '**ماژول‌های شرکتی در مطب خاموش‌اند** — حتی وقتی ردیفشان پیش از تغییرِ نوع وجود نداشت');
+ok(freshClinic.get('waitlist')?.enabled === true && freshClinic.get('dashboard')?.minLevel === 4, 'ماژولِ مطب روشن و با سطحِ پلانِ مطب (نه سطحِ سراسری)');
+const freshCo = new Map(); seedInto(freshCo, CO);
+ok(freshCo.get('waitlist')?.enabled === false && freshCo.get('tech')?.enabled === true, 'شرکتِ تازه: «فهرستِ انتظارِ عمل» (مطب) خاموش، پنلِ کارشناسی روشن');
+const toBoth = new Map(); seedInto(toBoth, CL); switchTo(toBoth, CL, BOTH);
+const freshBoth = new Map(); seedInto(freshBoth, BOTH);
+ok(snap(toBoth) === snap(freshBoth), 'مطب ← شرکتِ دوخدمته همان حالتِ نصبِ تازهٔ دوخدمته', `${snap(toBoth).slice(0, 120)} ≠ ${snap(freshBoth).slice(0, 120)}`);
 
 console.log(`\nسبز: ${pass}  قرمز: ${fails.length}`);
 if (fails.length) process.exit(1);

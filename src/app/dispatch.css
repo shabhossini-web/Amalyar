@@ -59,7 +59,7 @@
 .dp-time { min-width: 54px; text-align: center; font-size: 14px; font-weight: 700; }
 .dp-title { flex: 1; min-width: 0; }
 .dp-title b { display: block; font-size: 13.5px; }
-.dp-title b i { font-style: normal; font-size: 10.5px; color: #c4b5fd; margin-inline-start: 6px; }
+.dp-title b i { font-style: normal; font-size: 10.5px; color: var(--brand-text); margin-inline-start: 6px; }
 .dp-title small { display: block; font-size: 11px; color: rgba(var(--veil-rgb), .55); line-height: 1.9; }
 
 .dp-cargo, .dp-people { display: flex; flex-wrap: wrap; gap: 6px; margin-block-start: 10px; }
@@ -69,10 +69,10 @@
   font-size: 11px; background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .1);
 }
 .dp-chip em { font-style: normal; font-size: 9.5px; color: rgba(var(--veil-rgb), .4); }
-.dp-chip.cargo { color: #86efac; border-color: rgba(52, 211, 153, .28); background: rgba(52, 211, 153, .08); }
-.dp-chip.tech { color: #a5b4fc; border-color: rgba(129, 140, 248, .3); }
-.dp-chip.driver { color: #fcd34d; border-color: rgba(245, 158, 11, .3); }
-.dp-chip.courier { color: #67e8f9; border-color: rgba(34, 211, 238, .3); }
+.dp-chip.cargo { color: var(--green-text); border-color: rgba(52, 211, 153, .28); background: rgba(52, 211, 153, .08); }
+.dp-chip.tech { color: var(--brand-text); border-color: rgba(129, 140, 248, .3); }
+.dp-chip.driver { color: var(--amber-text); border-color: rgba(245, 158, 11, .3); }
+.dp-chip.courier { color: var(--cyan); border-color: rgba(34, 211, 238, .3); }
 .dp-chip button {
   font: inherit; font-size: 11px; line-height: 1; cursor: pointer; padding: 2px 3px;
   color: inherit; background: none; border: none; opacity: .7;
@@ -97,10 +97,10 @@
 .dp-sheet > header button { font: inherit; cursor: pointer; color: var(--text1); background: none; border: none; font-size: 15px; }
 .dp-brief {
   flex: 1; overflow: auto; margin: 0; padding: 16px; font: inherit; font-size: 12.5px; line-height: 2.1;
-  white-space: pre-wrap; word-break: break-word; color: #e7e2ff;
+  white-space: pre-wrap; word-break: break-word; color: var(--text1);
 }
 .dp-sheet > footer { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-block-start: 1px solid rgba(var(--veil-rgb), .07); }
-.dp-privacy { flex: 1; font-size: 10.5px; color: #86efac; line-height: 1.8; }
+.dp-privacy { flex: 1; font-size: 10.5px; color: var(--green-text); line-height: 1.8; }
 .dp-copy {
   display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: 12px; cursor: pointer;
   padding: 9px 14px; border-radius: 11px; margin-inline-start: auto;
@@ -121,7 +121,7 @@
 
 .dp-chip .cat {
   padding: 1px 6px; border-radius: 6px; font-size: 9px; font-style: normal;
-  color: #d1fae5; background: rgba(52, 211, 153, .18);
+  color: var(--green-text); background: rgba(52, 211, 153, .18);
 }
 .dp-dest { font-size: 10.5px; color: rgba(var(--veil-rgb), .5); align-self: center; }
 .dp-none { font-size: 11px; color: var(--amber-text); }
@@ -139,11 +139,20 @@
 .dp-timebox .tp-btn { width: 30px; padding: 0; border-radius: 9px; }
 /* خطا در این ردیفِ باریک جا نمی‌شود؛ همان پیام از راهِ toast می‌آید. */
 .dp-timebox .tp-err { display: none; }
+/* ⚠️ رنگِ متن از توکن (`--brand-text`)، نه `#c4b5fd`ِ خام: آن بنفشِ روشن روی پُرِ بنفشِ کم‌رنگ
+   در تمِ روشن تقریباً نامرئی بود (کنتراستِ ۱٫۱ تا ۱٫۴ — بازبینیِ UX، company-02). */
 .dp-brief-btn {
-  font: inherit; font-size: 11px; cursor: pointer; padding: 6px 11px; border-radius: 9px;
-  color: #c4b5fd; background: rgba(var(--brand-rgb), .14); border: 1px solid rgba(var(--brand-rgb), .34);
+  display: inline-flex; align-items: center; gap: 6px; min-height: 36px;
+  font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer; padding: 7px 12px; border-radius: 10px;
+  color: var(--brand-text); background: rgba(var(--brand-rgb), .12); border: 1px solid rgba(var(--brand-rgb), .4);
+  transition: background .2s, color .2s;
 }
-.dp-nopool a { color: #fcd34d; }
+.dp-brief-btn:hover:not(:disabled) { color: var(--text1); background: rgba(var(--brand-rgb), .2); }
+.dp-brief-btn:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+.dp-brief-btn:disabled { opacity: .5; cursor: default; }
+@media (pointer: coarse) { .dp-brief-btn { min-height: 44px; } }
+@media (prefers-reduced-motion: reduce) { .dp-brief-btn { transition: none; } }
+.dp-nopool a { color: var(--amber-text); text-decoration: underline; text-underline-offset: 3px; }
 .dp-nopool {
   max-width: 940px; margin: 12px auto 0; padding: 14px 16px; border-radius: 14px;
   font-size: 12px; color: var(--amber-text); line-height: 2;
@@ -168,7 +177,7 @@
   font-style: normal; font-size: 10px; padding: 1px 7px; border-radius: 99px;
   color: var(--ink-bright); background: #fbbf24; font-weight: 700;
 }
-.dp-none.ok { color: #86efac; }
+.dp-none.ok { color: var(--green-text); }
 
 /* ── عملِ بی‌بار ──
    عمداً قرمز و بالای صفحه: تنها خطای این تخته که روزِ عمل معلوم می‌شود.
@@ -208,7 +217,7 @@
 .dp-run > header > b { font-size: 13.5px; display: inline-flex; align-items: center; gap: 7px; }
 .dp-runrole {
   font-style: normal; font-size: 9.5px; padding: 1px 7px; border-radius: 7px;
-  color: #fcd34d; background: rgba(245, 158, 11, .14);
+  color: var(--amber-text); background: rgba(245, 158, 11, .14);
 }
 .dp-run > header em { font-style: normal; font-size: 10.5px; color: rgba(var(--veil-rgb), .45); }
 .dp-runmeta { flex: 1; font-size: 11px; color: rgba(var(--veil-rgb), .45); }
@@ -230,15 +239,15 @@
   font-size: 11px; font-weight: 700; color: var(--ink-bright); background: #fbbf24;
 }
 .dp-kind { font-style: normal; font-size: 9.5px; padding: 2px 8px; border-radius: 7px; }
-.dp-kind.deliver { color: #86efac; background: rgba(52, 211, 153, .14); }
-.dp-kind.pickup { color: #67e8f9; background: rgba(34, 211, 238, .14); }
+.dp-kind.deliver { color: var(--green-text); background: rgba(52, 211, 153, .14); }
+.dp-kind.pickup { color: var(--cyan); background: rgba(34, 211, 238, .14); }
 .dp-stophead button {
   font: inherit; font-size: 11px; line-height: 1; cursor: pointer; padding: 5px 8px; border-radius: 8px;
   color: var(--text1); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .1);
 }
 .dp-stophead button:disabled { opacity: .35; cursor: default; }
 .dp-stophead button.x { color: var(--red-text); }
-.dp-stophead button.dp-doneon { color: #86efac; border-color: rgba(52, 211, 153, .4); }
+.dp-stophead button.dp-doneon { color: var(--green-text); border-color: rgba(52, 211, 153, .4); }
 
 .dp-addstop {
   display: flex; flex-wrap: wrap; align-items: flex-end; gap: 9px; margin-block-start: 12px;
@@ -266,7 +275,7 @@
 .dp-proof i { font-style: normal; font-size: 11px; color: rgba(var(--veil-rgb), .4); }
 .dp-upload {
   font-size: 11px; cursor: pointer; padding: 6px 11px; border-radius: 9px;
-  color: #86efac; background: rgba(52, 211, 153, .1); border: 1px dashed rgba(52, 211, 153, .34);
+  color: var(--green-text); background: rgba(52, 211, 153, .1); border: 1px dashed rgba(52, 211, 153, .34);
 }
 .dp-upload.off { opacity: .5; cursor: default; }
 .dp-upload input { display: none; }
@@ -275,7 +284,7 @@
 /* ── هزینهٔ مسیر ─────────────────────────────────────────────── */
 .dp-runcost {
   font-size: 12px; padding: 2px 8px; border-radius: 999px;
-  color: #fcd34d; background: rgba(245, 158, 11, .13); white-space: nowrap;
+  color: var(--amber-text); background: rgba(245, 158, 11, .13); white-space: nowrap;
 }
 .dp-costbody { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 12px 14px; }
 .dp-costbody label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
@@ -299,8 +308,28 @@
 .roster-duty b, .roster-visit > div { flex: 1 1 160px; }
 .roster-visit small { display: block; margin-top: 6px; opacity: .7; }
 .hospital-roster select { min-width: 0; max-width: 100%; width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--card-border); background: var(--bg3); color: inherit; }
-.roster-duty button { border: 1px solid var(--card-border); border-radius: 12px; padding: 10px 14px; background: var(--card); color: inherit; cursor: pointer; }
-.roster-duty button:disabled { opacity: .4; cursor: default; }
-.roster-send { display: flex; align-items: center; flex-wrap: wrap; gap: 18px; }
+/* ⚠️ فقط دکمه‌های **خودِ ردیف** (`>`): قاعدهٔ بی‌فرزندِ قبلی روی دکمهٔ ساعتِ `TimePick` هم
+   می‌نشست و آیکونِ ساعت را به ۱۰ پیکسل می‌فشرد — شبیهِ یک نقطه (company-18). */
+.roster-duty > button { min-height: 44px; border: 1px solid var(--card-border); border-radius: 12px; padding: 10px 14px; background: var(--card); color: inherit; cursor: pointer; font: inherit; font-size: 13px; font-weight: 700; }
+.roster-duty > button:hover:not(:disabled) { border-color: rgba(var(--brand-2-rgb), .55); }
+.roster-duty > button:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+.roster-duty > button:disabled { opacity: .4; cursor: default; }
+.roster-send { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 18px; }
+/* «ابلاغِ برنامهٔ روز» — اصلی‌ترین کارِ این صفحه، پس دکمهٔ اصلیِ درشتِ پایینِ روز (company-02)،
+   نه دکمهٔ کوچکِ ۳۴ پیکسلی. متنِ سفید روی گرادیانِ برند در هر دو تم (همان `.wk-btn.primary`). */
+.roster-send-main {
+  flex: 1 1 260px; min-height: 48px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px 18px; border: 0; border-radius: 14px; cursor: pointer;
+  font: inherit; font-size: 14px; font-weight: 800; color: #fff;
+  background: linear-gradient(135deg, var(--brand), var(--brand-dark)); box-shadow: var(--shadow-glow);
+  transition: filter .2s, transform .2s cubic-bezier(.2, .7, .2, 1);
+}
+.roster-send-main:hover:not(:disabled) { filter: brightness(1.08); }
+.roster-send-main:active:not(:disabled) { transform: translateY(1px); }
+.roster-send-main:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 3px; }
+.roster-send-main:disabled { opacity: .55; cursor: default; }
+.roster-send-hint { flex: 1 1 100%; margin: 0; font-size: 12px; color: var(--text3); }
+.roster-send a { color: var(--brand-text); font-weight: 700; font-size: 12.5px; }
+@media (prefers-reduced-motion: reduce) { .roster-send-main { transition: none; } }
 .roster-preview details { padding: 12px; border-bottom: 1px solid var(--card-border); }
 .roster-preview p { line-height: 1.9; }

@@ -36,6 +36,11 @@
 /* قرص **پشتِ** دکمه‌ها می‌نشیند (ترتیبِ DOM)، پس دکمهٔ فعال باید پس‌زمینهٔ
    خودش را کنار بگذارد وگرنه یک پردهٔ سفید روی گرادیان می‌ماند. */
 .ui-tabs button.on { color: #fff; border-color: transparent; background: transparent; }
+/* ⚠️ قرصِ کهربایی **نیمه‌شفاف** است (بر خلافِ گرادیانِ ماتِ برند): سفید روی آن در تمِ روشن —
+   کهرباییِ کم‌رنگ روی زمینهٔ سفید — خوانده نمی‌شد و زبانهٔ فعالِ «چینشِ نیروها» گم بود
+   (بازبینیِ UX، company-02). متن از توکنِ متن می‌آید: در تیره همان تقریباً سفید، در روشن تیره. */
+.ui-tabs.ui-tone-amber button.on { color: var(--text1); }
+.ui-tabs.ui-tone-amber button.on .ui-tab-badge { background: rgba(var(--veil-rgb), .12); color: var(--text1); }
 .ui-tabs button:focus-visible { outline: 2px solid var(--tab-ring); outline-offset: 2px; }
 
 /* قرصِ فعال — یک المانِ **همیشه‌مانده** که روی دکمهٔ فعال می‌لغزد.

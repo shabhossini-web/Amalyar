@@ -13,9 +13,12 @@ import TimePick from '../ui/TimePick.jsx';
 import HospitalRoster from './HospitalRoster.jsx';
 import { badTime, normTime } from '../lib/time.js';
 import { usePlaces } from '../lib/places.js';
+import { useTerms } from './config.jsx';
 
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
+/* «مراجعه‌ای» / «عملی» — پسوندِ نکره به حرفِ آخرِ واژهٔ حوزه بسته است. */
+const indef = (w) => (/ه$/.test(w) ? `${w}‌ای` : `${w}ی`);
 
 /** ساعتِ HH:MM — همان قاعدهٔ سرور، تا پیش از رفت‌وبرگشت خطا معلوم شود. */
 const timeOk = (v) => !badTime(v);
@@ -34,6 +37,9 @@ const timeOk = (v) => !badTime(v);
  * نمی‌گیرد» باید یک‌جا اعمال شود تا کانالِ بعدی (بله/پیامک) دورش نزند.
  */
 export default function Dispatch() {
+  /* واژهٔ «عمل/مراجعه» یک‌جا و از حوزه (قانونِ ۲۴، company-18): سرِ صفحه، خانه‌های تقویم و
+     برنامهٔ حضور یک چیز می‌گویند — نه «۹ عمل» بالا و «۲ مراجعه» پایین. */
+  const terms = useTerms();
   const [ty, tm, td] = jToday();
   const [tab, setTab] = useState('tech');
   const [ym, setYm] = useState({ y: ty, m: tm });
@@ -207,10 +213,10 @@ export default function Dispatch() {
         <div>
           <h1>چینشِ نیروها</h1>
           <p>
-            {month ? `${faNum(month.total)} عمل در ${J_MONTHS[ym.m - 1]}` : 'در حال بارگذاری…'}
+            {month ? `${faNum(month.total)} ${terms.surgery} در ${J_MONTHS[ym.m - 1]}` : 'در حال بارگذاری…'}
             {gapNow > 0 && (
               <em className="dp-gapnote">
-                {' — '}{faNum(gapNow)} عمل بدونِ {tab === 'tech' ? 'کارشناس' : 'راننده'}
+                {' — '}{faNum(gapNow)} {terms.surgery} بدونِ {tab === 'tech' ? 'کارشناس' : 'راننده'}
               </em>
             )}
           </p>
@@ -242,7 +248,7 @@ export default function Dispatch() {
           const gap = tab === 'tech' ? cell.noTech : cell.noDriver;
           return (
             <div className="dp-cell">
-              <i className="t">{faNum(cell.total)} عمل</i>
+              <i className="t">{faNum(cell.total)} {terms.surgery}</i>
               {gap > 0 && (
                 <i className="g" title={tab === 'tech' ? 'بدونِ کارشناس' : 'بار دارد ولی راننده ندارد'}>
                   {faNum(gap)} بدونِ {tab === 'tech' ? 'کارشناس' : 'راننده'}
@@ -255,7 +261,7 @@ export default function Dispatch() {
 
       <section className="dp-day">
         <b>{faNum(day)} {J_MONTHS[ym.m - 1]}</b>
-        {tab === 'transport' && visits.length === 0 && <div className="dp-empty">عملی برای این روز ثبت نشده</div>}
+        {tab === 'transport' && visits.length === 0 && <div className="dp-empty">{indef(terms.surgery)} برای این روز ثبت نشده</div>}
 
         {tab === 'tech' && <HospitalRoster key={onIso} date={onIso} techs={techs} hospitals={hospitals} onChanged={refresh} />}
 
@@ -268,7 +274,7 @@ export default function Dispatch() {
                 دارد (مثلاً نورومانیتورینگ بدونِ دستگاه). */}
             {visits.some((v) => v.noCargo || v.missingNeeds?.length) && (
               <div className="dp-nocargo">
-                <b><Alert size={14} /> عمل‌های بی‌بار</b>
+                <b><Alert size={14} /> {terms.surgery}‌های بی‌بار</b>
                 {visits.filter((v) => v.noCargo || v.missingNeeds?.length).map((v) => (
                   <span key={v.id} className="dp-chip bad">
                     <em dir="ltr">{v.code}</em>
@@ -653,6 +659,7 @@ function TimeBox({ label, value, disabled, onSave }) {
  * سرشکنِ per-visit نمایشی است و ذخیره نمی‌شود — وگرنه هزینه دو بار شمرده می‌شد.
  */
 function RunCost({ run, busy, onClose, onSave }) {
+  const terms = useTerms();
   const [fuel, setFuel] = useState(run.cost?.fuelCost != null ? String(run.cost.fuelCost) : '');
   const [fee, setFee] = useState(run.cost?.driverFee != null ? String(run.cost.driverFee) : '');
   const [other, setOther] = useState(run.cost?.otherCost != null ? String(run.cost.otherCost) : '');
@@ -681,8 +688,8 @@ function RunCost({ run, busy, onClose, onSave }) {
         <p className="dp-costsum">
           جمع: <b>{faNum(total)}</b> تومان
           {visits.length > 0
-            ? ` · سرشکن روی ${faNum(visits.length)} عمل ≈ ${faNum(per)} تومان`
-            : ' · هیچ عملی روی این مسیر نیست؛ کلِ مبلغ هزینهٔ عمومیِ حمل می‌ماند'}
+            ? ` · سرشکن روی ${faNum(visits.length)} ${terms.surgery} ≈ ${faNum(per)} تومان`
+            : ` · هیچ ${indef(terms.surgery)} روی این مسیر نیست؛ کلِ مبلغ هزینهٔ عمومیِ حمل می‌ماند`}
         </p>
       </div>
       <footer>

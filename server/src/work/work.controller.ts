@@ -58,9 +58,16 @@ function parseOwnerRole(raw?: string): OwnerRoleFilter | undefined {
 export class WorkController {
   constructor(private work: WorkService, private todaySvc: TodayService) {}
 
-  /** صفحهٔ «امروز» (W2.3) — کارها + عمل‌ها + نوبت‌های امروز در یک درخواست، هر بخش جدا گیت‌شده. */
+  /**
+   * صفحهٔ «امروز» (W2.3) — کارها + عمل‌ها + نوبت‌های امروز در یک درخواست، هر بخش جدا گیت‌شده.
+   *
+   * ⚠️ هر خواندنِ صفِ کار اول `settle()` می‌زند: کاری که رویدادِ واقعی‌اش همین حالا رخ داده
+   * («انجام شد» از پاپ‌آپِ خودِ کار، گزارشی که آمد) باید همین حالا از فهرست برود، نه پنج دقیقه
+   * بعد با worker — وگرنه کاربر همان ردیف را باز می‌بیند و خیال می‌کند ثبت نشده.
+   */
   @Get('today') @RequirePermissions('work.read')
-  today(@CurrentUser() user: any) {
+  async today(@CurrentUser() user: any) {
+    await this.work.settle();
     return this.todaySvc.today(user);
   }
 
@@ -69,7 +76,7 @@ export class WorkController {
    * `filter`ِ آماده دارند). `sort=overdue` = عقب‌افتاده اول (زنگِ نمای تیم).
    */
   @Get() @RequirePermissions('work.read')
-  list(
+  async list(
     @CurrentUser() user: any,
     @Query('scope') scope?: string,
     @Query('patientId') patientId?: string,
@@ -81,6 +88,7 @@ export class WorkController {
     @Query('ownerRole') ownerRole?: string,
     @Query('sort') sort?: string,
   ) {
+    await this.work.settle();
     return this.work.list(user, {
       scope: SCOPES.includes(scope as WorkScope) ? (scope as WorkScope) : 'inbox',
       patientId: patientId ? Number(patientId) : undefined,
@@ -96,7 +104,8 @@ export class WorkController {
 
   /** `owners=1` دسته‌های «مالِ کیست» را هم می‌دهد (فقط نمای تیم) — زنگ که هر دقیقه می‌پرسد لازمش ندارد. */
   @Get('counts') @RequirePermissions('work.read')
-  counts(@CurrentUser() user: any, @Query('owners') owners?: string) {
+  async counts(@CurrentUser() user: any, @Query('owners') owners?: string) {
+    await this.work.settle();
     return this.work.counts(user, { owners: owners === '1' });
   }
 

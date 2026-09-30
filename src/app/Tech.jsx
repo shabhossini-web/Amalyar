@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import FileDrop from '../ui/FileDrop.jsx';
 import { api, apiUpload } from '../lib/api.js';
-import { faDate, jStrToIso, toEnDigits } from '../lib/jalali.js';
+import { faDate, jStrToIso, toEnDigits, todayJStr } from '../lib/jalali.js';
 import './tech.css';
 import { Alert, Arrive, Back, CheckCircle, Clock, Close, Hospital, Doctor, Box, User, Users, Wave } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
@@ -11,7 +11,7 @@ import Overlay from '../ui/Overlay.jsx';
 import TimePick from '../ui/TimePick.jsx';
 import CancelReason from '../ui/CancelReason.jsx';
 import JDate from './JDate.jsx';
-import { badTime, faTime, normTime } from '../lib/time.js';
+import { badTime, faTime, minToTime, normTime } from '../lib/time.js';
 import { useStagger } from '../ui/stagger.js';
 import { usePlaces } from '../lib/places.js';
 import { useTerms } from './config.jsx';
@@ -20,6 +20,15 @@ const num = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 /* نمایشِ فارسیِ ساعت از `lib/time` می‌آید — همان تبدیلی که خودِ ورودی به کار
    می‌برد، تا آنچه کارشناس ثبت می‌کند و آنچه بعداً روی کارت می‌بیند یکی باشد. */
 const time = (t) => (t ? faTime(t) : '—');
+
+/* روزِ تقویمیِ عمل («2026-09-30») از خودِ رشتهٔ ذخیره‌شده (نیمه‌شبِ UTCِ همان روز)، نه
+   `new Date` که در منطقهٔ زمانیِ دیگر روزِ کناری را می‌دهد. هم‌شکلِ «امروز»ِ سرور
+   (`today`ِ دفترِ کار)، پس مقایسهٔ رشته‌ای همان مقایسهٔ تاریخ است. */
+const dayOf = (iso) => (iso ? String(iso).slice(0, 10) : '');
+/* «امروز»ِ گوشی — فقط وقتی «امروز»ِ مطب در دست نیست (پنجرهٔ «کارها»، یا سرورِ قدیمی). */
+const deviceToday = () => jStrToIso(todayJStr());
+/* «الان» به شکلِ ذخیره‌شدنی («14:05») — همان تبدیلی که دکمهٔ «اکنون»ِ `TimePick` دارد. */
+const nowTime = () => { const d = new Date(); return minToTime(d.getHours() * 60 + d.getMinutes()); };
 
 const SCOPES = [
   { key: 'today', label: 'امروز', icon: Arrive },
@@ -61,6 +70,52 @@ function Owner({ role, name }) {
 }
 
 /**
+ * ساعتِ سرِ کارت — company-22.
+ *
+ * تا بازبینیِ UX نبودنِ ساعت یک قرصِ بنفشِ پررنگ با «—» بود: درشت‌ترین جزءِ کارت، و شبیهِ
+ * دکمهٔ «منها / جمع‌کردن». حالا نبودنش یک «ساعت؟»ِ کم‌رنگ است و هر دو حالت لمس‌خورند و
+ * «ثبتِ ساعت» را باز می‌کنند — ساعتِ ثبت‌شده همان‌جا اصلاح می‌شود. پایان، اگر هست، زیرِ شروع.
+ */
+function TimeChip({ visit, onOpen }) {
+  const { opStartTime: start, opEndTime: end } = visit;
+  if (!start && !end) {
+    /* عملِ لغوشده ساعت لازم ندارد — «ساعت؟» آن‌جا دعوت به کارِ بی‌معناست. */
+    if (visit.status === 'cancelled') return null;
+    return (
+      <button type="button" className="tk-time empty" onClick={onOpen} aria-label="ساعت؟ — افزودنِ ساعتِ عمل">
+        ساعت؟
+      </button>
+    );
+  }
+  const said = [start ? faTime(start) : null, end ? `تا ${faTime(end)}` : null].filter(Boolean).join(' ');
+  return (
+    <button type="button" className="tk-time" onClick={onOpen} aria-label={`${said} — اصلاحِ ساعتِ عمل`}>
+      {start ? <span dir="ltr">{faTime(start)}</span> : null}
+      {end ? <small>تا <span dir="ltr">{faTime(end)}</span></small> : null}
+    </button>
+  );
+}
+
+/**
+ * «شروع شد / پایان یافت» با یک لمس (company-15) — همان دو دکمهٔ میزِ اتاقِ عمل.
+ *
+ * فقط روی عملِ **امروزِ** در انتظار: ساعتِ «الان» برای عملِ فردا یا دیروز معنا ندارد. فقط
+ * کارِ بعدی دیده می‌شود — بی‌شروع «شروع شد»، با شروع و بی‌پایان «پایان یافت»، و با هر دو
+ * هیچ — تا دکمهٔ غیرفعالِ بی‌کار جای کارت را نگیرد.
+ */
+function StampButton({ visit, today, busy, onStamp }) {
+  if (visit.status !== 'pending' || !visit.opDate || dayOf(visit.opDate) !== today) return null;
+  const key = !visit.opStartTime ? 'opStartTime' : !visit.opEndTime ? 'opEndTime' : null;
+  if (!key) return null;
+  return (
+    <button type="button" className="tk-save tk-stamp" disabled={busy !== null} onClick={() => onStamp(visit, key)}>
+      <Clock width="16" height="16" aria-hidden="true" />
+      {busy === visit.id ? 'در حال ثبت…' : key === 'opStartTime' ? 'شروع شد' : 'پایان یافت'}
+    </button>
+  );
+}
+
+/**
  * دفترِ کارِ کارشناس.
  *
  * این صفحه عمداً **فهرستِ داشبورد نیست با یک فیلتر**. سرور نمای جداگانه‌ای
@@ -85,6 +140,7 @@ export default function Tech() {
   const [timesFor, setTimesFor] = useState(null); // visit
   const [statusFor, setStatusFor] = useState(null); // visit
   const [claiming, setClaiming] = useState(null);
+  const [stamping, setStamping] = useState(null); // شناسهٔ عملی که «شروع شد / پایان یافت»ش در راه است
   const row = useStagger();
 
   useEffect(() => { document.title = 'عمل‌یار — پنلِ کارشناسی'; }, []);
@@ -102,6 +158,8 @@ export default function Tech() {
   useEffect(() => { load(scope); }, [load, scope]);
 
   const team = !!data?.team;
+  /* «امروز»ِ مطب از خودِ دفترِ کار (سرور، `clinic-day`) — نه ساعتِ گوشی. */
+  const today = data?.today || deviceToday();
   const allVisits = data?.visits ?? [];
   const allDuties = data?.hospitals ?? [];
   const people = team ? peopleOf(allVisits, allDuties) : [];
@@ -130,6 +188,24 @@ export default function Tech() {
     }
     catch (e) { setToast(e.message); }
     finally { await load(scope); setClaiming(null); }
+  };
+  /* «شروع شد / پایان یافت» با یک لمس (company-15) — ساعتِ همین لحظه، فقط همان یک ساعت؛
+     ساعتِ دیگر دست نمی‌خورد. هم‌معنا با میزِ اتاقِ عمل: ساعتِ ثبت‌شده را بازنویسی نمی‌کند
+     (دکمه فقط وقتی هست که آن ساعت خالی است) و اصلاح از «ثبتِ ساعت» یا خودِ ساعتِ کارت است. */
+  const stamp = async (v, key) => {
+    const at = nowTime();
+    /* دکمه پس از «شروع شد» در همان جا «پایان یافت» می‌شود؛ لمسِ دوبارهٔ بی‌هوا (دستِ
+       دستکش‌دار) پایان را هم‌دقیقهٔ شروع ثبت می‌کرد. عملِ صفردقیقه‌ای یعنی لمسِ اشتباه. */
+    if (key === 'opEndTime' && v.opStartTime === at) {
+      setToast('پایان هم‌دقیقهٔ شروع است — اگر درست است، از «ثبتِ ساعت» ثبتش کنید');
+      return;
+    }
+    setStamping(v.id);
+    try {
+      await api(`/tech/visits/${v.id}/times`, { method: 'PATCH', body: { [key]: at } });
+      setToast(`${key === 'opStartTime' ? 'شروعِ عمل' : 'پایانِ عمل'} ثبت شد: ${faTime(at)} · اصلاح با «ثبتِ ساعت»`);
+    } catch (e) { setToast(e.message); }
+    finally { await load(scope); setStamping(null); }
   };
 
   return (
@@ -172,7 +248,7 @@ export default function Tech() {
           {team && <Owner role={terms.tech} name={h.techName} />}
           <p>بیماران احتمالی — هنوز به کارشناس تخصیص داده نشده‌اند</p>
           {h.openVisits.length === 0 && <p>مراجعه آزادی در این بیمارستان نیست.</p>}
-          {h.openVisits.map(v => <div className="tk-open-visit" key={v.id}><div><b>{v.name}</b><small>{v.procedure || ''} · {time(v.opStartTime)}</small></div><button className="tk-ghost" disabled={claiming !== null} onClick={() => claim(h, v)}>{claiming === `${h.id}:${v.id}` ? 'در حال ثبت…' : team ? `پذیرش برای ${h.techName || terms.tech}` : 'پذیرش این مراجعه'}</button></div>)}
+          {h.openVisits.map(v => <div className="tk-open-visit" key={v.id}><div><b>{v.name}</b><small>{[v.procedure, v.opStartTime ? faTime(v.opStartTime) : null].filter(Boolean).join(' · ')}</small></div><button className="tk-ghost" disabled={claiming !== null} onClick={() => claim(h, v)}>{claiming === `${h.id}:${v.id}` ? 'در حال ثبت…' : team ? `پذیرش برای ${h.techName || terms.tech}` : 'پذیرش این مراجعه'}</button></div>)}
         </section>)}
         {!data && !err && <div className="tk-empty">در حال بارگذاری…</div>}
         {data && visits.length === 0 && (
@@ -187,10 +263,12 @@ export default function Tech() {
         {visits.map((v, i) => (
           <motion.article key={v.id} {...row(i)} className={`tk-card st-${v.status}`}>
             <header>
-              <span className="tk-time" dir="ltr">{time(v.opStartTime)}</span>
+              <TimeChip visit={v} onOpen={() => setTimesFor(v)} />
               <div className="tk-title">
                 <b>{v.patientName}</b>
-                <small>{v.code} · {faDate(v.opDate)}</small>
+                {/* تاریخ اول و کد جدا از جهتِ متن (قانونِ ۹، company-05): کدِ لاتینِ بی‌جداساز
+                    رقمِ روز را آن‌طرفِ خودش می‌برد — «۶ · AM-0005-V1 مهر ۱۴۰۵». */}
+                <small>{faDate(v.opDate)} · <bdi dir="ltr">{v.code}</bdi></small>
               </div>
               {v.status === 'done' && <span className="tk-tag ok">انجام‌شده</span>}
               {v.status === 'cancelled' && <span className="tk-tag no">لغو</span>}
@@ -211,7 +289,7 @@ export default function Tech() {
                 {v.transfers.map((t) => (
                   <div key={t.id} className="tk-set">
                     <div className="tk-set-head">
-                      <b><Box width="14" height="14" /> {t.code}</b>
+                      <b><Box width="14" height="14" /> <bdi dir="ltr">{t.code}</bdi></b>
                       <span>{t.toLocation}</span>
                       {t.releasedAt
                         ? <i className="tk-tag ok">پایان اعلام شد</i>
@@ -239,6 +317,7 @@ export default function Tech() {
             <footer className="tk-acts">
               {/* مالک (۱۴۰۵/۰۷/۰۵): «کارشناس باید وضعیتِ عمل را تعیین کند — انجام شد، موکول شد یا کلاً
                   لغو شد». فقط برای عملِ در انتظار؛ برگرداندنِ وضعیتِ ثبت‌شده کارِ مدیر است. */}
+              <StampButton visit={v} today={today} busy={stamping} onStamp={stamp} />
               {v.status === 'pending' && (
                 <button type="button" className="tk-ghost tk-status-btn" onClick={() => setStatusFor(v)}>وضعیتِ عمل</button>
               )}
@@ -275,6 +354,7 @@ export default function Tech() {
         {statusFor && (
           <StatusSheet
             visit={statusFor}
+            today={today}
             onClose={() => setStatusFor(null)}
             onSaved={(m) => { setStatusFor(null); setToast(m); load(scope); }}
           />
@@ -300,13 +380,37 @@ const STATUS_CHOICES = [
  * می‌رسد و متنِ پیامکش همان‌جا پیش‌نمایش دارد — همان پنجره‌ای که داشبورد و تقویم دارند.
  * ⚠️ «موکول» بی‌تاریخ هم پذیرفته است (خالی = «هنوز تاریخ ندارد»): کارشناسِ سرِ عمل معمولاً
  * فقط می‌داند که امروز نشد، نه روزِ بعدش را؛ تاریخ را مدیر بعداً می‌گذارد.
+ *
+ * دو گامِ پس از «انجام شد» (بازبینیِ UX، ۱۴۰۵/۰۷):
+ *  - **عملِ آینده** (company-20): یک لمسِ اشتباه روی کارتِ فردا عمل را بی‌پرسش انجام‌شده
+ *    می‌کرد. حالا می‌پرسد «این عمل برای ۸ مهر است — تاریخش به امروز عوض شود؟»؛ «بله» اول
+ *    تاریخ را به امروز می‌آورد (همان مسیرِ «موکول»، که امروز را هم می‌پذیرد، با همان ممیزی و
+ *    رویداد) و بعد «انجام شد» را ثبت می‌کند.
+ *  - **ساعتِ خالی** (company-15): «انجام شد» ساعت نمی‌پرسید و مدتِ عمل خالی می‌ماند. حالا اگر
+ *    شروع یا پایان خالی است همین شیت می‌پرسد — پایانِ عملِ امروز با «الان» پیش‌پر. وضعیت پیش
+ *    از این گام ثبت شده، پس «بعداً» و بستنِ شیت هر دو یعنی «بی‌ساعت، فعلاً»، نه انصراف.
+ * ساعت‌ها از پاسخِ همان ثبت خوانده می‌شوند، نه از کارتِ صدازننده: پنجرهٔ «کارها» (`thing-popups`)
+ * فقط خلاصهٔ مراجعه را دارد و ساعتش را نمی‌داند.
  */
-function StatusSheet({ visit, onClose, onSaved }) {
+export function StatusSheet({ visit, today, onClose, onSaved }) {
   const [pick, setPick] = useState('');
   const [date, setDate] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
   const [asking, setAsking] = useState(false);
+  const [step, setStep] = useState('pick'); // pick · future · times
+  const [times, setTimes] = useState(null); // { f, msg, missing, prefilled }
+  /* اگر جابه‌جاییِ تاریخ رفت و «انجام شد» نه، تلاشِ دوباره تاریخ را دوباره جابه‌جا نمی‌کند. */
+  const moved = useRef(false);
+  /* با هر گامِ تازه فوکوس روی متنِ همان گام — صفحه‌خوان پرسش یا نتیجه را بخواند، نه سکوت؛
+     و در برگشت به انتخاب، روی همان گزینهٔ انتخاب‌شده (دکمهٔ «نه، برگرد» دیگر وجود ندارد). */
+  const stepRef = useRef(null);
+  const firstStep = useRef(true);
+  useEffect(() => {
+    if (firstStep.current) { firstStep.current = false; return; }
+    stepRef.current?.focus();
+  }, [step]);
+  const day = today || deviceToday();
 
   const send = async (body, msg) => {
     setBusy(true); setErr('');
@@ -315,14 +419,50 @@ function StatusSheet({ visit, onClose, onSaved }) {
       onSaved(msg);
     } catch (e) { setErr(e.message); setBusy(false); throw e; }
   };
+  const markDone = async (toToday) => {
+    setBusy(true); setErr('');
+    try {
+      if (toToday && !moved.current) {
+        await api(`/tech/visits/${visit.id}/status`, { method: 'POST', body: { status: 'postponed', opDate: day } });
+        moved.current = true;
+      }
+      const r = await api(`/tech/visits/${visit.id}/status`, { method: 'POST', body: { status: 'done' } });
+      const msg = toToday ? 'انجام شد — تاریخِ عمل امروز شد' : 'انجام شد — ثبت شد';
+      const start = r?.opStartTime ?? '';
+      const end = r?.opEndTime ?? '';
+      if (start && end) { onSaved(msg); return; }
+      const now = !end && dayOf(r?.opDate ?? visit.opDate) === day ? nowTime() : '';
+      setTimes({
+        f: { opStartTime: start, opEndTime: end || now },
+        msg,
+        missing: !start && !end ? 'شروع و پایانِ' : !start ? 'شروعِ' : 'پایانِ',
+        prefilled: !!now,
+      });
+      setStep('times');
+      setBusy(false);
+    } catch (e) { setErr(e.message); setBusy(false); }
+  };
   const save = async () => {
     if (pick === 'cancelled') { setAsking(true); return; }
-    if (pick === 'done') { await send({ status: 'done' }, 'انجام شد — ثبت شد').catch(() => {}); return; }
+    if (pick === 'done') {
+      if (visit.opDate && dayOf(visit.opDate) > day) { setErr(''); setStep('future'); return; }
+      await markDone(false);
+      return;
+    }
     const iso = date.trim() ? jStrToIso(date) : '';
     if (date.trim() && !iso) { setErr('تاریخ را به شکلِ ۱۴۰۵/۰۷/۱۲ بنویسید'); return; }
     await send({ status: 'postponed', ...(iso ? { opDate: iso } : {}) },
       iso ? `موکول شد به ${faDate(iso)}` : 'موکول شد — تاریخِ تازه را مدیر می‌گذارد').catch(() => {});
   };
+  const saveTimesNow = async () => {
+    setBusy(true); setErr('');
+    try {
+      await saveTimes(visit.id, times.f);
+      onSaved('انجام شد و ساعتِ عمل ثبت شد');
+    } catch (e) { setErr(e.message); setBusy(false); }
+  };
+  const later = () => onSaved(times?.msg ?? 'انجام شد — ثبت شد');
+  const setTimesF = (fn) => setTimes((t) => ({ ...t, f: fn(t.f) }));
   const cta = pick === 'done' ? 'ثبت: انجام شد'
     : pick === 'postponed' ? (date.trim() ? 'ثبت: موکول به همین تاریخ' : 'ثبت: موکول، بی‌تاریخ')
       : pick === 'cancelled' ? 'ادامه: دلیلِ لغو' : 'یکی را انتخاب کنید';
@@ -339,31 +479,77 @@ function StatusSheet({ visit, onClose, onSaved }) {
       />
     );
   }
+  const inTimes = step === 'times';
+  /* در گامِ ساعت «انجام شد» ثبت شده است: بستن یعنی «بعداً»، و صفحه باید تازه شود. */
+  const close = inTimes ? later : onClose;
   return (
-    <Overlay backdrop="tk-overlay" panel="tk-sheet sm" as="section" onClose={onClose} closable={!busy}>
+    <Overlay backdrop="tk-overlay" panel="tk-sheet sm" as="section" onClose={close} closable={!busy}>
       <header className="tk-sheet-head">
-        <b>وضعیتِ عمل — {visit.patientName}</b>
-        <button type="button" className="tk-x" onClick={onClose} aria-label="بستن" disabled={busy}><Close width="17" height="17" /></button>
+        <b>{inTimes ? 'ساعتِ عمل' : 'وضعیتِ عمل'} — {visit.patientName}</b>
+        <button type="button" className="tk-x" onClick={close} aria-label="بستن" disabled={busy}><Close width="17" height="17" /></button>
       </header>
       <div className="tk-sheet-body">
-        <p className="tk-note">{visit.code} · {faDate(visit.opDate)}{visit.procedure ? ` · ${visit.procedure}` : ''}</p>
-        <div className="tk-status" role="radiogroup" aria-label="وضعیتِ عمل">
-          {STATUS_CHOICES.map(({ key, label, hint, icon: Icon }) => (
-            <button key={key} type="button" role="radio" aria-checked={pick === key} disabled={busy}
-                    className={`tk-status-opt k-${key}${pick === key ? ' on' : ''}`} onClick={() => { setPick(key); setErr(''); }}>
-              <Icon width="18" height="18" aria-hidden="true" />
-              <span><b>{label}</b><small>{hint}</small></span>
+        {step === 'pick' && (
+          <>
+            <p className="tk-note">
+              {[visit.opDate ? faDate(visit.opDate) : null, visit.code ? <bdi key="c" dir="ltr">{visit.code}</bdi> : null, visit.procedure || null]
+                .filter(Boolean)
+                .flatMap((part, i) => (i ? [' · ', part] : [part]))}
+            </p>
+            <div className="tk-status" role="radiogroup" aria-label="وضعیتِ عمل">
+              {STATUS_CHOICES.map(({ key, label, hint, icon: Icon }) => (
+                <button key={key} type="button" role="radio" aria-checked={pick === key} disabled={busy}
+                        ref={pick === key ? stepRef : undefined}
+                        className={`tk-status-opt k-${key}${pick === key ? ' on' : ''}`} onClick={() => { setPick(key); setErr(''); }}>
+                  <Icon width="18" height="18" aria-hidden="true" />
+                  <span><b>{label}</b><small>{hint}</small></span>
+                </button>
+              ))}
+            </div>
+            {pick === 'postponed' && (
+              <JDate className="tk-field" label="تاریخِ تازه (اختیاری)" value={date} onChange={setDate} disabled={busy}
+                     hint="اگر هنوز معلوم نیست خالی بگذارید؛ عمل از دفترِ امروز برداشته می‌شود و مدیر تاریخ را می‌گذارد." />
+            )}
+            {err && <p className="tk-note no" role="alert">{err}</p>}
+            <button type="button" className="tk-save" disabled={busy || !pick} onClick={save}>
+              {busy ? 'در حال ثبت…' : cta}
             </button>
-          ))}
-        </div>
-        {pick === 'postponed' && (
-          <JDate className="tk-field" label="تاریخِ تازه (اختیاری)" value={date} onChange={setDate} disabled={busy}
-                 hint="اگر هنوز معلوم نیست خالی بگذارید؛ عمل از دفترِ امروز برداشته می‌شود و مدیر تاریخ را می‌گذارد." />
+          </>
         )}
-        {err && <p className="tk-note no" role="alert">{err}</p>}
-        <button type="button" className="tk-save" disabled={busy || !pick} onClick={save}>
-          {busy ? 'در حال ثبت…' : cta}
-        </button>
+
+        {step === 'future' && (
+          <>
+            <div className="tk-ask" ref={stepRef} tabIndex={-1}>
+              <b>این عمل برای {faDate(visit.opDate)} است — تاریخش به امروز عوض شود؟</b>
+              <p>اگر امروز انجام شد، «بله» تاریخِ عمل را امروز می‌کند و «انجام شد» را ثبت می‌کند. اگر اشتباهی زدید، برگردید.</p>
+            </div>
+            {err && <p className="tk-note no" role="alert">{err}</p>}
+            <button type="button" className="tk-save" disabled={busy} onClick={() => markDone(true)}>
+              {busy ? 'در حال ثبت…' : 'بله، امروز انجام شد'}
+            </button>
+            <button type="button" className="tk-ghost" disabled={busy} onClick={() => { setErr(''); setStep('pick'); }}>
+              نه، برگرد
+            </button>
+          </>
+        )}
+
+        {inTimes && (
+          <>
+            <p className="tk-note ok tk-done-note" ref={stepRef} tabIndex={-1}>
+              <CheckCircle width="16" height="16" aria-hidden="true" /> «انجام شد» ثبت شد.
+            </p>
+            <p className="tk-note">
+              ساعتِ {times.missing} عمل هنوز خالی است — مدتِ قابلِ صورتحساب از همین دو ساعت حساب می‌شود.
+              {times.prefilled ? ' پایان با «الان» پر شده؛ اگر زودتر تمام شد، عوضش کنید.' : ''}
+            </p>
+            <TimesFields f={times.f} setF={setTimesF} />
+            {err && <p className="tk-note no" role="alert">{err}</p>}
+            <button type="button" className="tk-save" disabled={busy} onClick={saveTimesNow}>
+              {busy ? 'در حال ذخیره…' : 'ذخیرهٔ ساعت'}
+            </button>
+            <button type="button" className="tk-ghost" disabled={busy} onClick={later}>بعداً</button>
+          </>
+        )}
       </div>
     </Overlay>
   );
@@ -429,7 +615,7 @@ function UsageSheet({ transferId, onClose, onToast }) {
   return (
     <Overlay backdrop="tk-overlay" panel="tk-sheet" as="section" onClose={onClose} closable={!busy}>
       <header className="tk-sheet-head">
-        <b>{t ? `حوالهٔ ${t.code}` : 'حواله'}</b>
+        <b>{t ? <>حوالهٔ <bdi dir="ltr">{t.code}</bdi></> : 'حواله'}</b>
         <button type="button" className="tk-x" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
       </header>
 
@@ -522,6 +708,48 @@ function UsageSheet({ transferId, onClose, onToast }) {
   );
 }
 
+const TIME_FIELDS = [['opStartTime', 'شروعِ عمل'], ['opEndTime', 'پایانِ عمل']];
+
+/**
+ * ثبتِ دو ساعتِ عمل — مشترکِ «ثبتِ ساعت» و گامِ پس از «انجام شد» (`StatusSheet`).
+ *
+ * نرمال‌سازی پیش از ارسال، چون کاربر ممکن است بدونِ خروج از فیلد مستقیم «ذخیره» را بزند و
+ * «۸:۵» خام به سرور برسد. خطا فارسی و همان متنی که کادر نشان می‌دهد.
+ */
+async function saveTimes(id, f) {
+  const body = Object.fromEntries(Object.entries(f).map(([k, v]) => [k, normTime(v)]));
+  if (Object.values(body).some(badTime)) throw new Error('ساعت باید به شکلِ ۰۸:۳۰ باشد');
+  return api(`/tech/visits/${id}/times`, { method: 'PATCH', body });
+}
+
+/**
+ * دو کادرِ ساعت (`TimePick`) — `f` مقدارها و `setF` به‌روزکنندهٔ تابعی‌اش.
+ *
+ * کنارِ هر کادر یک «اکنون»ِ یک‌لمسی با رنگِ خنثی (company-15): تا بازبینیِ UX تنها راهِ «همین
+ * الان» بازکردنِ ساعتِ تودرتوی `TimePick` بود و «اکنون»ِ آن‌جا صورتی و هم‌شکلِ «پاک‌کردن» است —
+ * شبیهِ دکمهٔ خطرناک. ستونِ «اکنون» همان `tk-field` است با برچسبِ خالیِ هم‌قد، تا دکمه دقیقاً
+ * هم‌ترازِ خودِ کادر بنشیند، حتی وقتی زیرِ کادر پیامِ خطا آمده است.
+ */
+function TimesFields({ f, setF }) {
+  return TIME_FIELDS.map(([k, label]) => (
+    <div key={k} className="tk-trow">
+      <TimePick
+        className="tk-field"
+        label={label}
+        value={f[k]}
+        onChange={(v) => setF((s) => ({ ...s, [k]: v }))}
+      />
+      <div className="tk-field tk-now-col">
+        <span aria-hidden="true">&nbsp;</span>
+        <button type="button" className="tk-now" aria-label={`اکنون — ${label}`}
+                onClick={() => setF((s) => ({ ...s, [k]: nowTime() }))}>
+          اکنون
+        </button>
+      </div>
+    </div>
+  ));
+}
+
 /**
  * ساعتِ واقعیِ عمل — شروع و پایان.
  *
@@ -538,13 +766,9 @@ function TimesSheet({ visit, onClose, onSaved }) {
   const [err, setErr] = useState('');
 
   const save = async () => {
-    // نرمال‌سازی پیش از ارسال، چون کاربر ممکن است بدونِ خروج از فیلد
-    //    مستقیم «ذخیره» را بزند و «۸:۵» خام به سرور برسد.
-    const body = Object.fromEntries(Object.entries(f).map(([k, v]) => [k, normTime(v)]));
-    if (Object.values(body).some(badTime)) { setErr('ساعت باید به شکلِ ۰۸:۳۰ باشد'); return; }
     setBusy(true); setErr('');
     try {
-      await api(`/tech/visits/${visit.id}/times`, { method: 'PATCH', body });
+      await saveTimes(visit.id, f);
       onSaved('ساعت ثبت شد');
     } catch (e) { setErr(e.message); setBusy(false); }
   };
@@ -556,16 +780,8 @@ function TimesSheet({ visit, onClose, onSaved }) {
         <button type="button" className="tk-x" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
       </header>
       <div className="tk-sheet-body">
-        {[['opStartTime', 'شروعِ عمل'], ['opEndTime', 'پایانِ عمل']].map(([k, label]) => (
-          <TimePick
-            key={k}
-            className="tk-field"
-            label={label}
-            value={f[k]}
-            onChange={(v) => setF((s) => ({ ...s, [k]: v }))}
-          />
-        ))}
-        {err && <p className="tk-note no">{err}</p>}
+        <TimesFields f={f} setF={setF} />
+        {err && <p className="tk-note no" role="alert">{err}</p>}
         <button type="button" className="tk-save" disabled={busy} onClick={save}>
           {busy ? 'در حال ذخیره…' : 'ذخیرهٔ ساعت'}
         </button>

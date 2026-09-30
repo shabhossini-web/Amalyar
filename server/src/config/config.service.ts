@@ -11,9 +11,10 @@ import { AuditService } from '../audit/audit.service';
 import { DEFAULT_VERTICAL, VERTICALS, VerticalKey, featurePlanFor, isVertical } from './verticals';
 import {
   KEY_SERVICES, SERVICES, SERVICE_ORDER, TENANT_KINDS, TenantKind, TenantProfile,
-  featureChanges, profileError, profileLabel, profileOf, requestedProfile,
+  featureChanges, featureSeedRows, profileError, profileLabel, profileOf, requestedProfile,
 } from './tenant-profile';
 import { FEATURES } from '../auth/access-registry';
+import { seedFeatureRows } from '../features/features.service';
 import { SITE_SECTIONS, sectionPlanFor } from '../site/site.registry';
 import { SettingsService } from './settings.service';
 import { CANCEL_REASONS, cancelSms } from '../common/cancel-reasons';
@@ -195,6 +196,8 @@ export class ConfigService {
       const plan = featurePlanFor(value);
       // ماژولی که در پلانِ حوزهٔ تازه نیست خاموش می‌شود، نه حذف — تا اگر شرکت
       // برگشت، تنظیماتِ قبلی‌اش از دست نرفته باشد.
+      /* global-07: ردیفِ غایب هم ساخته شود و همین حلقه تکلیفش را بگیرد — وگرنه ساختِ تنبلِ بعدی روشنش می‌کرد. */
+      await seedFeatureRows(tx);
       const existing = await tx.feature.findMany();
       for (const row of existing) {
         const wanted = plan[row.key];
@@ -251,7 +254,11 @@ export class ConfigService {
     if (err) throw new BadRequestException(err);
     const before = await this.profile();
     const after = requestedProfile(kind as TenantKind, services);
-    const rows = await this.prisma.feature.findMany({ select: { key: true, minLevel: true, enabled: true } });
+    const stored = await this.prisma.feature.findMany({ select: { key: true, minLevel: true, enabled: true } });
+    /* global-07: ردیفِ غایب همان‌طور حساب می‌شود که `setProfile` پیش از گذار می‌سازدش (پلانِ قبلی) —
+       تا پیش‌نمایش همان را بگوید که ذخیره می‌کند. */
+    const have = new Set(stored.map((r) => r.key));
+    const rows = [...stored, ...featureSeedRows(before, FEATURES).filter((r) => !have.has(r.key))];
     const label = (key: string) => FEATURES.find((f) => f.key === key)?.label ?? key;
     const changes = featureChanges(before, after, rows).map((c) => ({ ...c, label: label(c.key) }));
     /* خدمتی که برداشته می‌شود: لینک‌های زنده‌اش کار می‌کنند و ثبت‌نام‌های بازش
@@ -293,6 +300,10 @@ export class ConfigService {
         await tx.setting.deleteMany({ where: { key: KEY_SERVICES } });
       }
 
+      /* global-07: ردیف‌های غایب اول به پروفایلِ **قبلی** ساخته می‌شوند تا گذار روی ردیفِ واقعی حساب
+         شود. بی‌این، ماژولی که پلانِ تازه ندارد و ردیفی هم نداشت خاموش نمی‌شد و ساختِ تنبلِ بعدی
+         روشنش می‌کرد — «چینشِ نیروها» در لانچرِ مطب. */
+      await seedFeatureRows(tx, before);
       const rows = await tx.feature.findMany({ select: { key: true, minLevel: true, enabled: true } });
       for (const c of featureChanges(before, after, rows)) {
         if (c.action === 'create') await tx.feature.create({ data: { key: c.key, minLevel: c.minLevel!, enabled: true } });

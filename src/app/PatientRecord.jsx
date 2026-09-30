@@ -1085,7 +1085,7 @@ function NotesTab({ rec, reload, toast }) {
  * جای خالیِ واژهٔ حوزه‌ای را پُر می‌کند (قانون ۲۴). سرور `{visit}` می‌فرستد چون
  * واژه‌نامه فقط یک نسخه دارد و آن `src/lib/terms.js` است.
  */
-const withTerm = (str, t) => (str ? String(str).replaceAll('{visit}', t.visit).replaceAll('{visits}', t.visits) : str);
+const withTerm = (str, t) => (str ? String(str).replaceAll('{visit}', t.visit).replaceAll('{visits}', t.visits).replaceAll('{tech}', t.tech) : str);
 
 /** نگاشتِ نوعِ ردیفِ خطِ زمان به آیکون و برچسب — تک‌منبع. */
 const TL_META = {
@@ -1166,7 +1166,7 @@ function NextUp({ live, onGo, onActed, toast, onOpen }) {
     try {
       await api(`/work/${item.id}`, { method: 'PATCH', body: { action, ...body } });
       window.dispatchEvent(new Event(WORK_CHANGED));
-      toast(action === 'done' ? 'انجام شد ✓' : 'به فردا موکول شد');
+      toast(action === 'done' ? (body.outcome?.dismissed ? 'یادآوری بسته شد' : 'انجام شد ✓') : 'یادآوری به فردا افتاد');
       await onActed();
     } catch (e) { toast(e?.message || 'انجام نشد', true); } finally { setBusy(0); }
   };

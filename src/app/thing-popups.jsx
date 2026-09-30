@@ -1,19 +1,30 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
-import { api } from '../lib/api.js';
+import { api, apiUpload } from '../lib/api.js';
 import { faDate } from '../lib/jalali.js';
 import { useAuth } from './auth.jsx';
-import { useTerms, useStatusMap } from './config.jsx';
+import { useConfig, useTerms, useStatusMap } from './config.jsx';
 import VisitForm, { surgeryPrefill } from './VisitForm.jsx';
 import OrderSheet from './OrderSheet.jsx';
 import { useVisitDefs } from './visit-defs.js';
+import { targetForKind } from './work-target.js';
 import Overlay from '../ui/Overlay.jsx';
-import { Calendar, Close, Send } from '../ui/icons.jsx';
+import FileDrop from '../ui/FileDrop.jsx';
+import { Calendar, Close, Send, Upload } from '../ui/icons.jsx';
 import './thing-popups.css';
 
 /* پرونده همین سازنده را از همین‌جا می‌گیرد — هر دو فرمِ عمل را از یک میزبان باز می‌کنند. */
 export { surgeryPrefill };
+/* مقصدِ کار در فایلِ سبکِ خودش است (زنگِ پوسته هم می‌خواندش)؛ صفحه‌ها از همین‌جا می‌گیرند. */
+export { workTarget } from './work-target.js';
+
+/* پاپ‌آپ‌های «خودِ کار» که صفحهٔ دیگری صاحبشان است — **همان** پنجره، نه نسخهٔ دوم:
+   وضعیتِ عمل از پنلِ کارشناس، تأییدِ ثبت‌نام از صفحهٔ پذیرش. تنبل، چون فقط وقتی
+   کسی رویشان می‌زند لازم‌اند و CSSِ صفحهٔ صاحبشان هم با همان چانک می‌آید (قانونِ ۲۱). */
+const StatusSheet = lazy(() => import('./Tech.jsx').then((m) => ({ default: m.StatusSheet })));
+const ApproveSheet = lazy(() => import('./Intake.jsx').then((m) => ({ default: m.ApproveSheet })));
+const ReceiptZoom = lazy(() => import('./Intake.jsx').then((m) => ({ default: m.ReceiptZoom })));
 
 /**
  * پاپ‌آپِ «همان چیز» — مراجعه، سفارش، یادآوری، نوبت — از هر صفحه‌ای.
@@ -31,18 +42,21 @@ export { surgeryPrefill };
  *  - `<ThingPopups things={…} />` — میزبانِ خودِ پاپ‌آپ‌ها، یک‌بار پایینِ صفحه.
  *
  * `spec`: `{ type: 'visit', id }` · `{ type: 'order', kind, id, patientId }` ·
- * `{ type: 'reminder', id, patientId, item }` · `{ type: 'appointment', id, item }`.
+ * `{ type: 'reminder', id, patientId, item }` · `{ type: 'appointment', id, item }` ·
+ * و سه مقصدِ «خودِ کار» (`work-target.js`، بازبینیِ UX company-01):
+ * `{ type: 'opstatus', id, visit, patientName }` — انجام شد / موکول / لغو ·
+ * `{ type: 'report', id, visit, patientName }` — بارگذاریِ گزارشِ خدمت ·
+ * `{ type: 'intake', id }` — پنجرهٔ تأییدِ همان ثبت‌نام.
  */
 
-/** مقصدِ یک کار: سفارشِ زیرِ بررسی یا مراجعه‌ای که کار به آن گره خورده. */
-export const workTarget = (w) => {
-  const pid = w?.patientId ?? w?.patient?.id ?? null;
-  const m = /^(lab|imaging|consult|referral)_order$/.exec(w?.refType ?? '');
-  if (m && w.refId) return { type: 'order', kind: m[1], id: w.refId, patientId: pid };
-  if (w?.refType === 'visit' && w.refId) return { type: 'visit', id: w.refId, patientId: pid };
-  if (w?.visitId) return { type: 'visit', id: w.visitId, patientId: pid };
-  return null;
-};
+/** خلاصهٔ مراجعه برای پنجرهٔ وضعیت/گزارش — همان شکلی که کارتِ پنلِ کارشناس دارد. */
+const visitBrief = (spec) => ({
+  id: spec.id,
+  patientName: spec.patientName ?? '',
+  code: spec.visit?.code ?? '',
+  opDate: spec.visit?.opDate ?? null,
+  procedure: spec.visit?.procedure ?? null,
+});
 
 /**
  * @param {object} o
@@ -52,14 +66,31 @@ export const workTarget = (w) => {
  */
 export function useThings({ patientId = null, onChanged, toast } = {}) {
   const [pop, setPop] = useState(null);
+  const { kind } = useConfig();
   /* ref، تا `open` با هر رندرِ صفحه (که toast/onChanged را inline می‌سازد) عوض نشود. */
   const cb = useRef({ onChanged, toast });
   useEffect(() => { cb.current = { onChanged, toast }; });
 
-  const open = useCallback(async (spec) => {
+  const open = useCallback(async (raw) => {
+    /* مطب پنلِ کارشناس و «گزارشِ خدمت» ندارد — وضعیت و شرحِ عملش در همان فرمِ عمل است. */
+    const spec = targetForKind(raw, kind);
     const pid = spec?.patientId ?? patientId;
     try {
-      if (spec.type === 'visit') {
+      if (spec.type === 'opstatus') {
+        setPop({ type: 'opstatus', visit: visitBrief(spec) });
+      } else if (spec.type === 'report') {
+        setPop({ type: 'report', visit: visitBrief(spec) });
+      } else if (spec.type === 'intake') {
+        /* ردیفِ کاملِ همان ثبت‌نام — پنجرهٔ تأیید مدارک، فیش و پیشنهادِ ارجاع‌ها را از آن می‌خواند. */
+        const find = async (status) => {
+          const rows = await api(`/intake/submissions?status=${status}`);
+          return (Array.isArray(rows) ? rows : []).find((x) => x.id === spec.id) ?? null;
+        };
+        const row = (await find('pending_approval')) ?? (await find('all'));
+        if (!row) throw new Error('این ثبت‌نام پیدا نشد');
+        if (row.status !== 'pending_approval') throw new Error('این ثبت‌نام دیگر منتظرِ تأیید نیست — در صفحهٔ «پذیرش» ببینید');
+        setPop({ type: 'intake', row });
+      } else if (spec.type === 'visit') {
         setPop({ type: 'visit', visit: await api(`/visits/${spec.id}`), patientId: pid });
       } else if (spec.type === 'order') {
         if (!pid) throw new Error('بیمارِ این سفارش مشخص نیست');
@@ -74,7 +105,7 @@ export function useThings({ patientId = null, onChanged, toast } = {}) {
         setPop({ type: 'appointment', id: spec.id, item: spec.item, patientId: pid });
       }
     } catch (e) { cb.current.toast?.(e.message, true); }
-  }, [patientId]);
+  }, [patientId, kind]);
   const close = useCallback(() => setPop(null), []);
   const changed = useCallback(() => cb.current.onChanged?.(), []);
   const say = useCallback((m, bad) => cb.current.toast?.(m, bad), []);
@@ -92,6 +123,10 @@ export function ThingPopups({ things, onVisitSaved }) {
   const t = useTerms();
   /* تعریف‌های فرمِ مراجعه تنبل‌اند: تا فرم باز نشود شش فهرست خوانده نمی‌شود. */
   const { defs, reload: loadDefs } = useVisitDefs(pop?.type === 'visit', user?.id);
+  /* بزرگ‌نماییِ فیش از داخلِ پنجرهٔ تأییدِ ثبت‌نام — همان کاری که صفحهٔ پذیرش می‌کند. */
+  const [zoom, setZoom] = useState(null);
+  /* بعد از انجامِ خودِ کار: پنجره بسته، صفحه تازه (کار با رویدادِ واقعی‌اش از فهرست می‌رود). */
+  const finished = (m) => { close(); changed(); if (m) say(m); };
 
   return (
     <>
@@ -135,6 +170,30 @@ export function ThingPopups({ things, onVisitSaved }) {
         onSaved={changed}
         onToast={(m) => say(m)}
       />
+      {/* «خودِ کار» — وضعیتِ عمل، گزارشِ خدمت، تأییدِ ثبت‌نام. */}
+      <Suspense fallback={null}>
+        <AnimatePresence>
+          {pop?.type === 'opstatus' && (
+            <StatusSheet key="opstatus" visit={pop.visit} onClose={close} onSaved={finished} />
+          )}
+          {pop?.type === 'intake' && (
+            <ApproveSheet
+              key="intake"
+              row={pop.row}
+              onClose={close}
+              onDone={finished}
+              onZoom={setZoom}
+              onChanged={changed}
+            />
+          )}
+        </AnimatePresence>
+        <AnimatePresence>
+          {zoom && <ReceiptZoom key="zoom" url={zoom} onClose={() => setZoom(null)} />}
+        </AnimatePresence>
+      </Suspense>
+      <AnimatePresence>
+        {pop?.type === 'report' && <ReportPop visit={pop.visit} onClose={close} onDone={finished} />}
+      </AnimatePresence>
       <AnimatePresence>
         {pop?.type === 'reminder' && <ReminderPop row={pop.row} item={pop.item} onClose={close} onActed={changed} toast={say} />}
         {pop?.type === 'appointment' && (
@@ -151,6 +210,50 @@ export function ThingPopups({ things, onVisitSaved }) {
 }
 
 const faNum = (v) => String(v ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
+
+/* ══════════════ گزارشِ خدمت ══════════════ */
+/**
+ * **بارگذاریِ گزارشِ خدمت** از خودِ کارِ «گزارشِ خدمت هنوز بارگذاری نشده» — همان مسیرِ
+ * دکمهٔ پنلِ کارشناس (`POST /tech/visits/:id/report`) و همان کادرِ مشترکِ `FileDrop`
+ * (چندصفحه‌ای، با صف و تلاشِ دوباره). رویدادِ `report.uploaded` کار را می‌بندد؛ بعد از
+ * آخرین فایل پنجره بسته و فهرست تازه می‌شود.
+ */
+function ReportPop({ visit, onClose, onDone }) {
+  const t = useTerms();
+  const [busy, setBusy] = useState(false);
+  const send = async (file) => {
+    setBusy(true);
+    const fd = new FormData();
+    fd.append('file', file);
+    try { await apiUpload(`/tech/visits/${visit.id}/report`, fd); } finally { setBusy(false); }
+  };
+  return (
+    <Overlay backdrop="rc-pop-bg" panel="glass rc-pop rc-pop-report" as="section" onClose={onClose} closable={!busy} role="dialog" aria-modal="true" aria-label={t.workReport}>
+      <header>
+        <Upload width="15" height="15" />
+        <b>{t.workReport}{visit.patientName ? ` — ${visit.patientName}` : ''}</b>
+        <button type="button" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
+      </header>
+      {(visit.code || visit.opDate) && (
+        <dl>
+          <dt>{t.surgery}</dt>
+          <dd>
+            {visit.opDate ? faDate(visit.opDate) : ''}
+            {visit.code && <>{visit.opDate ? ' · ' : ''}<bdi dir="ltr">{visit.code}</bdi></>}
+            {visit.procedure ? ` · ${visit.procedure}` : ''}
+          </dd>
+        </dl>
+      )}
+      <FileDrop
+        accept="image/*,application/pdf"
+        label={`انتخابِ فایلِ ${t.workReport}`}
+        hint="عکس یا PDF؛ گزارشِ چندصفحه‌ای را یک‌جا انتخاب کنید."
+        onUpload={send}
+        onAllDone={() => onDone(`${t.workReport} ثبت شد`)}
+      />
+    </Overlay>
+  );
+}
 
 /* ══════════════ یادآوری ══════════════ */
 /* ⚠️ دو نگاشتِ فارسیِ یادآوری برداشته شدند. کپیِ دومِ دفترِ یادآوری‌ها بودند

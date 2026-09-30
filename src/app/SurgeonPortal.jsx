@@ -282,7 +282,7 @@ function DoctorToday({ things, reloadRef, toast, access, pickId, picked, mine })
       await api(`/work/${w.id}`, { method: 'PATCH', body: { action, ...body } });
       setWork((cur) => (cur && Array.isArray(cur.rows) ? { ...cur, rows: cur.rows.filter((x) => x.id !== w.id) } : cur));
       window.dispatchEvent(new Event(WORK_CHANGED));
-      toast(action === 'done' ? 'انجام شد' : 'به فردا موکول شد');
+      toast(action === 'done' ? (body.outcome?.dismissed ? 'یادآوری بسته شد' : 'انجام شد') : 'یادآوری به فردا افتاد');
     } catch (e) { toast(e?.message || 'انجام نشد'); } finally { setBusy(0); }
   };
   const openVisit = (v) => things.open({ type: 'visit', id: v.id, patientId: v.patientId });
