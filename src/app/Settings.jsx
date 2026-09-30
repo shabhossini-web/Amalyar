@@ -5,6 +5,7 @@ import { useConfig, useTerms } from './config.jsx';
 import { termsFor } from '../lib/terms.js';
 import { invalidateFeatures, useToolTitle } from './tools.jsx';
 import { randomNationalId, toEnDigits } from '../lib/identity.js';
+import { setLeaveGuard } from '../lib/leave-guard.js';
 import { jToFa, todayJStr } from '../lib/jalali.js';
 import { useAuth } from './auth.jsx';
 import './launcher.css';
@@ -729,11 +730,14 @@ function SectionNav({ items }) {
 /**
  * هشدارِ ترکِ صفحه با تغییرِ ذخیره‌نشده. `beforeunload` فقط بستن/تازه‌کردنِ زبانه را می‌گیرد؛
  * لینک‌های داخلِ سامانه (react-router) در فازِ capture گرفته می‌شوند — پیش از آنکه `Link`
- * ناوبری کند.
+ * ناوبری کند. جابه‌جاییِ **برنامه‌ای** (`navigate()`ِ منوی پروفایل، جستجوی سراسری، زنگِ کارها)
+ * لینک نیست و از این دو رد می‌شد (بازبینیِ خصمانه، R11) — همان پرسش در `leave-guard` هم ثبت
+ * می‌شود و آن‌ها پیش از رفتن می‌پرسندش.
  */
 function useUnsavedGuard(on) {
   useEffect(() => {
     if (!on) return undefined;
+    const ask = () => window.confirm('تغییراتِ ذخیره‌نشدهٔ تنظیمات از دست می‌رود. صفحه را ترک می‌کنید؟');
     const unload = (e) => { e.preventDefault(); e.returnValue = ''; };
     const click = (e) => {
       if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
@@ -741,14 +745,15 @@ function useUnsavedGuard(on) {
       if (!a || a.target === '_blank' || a.hasAttribute('download')) return;
       const url = new URL(a.href, window.location.href);
       if (url.origin !== window.location.origin || url.pathname === window.location.pathname) return;
-      if (!window.confirm('تغییراتِ ذخیره‌نشدهٔ تنظیمات از دست می‌رود. صفحه را ترک می‌کنید؟')) {
+      if (!ask()) {
         e.preventDefault();
         e.stopPropagation();
       }
     };
+    const off = setLeaveGuard(ask);
     window.addEventListener('beforeunload', unload);
     document.addEventListener('click', click, true);
-    return () => { window.removeEventListener('beforeunload', unload); document.removeEventListener('click', click, true); };
+    return () => { off(); window.removeEventListener('beforeunload', unload); document.removeEventListener('click', click, true); };
   }, [on]);
 }
 

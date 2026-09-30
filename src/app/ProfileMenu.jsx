@@ -7,6 +7,7 @@ import './profile-menu.css';
 import { Caret, Check, Fingerprint, Grid, LogOut, Moon, Plus, Sun, User } from '../ui/icons.jsx';
 import { setTheme, setDensity } from '../lib/theme.js';
 import { useConfirm } from '../ui/Confirm.jsx';
+import { canLeave } from '../lib/leave-guard.js';
 
 
 const Avatar = ({ u, size = 32 }) => (
@@ -113,14 +114,18 @@ export default function ProfileMenu({ onToast }) {
     }
   };
 
+  /* پیش‌نویسِ ذخیره‌نشدهٔ صفحه (`leave-guard`، R11): رفتن به صفحهٔ دیگر، جابه‌جاییِ حساب و خروج
+     هر سه صفحهٔ فعلی را رها می‌کنند؛ پس پیش از خودِ کار پرسیده می‌شود — نه بعد از خروج. */
   const doSwitch = (id) =>
     run(async () => {
       if (id === user.id) {
         // حسابِ خودت → صفحهٔ پروفایل
+        if (!canLeave('/app/profile')) return;
         setOpen(false);
         navigate('/app/profile');
         return;
       }
+      if (!canLeave()) return;
       const me = await switchAccount(id);
       toast(`سوییچ به «${me.displayName}»`);
       setOpen(false);
@@ -128,12 +133,14 @@ export default function ProfileMenu({ onToast }) {
 
   const doLogoutOne = (id, name) =>
     run(async () => {
+      if (id === user.id && !canLeave()) return;
       const nextId = await logoutAccount(id);
       toast(`«${name}» خارج شد`);
       if (nextId === null) navigate('/login', { replace: true });
     });
 
   const doLogoutAll = async () => {
+    if (!canLeave()) return;
     const ok = await confirm({
       title: 'از همهٔ حساب‌ها خارج می‌شوید؟',
       body: `از ${accounts.length.toLocaleString('fa-IR')} حسابِ این مرورگر خارج می‌شوید و برای هر کدام باید دوباره وارد شوید.`,
@@ -147,7 +154,7 @@ export default function ProfileMenu({ onToast }) {
     });
   };
 
-  const goProfile = () => { setOpen(false); navigate('/app/profile'); };
+  const goProfile = () => { if (!canLeave('/app/profile')) return; setOpen(false); navigate('/app/profile'); };
 
   const doBio = () =>
     run(async () => {
@@ -235,13 +242,13 @@ export default function ProfileMenu({ onToast }) {
             </button>
 
             <button className="pm-item" disabled={busy}
-              onClick={() => { setOpen(false); navigate('/login?add=1'); }}>
+              onClick={() => { if (!canLeave('/login?add=1')) return; setOpen(false); navigate('/login?add=1'); }}>
               <Plus width="17" height="17" /> افزودن حساب کاربری
             </button>
 
             {!onHome && (
               <button className="pm-item" disabled={busy}
-                onClick={() => { setOpen(false); navigate('/app'); }}>
+                onClick={() => { if (!canLeave('/app')) return; setOpen(false); navigate('/app'); }}>
                 <Grid width="17" height="17" /> صفحهٔ امروز
               </button>
             )}

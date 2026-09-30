@@ -7,6 +7,7 @@ import { Close, Plus, Search } from '../ui/icons.jsx';
 import { useTerms } from './config.jsx';
 import { useAllowedTools } from './tools.jsx';
 import { jToFa } from '../lib/jalali.js';
+import { canLeave } from '../lib/leave-guard.js';
 
 const faNum = (n) => Number(n || 0).toLocaleString('fa-IR');
 const toEn = (v) => String(v ?? '').replace(/[۰-۹]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[٠-٩]/g, (d) => '٠١٢٣٤٥٦٧٨٩'.indexOf(d));
@@ -76,8 +77,9 @@ export default function GlobalSearch({ open, onOpen, onClose }) {
     return () => clearTimeout(h);
   }, [q, open]);
 
+  /* پیش‌نویسِ ذخیره‌نشدهٔ صفحهٔ زیرین (`leave-guard`، R11) — «نه» یعنی پالت باز می‌ماند. */
   const go = useCallback((p) => {
-    if (!p) return;
+    if (!p || !canLeave(`/app/patients/${p.id}`)) return;
     onClose();
     navigate(`/app/patients/${p.id}`);
   }, [navigate, onClose]);
@@ -97,6 +99,7 @@ export default function GlobalSearch({ open, onOpen, onClose }) {
   const noHits = !busy && !err && term.length >= 2 && rows.length === 0;
   const canCreate = !!hero && noHits && (asPhone || !/\d/.test(toEn(term)));
   const createNew = useCallback(() => {
+    if (!canLeave('/app/dashboard')) return;
     const [first, ...rest] = term.split(/\s+/);
     onClose();
     navigate('/app/dashboard', { state: { prefill: asPhone ? { phone } : { firstName: first, lastName: rest.join(' ') } } });
