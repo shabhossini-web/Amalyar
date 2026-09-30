@@ -75,14 +75,24 @@ export default function Login() {
   /* نامِ مطب/شرکت زیرِ نشانِ عمل‌یار (بندِ ۱۹) — کارکن باید مطمئن باشد واردِ سامانهٔ درست شده. از مسیرِ
      عمومیِ هویت (بی‌احراز)؛ فقط نام خوانده می‌شود، نه تم — صفحهٔ ورود عمداً همیشه تیره است. */
   const [tenantName, setTenantName] = useState('');
+  const [tenantPhone, setTenantPhone] = useState('');
   useEffect(() => {
     if (kind === 'platform') return undefined;
     let alive = true;
     api('/public/intake/brand', { quiet401: true })
-      .then((f) => { if (alive && f?.brand?.name) setTenantName(f.brand.name); })
+      .then((f) => {
+        if (!alive || !f?.brand?.name) return;
+        setTenantName(f.brand.name);
+        setTenantPhone(f.brand.phone ?? '');
+      })
       .catch(() => {});
     return () => { alive = false; };
   }, [kind]);
+  /* روی دامنهٔ مطب/شرکت این صفحه **مالِ کارکنان** است (بازبینیِ UX، بندِ ۱۰۸): بیمارِ دنبالِ نوبت که از ریشهٔ
+     دامنه به این‌جا می‌رسید «ثبت‌نام» را می‌زد، موبایل و کد و سلفی می‌داد و آخرش «در انتظارِ تأییدِ مدیر» —
+     یک درخواستِ حسابِ کارمندیِ بی‌جا. پس: عنوانِ «ورودِ کارکنانِ …»، تبِ «درخواستِ حسابِ کارمند» و راهِ بیمار.
+     اولین حسابِ سامانه (راه‌اندازی) همان «ثبت‌نام» می‌ماند. */
+  const staffHost = !!tenantName && !firstAdmin;
   useEffect(() => {
     document.title = tenantName ? `ورود — ${tenantName}` : 'عمل‌یار — ورود';
   }, [tenantName]);
@@ -342,7 +352,7 @@ export default function Login() {
         <header className="lg-brand">
           <Mark className="lg-mark" gradient aria-hidden="true" />
           <div className="lg-word">عمل<span className="grad-text">‌یار</span></div>
-          {tenantName && <p className="lg-tenant">{tenantName}</p>}
+          {tenantName && <p className="lg-tenant">ورودِ کارکنانِ {tenantName}</p>}
         </header>
 
         {adding && step !== 'done' && (
@@ -360,7 +370,7 @@ export default function Login() {
             label="ورود یا ثبت‌نام"
             value={tab}
             onChange={(k) => { setTab(k); setErr(''); setNotice(''); }}
-            items={[{ key: 'login', label: 'ورود' }, { key: 'signup', label: 'ثبت‌نام' }]}
+            items={[{ key: 'login', label: 'ورود' }, { key: 'signup', label: staffHost ? 'درخواستِ حسابِ کارمند' : 'ثبت‌نام' }]}
           />
         )}
 
@@ -494,6 +504,19 @@ export default function Login() {
             <p>حسابِ شما ساخته شد و <b>در انتظارِ تأییدِ مدیر</b> است. پس از تأیید و تعیینِ سطحِ دسترسی، می‌توانید وارد شوید.</p>
             <button className="lg-btn" onClick={() => { setStep('phone'); setTab('login'); }}>بازگشت به ورود</button>
           </div>
+        )}
+
+        {staffHost && !adding && step !== 'done' && !forgot && (
+          <p className="lg-patient">
+            <Info width="16" height="16" aria-hidden="true" />
+            <span>
+              بیمار هستید؟ این صفحه برای کارکنان است. برای نوبت
+              {tenantPhone
+                ? <> با <a href={`tel:${toEnDigits(tenantPhone).replace(/[^0-9+]/g, '')}`}><bdi dir="ltr">{tenantPhone.replace(/[0-9]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d])}</bdi></a> تماس بگیرید</>
+                : ' با ما تماس بگیرید'}
+              {' '}یا از لینکِ ثبت‌نامی که برایتان فرستاده شده استفاده کنید.
+            </span>
+          </p>
         )}
 
         {step !== 'done' && (
