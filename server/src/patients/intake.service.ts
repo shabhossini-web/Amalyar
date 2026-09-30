@@ -718,11 +718,13 @@ export class IntakeService {
     const purpose = `intake-resume:${link.id}`;
     const wrong = () => new BadRequestException('کدِ تأیید درست نیست یا منقضی شده — کدِ تازه بگیرید');
     const otp = await this.prisma.otpCode.findFirst({ where: { phone, purpose, consumedAt: null }, orderBy: { createdAt: 'desc' } });
-    if (!otp || otp.expiresAt < new Date() || otp.attempts >= RESUME_OTP_MAX_ATTEMPTS) throw wrong();
-    if (sha256(code) !== otp.codeHash) {
-      await this.prisma.otpCode.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } });
-      throw wrong();
-    }
+    if (!otp || otp.expiresAt < new Date()) throw wrong();
+    /* شمارشِ تلاش پیش از مقایسه و اتمی — همان قاعدهٔ بازیابیِ رمز (بستهٔ PF، PF4). */
+    const slot = await this.prisma.otpCode.updateMany({
+      where: { id: otp.id, consumedAt: null, attempts: { lt: RESUME_OTP_MAX_ATTEMPTS } }, data: { attempts: { increment: 1 } },
+    });
+    if (!slot.count) throw wrong();
+    if (sha256(code) !== otp.codeHash) throw wrong();
     const consumed = await this.prisma.otpCode.updateMany({
       where: { id: otp.id, consumedAt: null, expiresAt: { gt: new Date() } }, data: { consumedAt: new Date() },
     });

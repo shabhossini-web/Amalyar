@@ -148,12 +148,14 @@ export class AuthService {
     });
     if (!otp) throw new BadRequestException('برای این شماره کدی صادر نشده است');
     if (otp.expiresAt < new Date()) throw new BadRequestException('کد منقضی شده؛ دوباره درخواست دهید');
-    if (otp.attempts >= OTP_MAX_ATTEMPTS) throw new BadRequestException('تعداد تلاش زیاد است؛ کد جدید بگیرید');
+    /* شمارشِ تلاش پیش از مقایسه و اتمی — همان قاعدهٔ بازیابیِ رمز (بستهٔ PF، PF4): سنجش و افزایشِ جدا یعنی
+       حدس‌های هم‌زمان همه «۰ تلاش» را می‌خواندند و سقفِ پنج‌تایی دور زده می‌شد. */
+    const slot = await this.prisma.otpCode.updateMany({
+      where: { id: otp.id, consumedAt: null, attempts: { lt: OTP_MAX_ATTEMPTS } }, data: { attempts: { increment: 1 } },
+    });
+    if (!slot.count) throw new BadRequestException('تعداد تلاش زیاد است؛ کد جدید بگیرید');
 
-    if (sha256(dto.code) !== otp.codeHash) {
-      await this.prisma.otpCode.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } });
-      throw new BadRequestException('کد تأیید اشتباه است');
-    }
+    if (sha256(dto.code) !== otp.codeHash) throw new BadRequestException('کد تأیید اشتباه است');
     const consumed = await this.prisma.otpCode.updateMany({ where: { id: otp.id, consumedAt: null, expiresAt: { gt: new Date() } }, data: { consumedAt: new Date() } });
     if (!consumed.count) throw new BadRequestException('کد قبلاً استفاده شده یا منقضی است');
 
@@ -478,34 +480,46 @@ export class AuthService {
     this.rateLimit.hit(`pwreset:${this.tid}:ip:${ip}`, 10, 15 * 60_000);
     this.rateLimit.hit(`pwreset:${this.tid}:id:${key}`, 3, 15 * 60_000);
     const same = { ok: true, ttl: OTP_TTL_MS / 1000 };
+    /* فقط محیطِ آزمون با پیامکِ ساختگی کد را برمی‌گرداند (همان قراردادِ ثبت‌نام، برای e2e) — آن‌جا منتظرِ کار می‌مانیم. */
+    if (process.env.NODE_ENV === 'test') {
+      const devCode = await this.issueResetCode(identifier);
+      return devCode ? { ...same, devCode } : same;
+    }
+    /* هشدار — **پاسخ منتظرِ هیچ‌چیز نمی‌ماند** (بستهٔ PF، PF5). پیامک از قبل بی‌انتظار بود، ولی برای حسابِ
+       موجود هنوز یک SELECT و یک INSERTِ اضافه پیش از پاسخ می‌رفت؛ همین چند میلی‌ثانیه، با تکرار، می‌گفت این
+       شناسه حساب دارد. یافتنِ حساب، ساختنِ کد و پیامک همه پس از پاسخ‌اند (زمینهٔ شرکت با AsyncLocalStorage
+       همراهِ کار می‌رود). */
+    setImmediate(() => {
+      this.issueResetCode(identifier).catch((e) => this.logger.warn(`password reset code could not be issued: ${e?.message ?? e}`));
+    });
+    return same;
+  }
+
+  /**
+   * کدِ بازیابی برای حسابی که `resetTarget` مجاز می‌داند. خروجی خودِ کد است فقط وقتی درگاه stub بود (محیطِ
+   * آزمون)؛ وگرنه `null`. کدِ همین دقیقه هنوز معتبر است — بی‌صدا، نه «کمی صبر کنید» (آن پیام فقط برای حسابِ
+   * موجود بود). پیامکِ نرفته کدش را پاک می‌کند تا کدِ بعدی پشتِ پنجرهٔ ارسالِ دوباره گیر نکند.
+   */
+  private async issueResetCode(identifier: string): Promise<string | null> {
     const target = await this.resetTarget(identifier);
-    if (!target) return same;
-    /* کدِ همین دقیقه هنوز معتبر است — بی‌صدا، نه «کمی صبر کنید» (آن پیام فقط برای حسابِ موجود بود). */
+    if (!target) return null;
     const recent = await this.prisma.otpCode.findFirst({
       where: { phone: target.phone, purpose: RESET_PURPOSE, createdAt: { gt: new Date(Date.now() - OTP_RESEND_MS) } },
     });
-    if (recent) return same;
+    if (recent) return null;
     const code = String(randomInt(100000, 1000000));
     const otp = await this.prisma.otpCode.create({
       data: { phone: target.phone, codeHash: sha256(code), purpose: RESET_PURPOSE, expiresAt: new Date(Date.now() + OTP_TTL_MS) },
     });
-    const sending = this.sms.sendOtp(target.phone, code, this.tenantContext.current()?.hostname)
-      .then((res) => {
-        if (!res.sent && !res.stub) throw new Error('درگاهِ پیامک کد را نپذیرفت');
-        return res;
-      })
-      .catch(async (e) => {
-        /* کدِ نرفته نباید تا پایانِ پنجرهٔ ارسالِ دوباره جلوی کدِ بعدی را بگیرد. */
-        await this.prisma.otpCode.deleteMany({ where: { id: otp.id, consumedAt: null } }).catch(() => undefined);
-        this.logger.warn(`password reset sms failed for account ${target.account.id}: ${e?.message ?? e}`);
-        return null;
-      });
-    /* فقط محیطِ آزمون با پیامکِ ساختگی کد را برمی‌گرداند (همان قراردادِ ثبت‌نام، برای e2e). */
-    if (process.env.NODE_ENV === 'test') {
-      const res = await sending;
-      if (res?.stub) return { ...same, devCode: code };
+    const res = await this.sms.sendOtp(target.phone, code, this.tenantContext.current()?.hostname).catch((e) => {
+      this.logger.warn(`password reset sms failed for account ${target.account.id}: ${e?.message ?? e}`);
+      return null;
+    });
+    if (!res || (!res.sent && !res.stub)) {
+      await this.prisma.otpCode.deleteMany({ where: { id: otp.id, consumedAt: null } }).catch(() => undefined);
+      return null;
     }
-    return same;
+    return res.stub ? code : null;
   }
 
   async resetPassword(dto: { identifier: string; code: string; password: string }, meta: { ua?: string; ip?: string }) {
@@ -514,15 +528,28 @@ export class AuthService {
     this.rateLimit.hit(`pwreset-verify:${this.tid}:id:${key}`, 8, 15 * 60_000);
     const target = await this.resetTarget(dto.identifier);
     if (!target) throw new BadRequestException(RESET_BAD);
+    /* **بودجهٔ حدس مالِ حساب است، نه متنِ تایپ‌شده** (بستهٔ PF، PF4): نامِ کاربری و موبایلِ یک حساب تا دیروز
+       دو سطلِ جدا بودند (۸ + ۸ حدس)، و سقفِ روزانه هم نبود. سرریزِ این دو سطل همان خطای عام است نه ۴۲۹ —
+       ۴۲۹ می‌گفت «این نامِ کاربری و این موبایل مالِ یک حساب‌اند». */
+    try {
+      this.rateLimit.hit(`pwreset-verify:${this.tid}:acct:${target.account.id}`, 8, 15 * 60_000);
+      this.rateLimit.hit(`pwreset-verify:${this.tid}:acct-day:${target.account.id}`, 20, 24 * 3600_000);
+    } catch {
+      throw new BadRequestException(RESET_BAD);
+    }
     const otp = await this.prisma.otpCode.findFirst({
       where: { phone: target.phone, purpose: RESET_PURPOSE, consumedAt: null },
       orderBy: { createdAt: 'desc' },
     });
-    if (!otp || otp.expiresAt < new Date() || otp.attempts >= OTP_MAX_ATTEMPTS) throw new BadRequestException(RESET_BAD);
-    if (sha256(toEnDigits(dto.code).trim()) !== otp.codeHash) {
-      await this.prisma.otpCode.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } });
-      throw new BadRequestException(RESET_BAD);
-    }
+    if (!otp || otp.expiresAt < new Date()) throw new BadRequestException(RESET_BAD);
+    /* هشدار — **شمارشِ تلاش پیش از مقایسه و اتمی** (PF4): سنجش و افزایش جدا بودند، پس حدس‌های هم‌زمان همه
+       «۰ تلاش» را می‌خواندند و هر کدام مقایسه می‌شد — کدِ پنج‌تلاشی با ده درخواستِ هم‌زمان ده حدس می‌خورد.
+       حالا هر حدس اول یک خانه از پنج خانه را می‌گیرد؛ خانه نماند ← همان خطای عام. */
+    const slot = await this.prisma.otpCode.updateMany({
+      where: { id: otp.id, consumedAt: null, attempts: { lt: OTP_MAX_ATTEMPTS } }, data: { attempts: { increment: 1 } },
+    });
+    if (!slot.count) throw new BadRequestException(RESET_BAD);
+    if (sha256(toEnDigits(dto.code).trim()) !== otp.codeHash) throw new BadRequestException(RESET_BAD);
     const passwordHash = await bcrypt.hash(dto.password, 12);
     await this.prisma.$transaction(async (tx) => {
       const consumed = await tx.otpCode.updateMany({

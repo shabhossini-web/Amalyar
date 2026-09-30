@@ -13,11 +13,18 @@
  * بازبینیِ امنیتیِ بستهٔ P (بستهٔ PF) — هر بخش سنجه‌ای است که **بی‌اصلاح قرمز** می‌شد:
  *  - PF1: شمارهٔ کسی که حساب دارد از «تعاریف» (جراح/راننده) عوض نمی‌شود (۴۰۳)، و سوپرادمین کدِ پیامکی نمی‌گیرد
  *  - PF2: سطلِ سقفِ نرخ به‌ازای نشانیِ واقعی (تهِ X-Forwarded-For) و جدا برای هر شرکت
+ *  - PF3: «ادامه با موبایلِ» ثبت‌نامِ بیمار منتظرِ درگاهِ پیامک نمی‌ماند (درونِ فرایند)
+ *  - PF4: بودجهٔ حدسِ کد به‌ازای حساب است نه متنِ تایپ‌شده، و شمارشِ تلاش اتمی است
+ *  - PF5: درخواستِ کدِ بازیابی بیرون از محیطِ آزمون منتظرِ یافتنِ حساب نمی‌ماند (درونِ فرایند)
  *
  * ⚠️ سقفِ نرخ در حافظهٔ سرور است (۱۰ درخواستِ کد در ۱۵ دقیقه برای هر IP): اجرای دوباره روی همان
  * سرور در کمتر از ۱۵ دقیقه ممکن است ۴۲۹ بگیرد — سرور را از نو بالا بیاورید.
  */
+import { execSync } from 'node:child_process';
 const API = process.env.E2E_API ?? 'http://localhost:3101/api';
+/* دیتابیسِ همان شرکت — فقط برای چیدنِ حالتی که از بیرون ساختنی نیست (مثلِ صفرکردنِ تلاش‌های یک کد). */
+const DB = process.env.E2E_DB ?? 'postgresql://amal:amal@localhost:5432/amalyar_uitest';
+const sql = (q) => execSync(`psql "${DB}" -qtAc ${JSON.stringify(q)}`).toString().trim();
 let pass = 0, fail = 0;
 const ok = (c, m, extra = '') => { if (c) { pass++; console.log('  ✔ ' + m); } else { fail++; console.log('  ✘ ' + m + (extra ? ` — ${extra}` : '')); } };
 
@@ -168,7 +175,23 @@ for (let i = 0; i < 4; i++) inA.push(await call('/auth/password/request-otp', { 
 const inB = await call('/auth/password/request-otp', { body: { identifier: tid }, ip: '10.63.0.1', base: API_B }).catch((e) => ({ status: 0, json: { message: e.message } }));
 ok(inA[3].status === 429 && inB.status < 300, `شناسهٔ پرشده در شرکتِ الف، شرکتِ ب را قفل نمی‌کند (الف: ${inA.map((r) => r.status).join('،')} · ب: ${inB.status})`, msg(inB));
 
-console.log('\n۶) سقفِ نرخ برای شناسهٔ ناموجود هم');
+console.log('\n۶) PF4 — بودجهٔ حدسِ کد به‌ازای حساب، نه متنِ تایپ‌شده');
+/* نامِ کاربری و موبایلِ یک حساب دو سطلِ جدا بودند: ۸ حدس با یکی، ۸ حدسِ دیگر با دیگری. */
+const guess = await newAccount('7', bearer);
+const gReq = await call('/auth/password/request-otp', { body: { identifier: guess.username }, ip: '10.64.0.1' });
+const gCode = gReq.json?.devCode;
+const gBad = String((Number(gCode ?? 0) + 1) % 1_000_000).padStart(6, '0');
+const tries = [];
+for (let i = 0; i < 8; i++) {
+  tries.push(await call('/auth/password/reset', { body: { identifier: guess.username, code: gBad, password: 'guess-pass-1' }, ip: '10.64.0.1' }));
+}
+ok(tries.every((r) => r.status === 400 && msg(r) === msg(wrong)), `هشت حدسِ غلط با نامِ کاربری ← همه همان پیامِ عام (${tries.map((r) => r.status).join('،')})`);
+/* کد پس از پنج حدس مُرده است؛ زنده‌اش می‌کنیم تا **فقط** بودجهٔ حساب بتواند حدسِ نهم را نگه دارد. */
+sql(`UPDATE otp_codes SET attempts = 0 WHERE phone = '${guess.phone}' AND purpose = 'password-reset' AND consumed_at IS NULL`);
+const ninth = await call('/auth/password/reset', { body: { identifier: guess.phone, code: gCode, password: 'guess-pass-1' }, ip: '10.64.0.1' });
+ok(ninth.status === 400 && msg(ninth) === msg(wrong), `حدسِ نهم با موبایلِ همان حساب — حتی با کدِ درست — رد می‌شود (${ninth.status})`, msg(ninth));
+
+console.log('\n۷) سقفِ نرخ برای شناسهٔ ناموجود هم');
 const probe = `ratelimit${run}`;
 const codes = [];
 for (let i = 0; i < 4; i++) codes.push(await call('/auth/password/request-otp', { body: { identifier: probe } }));
@@ -178,7 +201,7 @@ ok(codes.slice(0, 3).every((r) => r.status < 300) && codes[3].status === 429 && 
 /* ── درونِ فرایند: چیزهایی که سرورِ زنده در NODE_ENV=test نشانشان نمی‌دهد ─────────────────────────────
    آزمونِ زنده کد را از پاسخ می‌گیرد (devCode)، پس در محیطِ آزمون سرور عمداً منتظرِ کارش می‌ماند. رفتارِ
    production (پاسخِ فوری، کارِ جداشده) این‌جا با خودِ کلاس‌های بیلدشده و دیتابیس/درگاهِ ساختگی سنجیده می‌شود. */
-console.log('\n۷) درونِ فرایند (NODE_ENV=production، دیتابیس و درگاهِ ساختگی)');
+console.log('\n۸) درونِ فرایند (NODE_ENV=production، دیتابیس و درگاهِ ساختگی)');
 const { createRequire } = await import('node:module');
 const requireServer = createRequire(new URL('../../server/package.json', import.meta.url));
 requireServer('reflect-metadata');
@@ -186,11 +209,13 @@ const { IntakeService } = requireServer('./dist/patients/intake.service.js');
 const { RateLimitService } = requireServer('./dist/common/rate-limit.service.js');
 const later = (ms, v) => new Promise((r) => setTimeout(() => r(v), ms));
 const timed = async (fn) => { const t0 = performance.now(); const r = await fn(); return { r, ms: performance.now() - t0 }; };
-const inProd = async (fn) => {
+const inEnv = (env) => async (fn) => {
   const was = process.env.NODE_ENV;
-  process.env.NODE_ENV = 'production';
-  try { return await fn(); } finally { process.env.NODE_ENV = was; }
+  process.env.NODE_ENV = env;
+  try { return await fn(); } finally { if (was === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = was; }
 };
+const inProd = inEnv('production');
+const inTest = inEnv('test');
 
 /** IntakeService با دیتابیس و درگاهِ ساختگی — فقط همان چیزهایی که «ادامه با موبایل» و لینکِ ادامه لازم دارند. */
 function fakeIntake({ open = true, smsDelay = 0, smsFail = false, recordPhone = '09120000000' } = {}) {
@@ -234,6 +259,97 @@ function fakeIntake({ open = true, smsDelay = 0, smsFail = false, recordPhone = 
   await inProd(() => broken.svc.resumeRequest('tok', '09120000003', '10.70.0.3'));
   await later(60);
   ok(broken.seen.deleted.length === 1, 'PF3: پیامکِ نرفته ← کدش پاک شد (کدِ بعدی پشتِ پنجرهٔ یک‌دقیقه‌ای گیر نمی‌کند)');
+}
+
+/** AuthService روی یک دیتابیسِ درون‌حافظه‌ایِ کوچک — فقط جدول‌هایی که بازیابیِ رمز می‌خواند و می‌نویسد. */
+const { AuthService } = requireServer('./dist/auth/auth.service.js');
+const { JwtService } = requireServer('@nestjs/jwt');
+process.env.JWT_SECRET ??= 'in-process-only-secret-with-more-than-32-chars';
+const cond = (v, c) => {
+  if (c === undefined) return true;
+  if (c === null) return v === null || v === undefined;
+  if (c instanceof Date || typeof c !== 'object') return v === c;
+  if ('gt' in c) return v > c.gt;
+  if ('lt' in c) return v < c.lt;
+  return true;
+};
+const matches = (o, w) => Object.entries(w ?? {}).every(([k, c]) => cond(o[k], c));
+function fakeAuth({ findDelay = 0, smsDelay = 0 } = {}) {
+  const db = { otps: [], sent: [], passwords: [], passkeysDeleted: [], barrier: null };
+  const account = {
+    id: 41, username: 'inproc', status: 'active', level: 2, passwordHash: '$2a$12$fixture', jobRole: null,
+    phoneVerifiedAt: new Date(), verificationDueAt: null, personId: 9,
+    person: { id: 9, firstName: 'آزمونی', lastName: 'درون', phone: '09129990041', phoneScope: 'primary' },
+  };
+  let seq = 0;
+  const otpCode = {
+    findFirst: async ({ where }) => {
+      const hit = db.otps.filter((o) => matches(o, where)).sort((a, b) => b.id - a.id)[0];
+      const snapshot = hit ? { ...hit } : null; // خواندن مثلِ دیتابیس: عکسِ همان لحظه
+      if (db.barrier) await db.barrier();
+      return snapshot;
+    },
+    create: async ({ data }) => { const row = { id: ++seq, attempts: 0, consumedAt: null, createdAt: new Date(), ...data }; db.otps.push(row); return { ...row }; },
+    update: async ({ where, data }) => { const o = db.otps.find((x) => x.id === where.id); if (data.attempts?.increment) o.attempts += data.attempts.increment; return { ...o }; },
+    updateMany: async ({ where, data }) => {
+      const rows = db.otps.filter((o) => matches(o, where));
+      for (const o of rows) { if (data.attempts?.increment) o.attempts += data.attempts.increment; if (data.consumedAt) o.consumedAt = data.consumedAt; }
+      return { count: rows.length };
+    },
+    deleteMany: async ({ where }) => { const before = db.otps.length; db.otps = db.otps.filter((o) => !matches(o, where)); return { count: before - db.otps.length }; },
+  };
+  const prisma = {
+    otpCode,
+    account: {
+      findFirst: async ({ where }) => {
+        await later(findDelay);
+        const ids = (where?.OR ?? []).map((w) => w.username ?? w.person?.phone);
+        return ids.includes(account.username) || ids.includes(account.person.phone) ? { ...account } : null;
+      },
+      update: async ({ data }) => { if (data.passwordHash) db.passwords.push(data.passwordHash); return { ...account }; },
+    },
+    session: { updateMany: async () => ({ count: 1 }) },
+    webauthnCredential: { deleteMany: async ({ where }) => { db.passkeysDeleted.push(where); return { count: 2 }; } },
+  };
+  prisma.$transaction = async (fn) => fn(prisma);
+  const sms = {
+    sendOtp: async (phone, code, host, purpose) => { db.sent.push({ phone, code, host, purpose }); await later(smsDelay); return { sent: false, stub: true }; },
+  };
+  const tenant = { current: () => ({ tenantId: 't-in', hostname: 'in.test' }), require: () => ({ tenantId: 't-in', hostname: 'in.test' }) };
+  const svc = new AuthService(prisma, new JwtService({ secret: process.env.JWT_SECRET }), sms, new RateLimitService(), tenant);
+  return { svc, db, account };
+}
+
+{
+  /* PF4 — شمارشِ تلاش اتمی: دو حدسِ هم‌زمان روی کدی که یک تلاش بیشتر ندارد. هر دو «۴ تلاش» را خوانده‌اند؛
+     بی‌افزایشِ اتمی، دومی (با کدِ درست) هم مقایسه می‌شد — حدسِ ششم روی کدِ پنج‌تلاشی. */
+  const { svc, db, account } = fakeAuth();
+  const issued = await inTest(() => svc.requestPasswordReset(account.username, '10.80.0.1'));
+  const code = issued?.devCode;
+  ok(/^\d{6}$/.test(code ?? ''), 'PF4: کدِ درونِ فرایند صادر شد (محیطِ test)');
+  db.otps.at(-1).attempts = 4;
+  let waiting = [];
+  db.barrier = () => new Promise((r) => { waiting.push(r); if (waiting.length === 2) { waiting.forEach((f) => f()); waiting = []; } });
+  const other = String((Number(code) + 1) % 1_000_000).padStart(6, '0');
+  const [a, b] = await Promise.allSettled([
+    svc.resetPassword({ identifier: account.username, code: other, password: 'race-pass-1' }, { ip: '10.80.0.2' }),
+    svc.resetPassword({ identifier: account.person.phone, code, password: 'race-pass-1' }, { ip: '10.80.0.3' }),
+  ]);
+  db.barrier = null;
+  ok(a.status === 'rejected' && b.status === 'rejected' && db.passwords.length === 0,
+    `PF4: حدسِ ششمِ هم‌زمان حتی با کدِ درست رد شد (${a.status}/${b.status}، رمزِ نوشته‌شده: ${db.passwords.length})`, b.reason?.message);
+  ok(db.otps.at(-1).attempts <= 5, `PF4: شمارندهٔ تلاش از سقف رد نشد (${db.otps.at(-1).attempts})`);
+}
+
+{
+  /* PF5 — درخواستِ کد: پاسخ منتظرِ یافتنِ حساب و ساختنِ کد نمی‌ماند؛ زمانش نمی‌گوید حساب هست یا نه. */
+  const { svc, db, account } = fakeAuth({ findDelay: 300 });
+  const hit = await inProd(() => timed(() => svc.requestPasswordReset(account.username, '10.81.0.1')));
+  const miss = await inProd(() => timed(() => svc.requestPasswordReset(`nobody-in-${run}`, '10.81.0.1')));
+  ok(hit.ms < 100 && miss.ms < 100, `PF5: پاسخِ حسابِ موجود ${Math.round(hit.ms)}ms و ناموجود ${Math.round(miss.ms)}ms — دیتابیسِ کند (۳۰۰ms) پشتِ پاسخ نیست`);
+  ok(JSON.stringify(hit.r) === JSON.stringify(miss.r) && !hit.r?.devCode, 'PF5: هر دو پاسخ یکی و بی‌کد');
+  await later(450);
+  ok(db.otps.length === 1 && db.sent.length === 1, 'PF5: کد در پس‌زمینه ساخته و پیامک شد (فقط برای حسابِ موجود)');
 }
 
 console.log(`\nسبز: ${pass}   قرمز: ${fail}`);
