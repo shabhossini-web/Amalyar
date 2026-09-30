@@ -70,6 +70,33 @@ function Owner({ role, name }) {
 }
 
 /**
+ * ساعتِ سرِ کارت — company-22.
+ *
+ * تا بازبینیِ UX نبودنِ ساعت یک قرصِ بنفشِ پررنگ با «—» بود: درشت‌ترین جزءِ کارت، و شبیهِ
+ * دکمهٔ «منها / جمع‌کردن». حالا نبودنش یک «ساعت؟»ِ کم‌رنگ است و هر دو حالت لمس‌خورند و
+ * «ثبتِ ساعت» را باز می‌کنند — ساعتِ ثبت‌شده همان‌جا اصلاح می‌شود. پایان، اگر هست، زیرِ شروع.
+ */
+function TimeChip({ visit, onOpen }) {
+  const { opStartTime: start, opEndTime: end } = visit;
+  if (!start && !end) {
+    /* عملِ لغوشده ساعت لازم ندارد — «ساعت؟» آن‌جا دعوت به کارِ بی‌معناست. */
+    if (visit.status === 'cancelled') return null;
+    return (
+      <button type="button" className="tk-time empty" onClick={onOpen} aria-label="ساعت؟ — افزودنِ ساعتِ عمل">
+        ساعت؟
+      </button>
+    );
+  }
+  const said = [start ? faTime(start) : null, end ? `تا ${faTime(end)}` : null].filter(Boolean).join(' ');
+  return (
+    <button type="button" className="tk-time" onClick={onOpen} aria-label={`${said} — اصلاحِ ساعتِ عمل`}>
+      {start ? <span dir="ltr">{faTime(start)}</span> : null}
+      {end ? <small>تا <span dir="ltr">{faTime(end)}</span></small> : null}
+    </button>
+  );
+}
+
+/**
  * «شروع شد / پایان یافت» با یک لمس (company-15) — همان دو دکمهٔ میزِ اتاقِ عمل.
  *
  * فقط روی عملِ **امروزِ** در انتظار: ساعتِ «الان» برای عملِ فردا یا دیروز معنا ندارد. فقط
@@ -221,7 +248,7 @@ export default function Tech() {
           {team && <Owner role={terms.tech} name={h.techName} />}
           <p>بیماران احتمالی — هنوز به کارشناس تخصیص داده نشده‌اند</p>
           {h.openVisits.length === 0 && <p>مراجعه آزادی در این بیمارستان نیست.</p>}
-          {h.openVisits.map(v => <div className="tk-open-visit" key={v.id}><div><b>{v.name}</b><small>{v.procedure || ''} · {time(v.opStartTime)}</small></div><button className="tk-ghost" disabled={claiming !== null} onClick={() => claim(h, v)}>{claiming === `${h.id}:${v.id}` ? 'در حال ثبت…' : team ? `پذیرش برای ${h.techName || terms.tech}` : 'پذیرش این مراجعه'}</button></div>)}
+          {h.openVisits.map(v => <div className="tk-open-visit" key={v.id}><div><b>{v.name}</b><small>{[v.procedure, v.opStartTime ? faTime(v.opStartTime) : null].filter(Boolean).join(' · ')}</small></div><button className="tk-ghost" disabled={claiming !== null} onClick={() => claim(h, v)}>{claiming === `${h.id}:${v.id}` ? 'در حال ثبت…' : team ? `پذیرش برای ${h.techName || terms.tech}` : 'پذیرش این مراجعه'}</button></div>)}
         </section>)}
         {!data && !err && <div className="tk-empty">در حال بارگذاری…</div>}
         {data && visits.length === 0 && (
@@ -236,7 +263,7 @@ export default function Tech() {
         {visits.map((v, i) => (
           <motion.article key={v.id} {...row(i)} className={`tk-card st-${v.status}`}>
             <header>
-              <span className="tk-time" dir="ltr">{time(v.opStartTime)}</span>
+              <TimeChip visit={v} onOpen={() => setTimesFor(v)} />
               <div className="tk-title">
                 <b>{v.patientName}</b>
                 {/* تاریخ اول و کد جدا از جهتِ متن (قانونِ ۹، company-05): کدِ لاتینِ بی‌جداساز

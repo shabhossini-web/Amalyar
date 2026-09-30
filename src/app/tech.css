@@ -42,7 +42,17 @@
   flex: 0 0 auto; display: grid; place-items: center; min-width: 58px; padding: 7px 9px;
   border-radius: 12px; font-size: 14px; font-weight: 800; color: #fff;
   background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
+  /* دکمه است (company-22): لمس «ثبتِ ساعت» را باز می‌کند. */
+  border: 0; font-family: inherit; line-height: 1.35; cursor: pointer;
 }
+.tk-time small { font-size: 10.5px; font-weight: 700; opacity: .88; }
+/* نبودِ ساعت خبر است، نه کنش: «ساعت؟»ِ کم‌رنگ با قابِ خط‌چین — نه قرصِ پررنگِ «—» که
+   درشت‌ترین جزءِ کارت بود و شبیهِ دکمهٔ جمع‌کردن. */
+.tk-time.empty {
+  font-size: 12px; font-weight: 700; color: var(--text3);
+  background: none; border: 1px dashed rgba(var(--veil-rgb), .24);
+}
+.tk-time.empty:hover { color: var(--text2); border-color: rgba(var(--brand-2-rgb), .5); }
 .tk-title { flex: 1; min-width: 0; }
 .tk-title b { display: block; font-size: 14px; }
 .tk-title small { display: block; margin-top: 3px; font-size: 11px; color: var(--text3); }
@@ -215,7 +225,7 @@
 .tk-status-opt:hover { border-color: rgba(var(--brand-2-rgb), .45); }
 .tk-status-opt.on { background: rgba(var(--brand-soft-rgb), .14); border-color: rgba(var(--brand-2-rgb), .7); }
 .tk-status-opt:disabled { opacity: .55; cursor: not-allowed; }
-.tk-status-opt:focus-visible, .tk-ghost:focus-visible, .tk-save:focus-visible, .tk-x:focus-visible {
+.tk-status-opt:focus-visible, .tk-ghost:focus-visible, .tk-save:focus-visible, .tk-x:focus-visible, .tk-time:focus-visible {
   outline: 2px solid var(--cyan); outline-offset: 2px;
 }
 @media (prefers-reduced-motion: reduce) { .tk-status-opt { transition: none; } }
@@ -239,9 +249,9 @@
   /* یک‌لمسیِ «شروع شد / پایان یافت» ردیفِ اولِ خودش — کارِ همین لحظه، پیش از بقیه. */
   .tk-acts > .tk-stamp { flex-basis: 100%; }
 }
-/* لمس: هدفِ ≥ ۴۴px برای دکمهٔ یک‌لمسی و «اکنون». */
+/* لمس: هدفِ ≥ ۴۴px برای ساعتِ کارت، دکمهٔ یک‌لمسی و «اکنون». */
 @media (pointer: coarse) {
-  .tk-stamp, .tk-now { min-height: 44px; }
+  .tk-time, .tk-stamp, .tk-now { min-height: 44px; }
 }
 /* مراجعه‌های آزادِ همان بیمارستان و روزِ برنامهٔ حضور — فقط پذیرش‌پذیرها. */
 .tk-open-visit { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid rgba(var(--veil-rgb), .12); }
