@@ -193,6 +193,55 @@ export class WorkService {
     return new Map(rows.map((a) => [a.id, nameOf(a)]));
   }
 
+  /**
+   * **خلاصهٔ مراجعهٔ هر کار** — کد، تاریخ، وضعیت و نامِ عمل — تا پاپ‌آپِ **خودِ کار** («وضعیتِ
+   * عمل»، «گزارشِ خدمت») بی‌درخواستِ دوم بگوید دربارهٔ کدام عمل است (و «عملِ آینده» را بپرسد).
+   * عمداً همین چند فیلد: نه مبلغ، نه سهم — کارشناس هم این ردیف را می‌بیند.
+   *
+   * ⚠️ **`techPopup`** (بازبینیِ خصمانه، R1): آن دو پاپ‌آپ همان مسیرهای پنلِ کارشناس‌اند
+   * (`/tech/visits/:id/{status,report}`) و آن مسیرها پشتِ ماژولِ `tech` و مجوزِ همان کار
+   * (`visits.status` / `documents.write`) هستند و فقط عملِ **خودِ کارشناس** را می‌پذیرند
+   * (سوپرادمین: هر عملی که کارشناس دارد — `visitScope`ِ `tech.service.ts`). کارِ «بی‌مسئول»
+   * (عملِ بی‌کارشناس)، کارِ واگذارشده به دیگری، یا شرکتی که ماژولِ `tech` را خاموش کرده، با
+   * آن پاپ‌آپ ۴۰۴/۴۰۳ می‌گرفت. پس سرور همین را برای **همین کاربر و همین نوعِ کار** می‌گوید
+   * (قانونِ ۳) و رابط بی‌آن فرمِ همان مراجعه را باز می‌کند — کاری که پیش از پاپ‌آپ‌ها می‌کرد.
+   *
+   * عمومی است چون نمای استثنای «امروز» (`TodayService.exceptions`) هم ردیفِ کارِ خام دارد
+   * و همان پاپ‌آپ‌ها را باز می‌کند؛ یک تعریف، نه دو.
+   */
+  async visitBriefs(user: any, rows: { type?: string | null; visitId?: number | null }[]) {
+    const vids = [...new Set(rows.map((r) => r.visitId).filter(Boolean))] as number[];
+    const needs = (type: string) => rows.some((r) => r.type === type && r.visitId);
+    const [visits, canStatus, canReport] = await Promise.all([
+      vids.length
+        ? this.prisma.visit.findMany({
+          where: { id: { in: vids } },
+          select: {
+            id: true, seq: true, opDate: true, opStatus: true, opType: true, techId: true,
+            procedureType: { select: { name: true } }, otherProcedures: OTHER_PX,
+            patient: { select: { code: true, deletedAt: true } },
+          },
+        })
+        : Promise.resolve([] as any[]),
+      /* فقط وقتی ردیفی از همین نوع هست — فهرستِ بی‌این دو نوع کوئریِ اضافه نمی‌زند. */
+      needs('confirm_surgery_done') ? canAccess(this.prisma, user, 'tech', ['visits.status']).catch(() => false) : Promise.resolve(false),
+      needs('complete_report') ? canAccess(this.prisma, user, 'tech', ['documents.write']).catch(() => false) : Promise.resolve(false),
+    ]);
+    const team = isUnrestricted(user);
+    /* همان دامنهٔ `visitScope`ِ پنلِ کارشناس (یک تعریف برای دو جا). */
+    const inTechScope = (v: any) => (team ? !!v.techId && !v.patient.deletedAt : !!v.techId && v.techId === user?.id);
+    const byId = new Map(visits.map((v: any) => [v.id, v]));
+    return (r: { type?: string | null; visitId?: number | null }) => {
+      const v: any = r.visitId ? byId.get(r.visitId) : null;
+      if (!v) return null;
+      const may = r.type === 'confirm_surgery_done' ? canStatus : r.type === 'complete_report' ? canReport : false;
+      return {
+        id: v.id, code: `${v.patient.code}-V${v.seq}`, opDate: v.opDate, opStatus: v.opStatus, procedure: procedureLabel(v),
+        techPopup: may && inTechScope(v),
+      };
+    };
+  }
+
   /** بیمار/مراجعه را سمتِ سرور ضمیمه می‌کند (قانونِ ۱۵ — render فرمول ندارد). */
   private async enrich(user: any, rows: any[]) {
     const pids = [...new Set(rows.map((r) => r.patientId).filter(Boolean))] as number[];
@@ -200,30 +249,15 @@ export class WorkService {
        برای بقیه `null` می‌ماند: ردیف‌هایشان در هیچ صفحه‌ای عوض نمی‌شود، و کارشناسی که
        کارهای یک بیمار را می‌بیند (`scope=patient`) نامِ هم‌تیمی‌ها را تازه نمی‌گیرد. */
     const team = isUnrestricted(user);
-    /* مراجعهٔ هر کار — کد، تاریخ، وضعیت و نامِ عمل — تا پاپ‌آپِ **خودِ کار** («وضعیتِ عمل»،
-       «گزارشِ خدمت») بی‌درخواستِ دوم بگوید دربارهٔ کدام عمل است. عمداً همین چند فیلد: نه
-       مبلغ، نه سهم — کارشناس هم این ردیف را می‌بیند. */
-    const vids = [...new Set(rows.map((r) => r.visitId).filter(Boolean))] as number[];
-    /* نامِ مالک‌ها هم‌زمان با بیمارها — یک کوئری برای همهٔ ردیف‌ها، و فقط وقتی لازم است. */
-    const [patients, names, visits] = await Promise.all([
+    /* نامِ مالک‌ها هم‌زمان با بیمارها و مراجعه‌ها — یک کوئری برای همهٔ ردیف‌ها، و فقط وقتی لازم است. */
+    const [patients, names, visitOf] = await Promise.all([
       pids.length
         ? this.prisma.patient.findMany({ where: { id: { in: pids } }, select: { id: true, code: true, firstName: true, lastName: true, phone: true } })
         : Promise.resolve([] as { id: number; code: string; firstName: string; lastName: string; phone: string | null }[]),
       team ? this.accountNames(rows.map((r) => r.ownerAccountId)) : Promise.resolve(new Map<number, string>()),
-      vids.length
-        ? this.prisma.visit.findMany({
-          where: { id: { in: vids } },
-          select: {
-            id: true, seq: true, opDate: true, opStatus: true, opType: true,
-            procedureType: { select: { name: true } }, otherProcedures: OTHER_PX, patient: { select: { code: true } },
-          },
-        })
-        : Promise.resolve([] as any[]),
+      this.visitBriefs(user, rows),
     ]);
     const byId = new Map(patients.map((p) => [p.id, { ...p, fullName: `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim() }]));
-    const visitById = new Map(visits.map((v: any) => [v.id, {
-      id: v.id, code: `${v.patient.code}-V${v.seq}`, opDate: v.opDate, opStatus: v.opStatus, procedure: procedureLabel(v),
-    }]));
     /* عکس‌هایی که بیمار برای سفارشِ همین کار فرستاده (W0.8) کنارِ ردیف می‌آیند —
        یک کوئری برای همهٔ ردیف‌ها، نه یکی به‌ازای هر کار. تا دیروز کارِ «بررسیِ
        نتیجهٔ مشاوره» فقط یک عنوان بود و عکسِ بیمار پشتِ دو کلیک پنهان می‌ماند؛
@@ -249,7 +283,7 @@ export class WorkService {
       return {
         ...r,
         patient: r.patientId ? byId.get(r.patientId) ?? null : null,
-        visit: r.visitId ? visitById.get(r.visitId) ?? null : null,
+        visit: visitOf(r),
         /* «انجام شد»ِ خالی فقط برای یادداشتِ دستی است (`act`)؛ کارِ رویدادی با انجامِ خودش
            بسته می‌شود یا با «بستن بدونِ اقدام». رابط همین را می‌خواند، نه فهرستِ نوع‌ها. */
         manual: isManual(r),

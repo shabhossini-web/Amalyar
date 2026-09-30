@@ -29,14 +29,15 @@ const faNum = (n) => Number(n || 0).toLocaleString('fa-IR');
  * فعلِ دکمهٔ اصلیِ کارِ رویدادی — همان کاری که ردیف یادآوری‌اش است، به زبانِ مقصدش
  * (`work-target.js`): «ثبتِ وضعیت» پنجرهٔ سه‌گزینه‌ای را باز می‌کند، نه اینکه ببندد.
  */
-function actVerb(w, target, t) {
+function actVerb(w, target, t, kind) {
   if (!target) return null;
   if (target.type === 'opstatus') return 'ثبتِ وضعیت';
   if (target.type === 'report') return 'بارگذاریِ گزارش';
   if (target.type === 'intake') return 'بررسی و تأیید';
   if (target.type === 'order' && w.type === 'review_result') return 'بررسیِ نتیجه';
-  /* مطب: «گزارش» همان شرحِ عملِ داخلِ فرمِ عمل است. */
-  if (w.type === 'complete_report') return `نوشتنِ ${t.workReport}`;
+  /* مطب: «گزارش» همان شرحِ عملِ داخلِ فرمِ عمل است. در شرکت، کارِ گزارشی که پاپ‌آپش برای
+     این کاربر باز نیست (`visit.techPopup`) فرمِ مراجعه را باز می‌کند — «نوشتن» آن‌جا دروغ است. */
+  if (w.type === 'complete_report' && kind === 'clinic') return `نوشتنِ ${t.workReport}`;
   return 'بازکردن';
 }
 
@@ -81,7 +82,7 @@ export default function WorkRow({ w, onAct, busy, compact = false, onOpen, onAss
   const { kind } = useConfig();
   /* پاسخِ سرورِ قدیمی `manual` ندارد؛ نوعِ «manual» همان تعریفِ سرور است. */
   const manual = w.manual ?? w.type === 'manual';
-  const verb = !manual && onOpen ? actVerb(w, workTarget(w, kind), t) : null;
+  const verb = !manual && onOpen ? actVerb(w, workTarget(w, kind), t, kind) : null;
   /* پرسشِ «بستن بدونِ اقدام» داخلِ خودِ ردیف — نه پنجره: همین ردیف در کشوی زنگ هم هست و
      پوششِ `fixed` داخلِ کشویی که `transform` دارد جای درستش را پیدا نمی‌کند. */
   const [asking, setAsking] = useState(false);

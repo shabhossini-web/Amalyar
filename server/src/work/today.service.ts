@@ -130,7 +130,7 @@ export class TodayService {
       can('formgen')
         ? this.prisma.intakeSubmission.count({ where: { status: 'pending_approval' } })
         : Promise.resolve(0),
-      seesExceptions ? this.exceptions(now) : Promise.resolve(null),
+      seesExceptions ? this.exceptions(now, user) : Promise.resolve(null),
       /* «پردازشِ صف» روی کارتِ رویدادِ گیرکرده — سرور تصمیم می‌گیرد (قانونِ ۳): مجوزِ
          `work.process` (پیش‌فرض سوپرادمین)، نه حدسِ سطح در رابط. بیرونِ `exceptions`
          می‌ماند تا آن شیء همگن (`{count, items}`) بماند. */
@@ -211,7 +211,7 @@ export class TodayService {
    * `kind`): مالک دید هشدارِ «نتیجهٔ بررسی‌نشده» فقط یک عدد و یک ساعت بود و معلوم
    * نبود کدام بیمار — هشداری که نگوید مالِ چیست، کلیک‌شدنی هم نیست.
    */
-  private async exceptions(now: Date) {
+  private async exceptions(now: Date, user: any) {
     const ago = (h: number) => new Date(now.getTime() - h * 3600_000);
     const NOT_PATIENT = { OR: [{ ownerRole: null }, { ownerRole: { not: 'patient' } }] };
     const unownedWhere = {
@@ -257,13 +257,20 @@ export class TodayService {
       }),
     ]);
 
-    const [unreviewed, byPatient] = await Promise.all([
+    /* خلاصهٔ مراجعه (و «پاپ‌آپِ خودِ کار شدنی است؟») همان‌که صفِ کار دارد (`visitBriefs`، R1):
+       بی‌آن «ثبتِ وضعیت»ِ ردیفِ بی‌مسئول پرسشِ «عملِ آینده» را دور می‌زد و مسیرِ پنلِ
+       کارشناس را برای عملی باز می‌کرد که کارشناس ندارد (۴۰۴). */
+    const [unreviewed, byPatient, visitOf] = await Promise.all([
       this.unreviewedOrders(ago(48)),
       this.patientsById([...unowned.map((w) => w.patientId), ...stuck.map((e) => e.patientId)]),
+      this.work.visitBriefs(user, unowned),
     ]);
 
     return {
-      unowned: { count: unownedCount, items: unowned.map((w) => ({ ...w, patient: byPatient.get(w.patientId ?? -1) ?? null })) },
+      unowned: {
+        count: unownedCount,
+        items: unowned.map((w) => ({ ...w, patient: byPatient.get(w.patientId ?? -1) ?? null, visit: visitOf(w) })),
+      },
       stuckEvents: {
         count: stuckCount,
         items: stuck.map((e) => ({ ...e, typeFa: EVENT_FA[e.type] ?? 'رویدادِ سامانه', patient: byPatient.get(e.patientId ?? -1) ?? null })),
