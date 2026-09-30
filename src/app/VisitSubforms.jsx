@@ -138,8 +138,10 @@ export function PhaseAttach({ phase, label, onClick, disabled }) {
  *
  * فرمِ عمل: بالای فهرست «الصاق به: قبل / حین / بعد از عمل» (`phases`) — پیش‌فرض همان تبی که
  * کاربر در آن است؛ «الصاق شده» هم به‌ازای همان مرحله است (`attached` را والد می‌سازد).
+ * فرمی که مالِ یک مرحلهٔ خاص است (`boundOf`) کنارِ ردیفش «معمولاً: حین عمل» دارد و اگر کاربر خودش مرحلهٔ
+ * دیگری زده (`explicit`) همان‌جا یک خطِ هشدار می‌گیرد (surgery-11) — والد تصمیم می‌گیرد کجا الصاق شود.
  */
-export function AttachPicker({ open, onClose, visitWord, groups, items, attached, pins, onPin, onAttach, canBuild, phases, phase, onPhase, loading = false, title }) {
+export function AttachPicker({ open, onClose, visitWord, groups, items, attached, pins, onPin, onAttach, canBuild, phases, phase, onPhase, loading = false, title, boundOf = null, explicit = false }) {
   const [q, setQ] = useState('');
   useEffect(() => { if (!open) setQ(''); }, [open]);
   const needle = q.trim();
@@ -148,6 +150,7 @@ export function AttachPicker({ open, onClose, visitWord, groups, items, attached
     [items, needle],
   );
   const pinned = new Set((pins ?? []).filter(Boolean));
+  const phaseFa = (k) => phases?.find((p) => p.key === k)?.label ?? k;
   return createPortal(
     <AnimatePresence>
       {open && (
@@ -184,11 +187,18 @@ export function AttachPicker({ open, onClose, visitWord, groups, items, attached
                   {rows.map((it) => {
                     const done = attached.has(it.key);
                     const star = pinned.has(it.key);
+                    const bound = phases && boundOf ? boundOf(it) : null;
+                    const off = !!bound && explicit && bound !== phase;
                     return (
                       <div key={it.key} className={`vf-pick-row${done ? ' is-done' : ''}`} data-subform-item={it.key}>
                         <div>
                           <b>{it.title}</b>
                           {it.hint && <small>{it.hint}</small>}
+                          {bound && (
+                            <small className={`vf-pick-usual${off ? ' is-off' : ''}`} data-usual-phase={bound} role={off ? 'note' : undefined}>
+                              {off ? `معمولاً «${phaseFa(bound)}» است — این‌جا به «${phaseFa(phase)}» الصاق می‌شود` : `معمولاً: ${phaseFa(bound)}`}
+                            </small>
+                          )}
                         </div>
                         {/* ستارهٔ «منتخب» فقط جایی که منتخب معنا دارد (فرمِ مراجعه) — میزِ اتاقِ عمل
                             `onPin` نمی‌دهد و دکمهٔ بی‌اثر هم نمی‌گیرد. */}

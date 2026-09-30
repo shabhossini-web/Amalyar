@@ -164,9 +164,34 @@ try {
   await page.locator('.vf-attach').click();
   await page.locator('.vf-pick').waitFor({ timeout: 5000 });
   ok('سربرگ پنجره را با تبِ فعال باز می‌کند', await page.locator('.vf-pick [data-pick-phase="pre"][aria-checked="true"]').count() === 1);
+  /* surgery-11: فرمی که مالِ یک مرحلهٔ خاص است مرحله‌اش را کنارِ ردیف می‌گوید؛ هشدار فقط وقتی کاربر خودش
+     مرحلهٔ دیگری زده. فرمِ بی‌مرحلهٔ خاص (علائمِ حیاتی) برچسب نمی‌گیرد. */
+  const intraRow = page.locator('.vf-pick [data-subform-item="subform.intra"]');
+  const hasIntraForm = (await intraRow.count()) === 1;
+  if (hasIntraForm) {
+    ok('**«فرمِ جزئیاتِ حینِ عمل»: «معمولاً: حین عمل» کنارِ ردیف، بی‌هشدار (مرحله را کاربر نزده)**',
+      (await intraRow.locator('[data-usual-phase="intra"]').innerText()).includes('حین عمل') && await intraRow.locator('.vf-pick-usual.is-off').count() === 0);
+  }
+  ok('فرمِ بی‌مرحلهٔ خاص (علائمِ حیاتی) برچسبِ مرحله نمی‌گیرد', await page.locator('.vf-pick [data-subform-item="vitals"] [data-usual-phase]').count() === 0);
   await page.locator('.vf-pick [data-pick-phase="post"]').click();
   ok('ASA در «بعد» هنوز الصاق نشده', (await page.locator('.vf-pick [data-subform-item="subform.asa"] [data-act="attach"]').innerText()).trim() === 'الصاق');
+  if (hasIntraForm) {
+    ok('**با «الصاق به»ِ دیگر، کنارِ همان ردیف هشدار می‌آید**', await intraRow.locator('.vf-pick-usual.is-off').count() === 1
+      && (await intraRow.locator('.vf-pick-usual.is-off').innerText()).includes('بعد از عمل'));
+  }
   await page.locator('.vf-pick .db-x').click();
+  if (hasIntraForm) {
+    /* از سربرگ (بی‌انتخابِ صریحِ مرحله) فرمِ حینِ عمل به «حین» می‌رود، نه به تبِ فعالِ «قبل» — و زبانه همان‌جا
+       می‌رود. کارتِ خالی بعد با × برداشته می‌شود تا بدنهٔ ذخیرهٔ پایین دست نخورد. */
+    await page.locator('.vf-attach').click();
+    await page.locator('.vf-pick').waitFor({ timeout: 5000 });
+    await intraRow.locator('[data-act="attach"]').click();
+    await page.waitForTimeout(400);
+    ok('**الصاق از سربرگ: فرمِ حینِ عمل در «حین عمل» نشست و زبانه همان‌جا رفت**',
+      await card(page, 'subform.intra', 'intra').count() === 1 && await card(page, 'subform.intra', 'pre').count() === 0 && (await activeTab(page)).includes('حین عمل'));
+    await card(page, 'subform.intra', 'intra').locator('[data-act="subform-remove"]').click();
+    await tab(page, 'قبل از عمل');
+  }
 
   console.log('\n۴) مراقبتِ «قبل از عمل» — پاپ‌آپ');
   const prev = page.locator('[data-care-open="pre"]');

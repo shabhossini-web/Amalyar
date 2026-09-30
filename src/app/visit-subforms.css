@@ -332,3 +332,12 @@
 .vf-sheet-titles { display: grid; gap: 2px; min-width: 0; }
 .vf-sheet-who { font-size: 12.5px; font-weight: 600; line-height: 1.7; color: var(--text2); overflow-wrap: anywhere; }
 .vf-sheet-who bdi { font-variant-numeric: tabular-nums; color: var(--text3); }
+
+/* ── مرحلهٔ خودِ فرم در پنجرهٔ الصاق (surgery-11) ─────────────────────────────────
+   «معمولاً: حین عمل» کنارِ فرمی که مالِ یک مرحلهٔ خاص است؛ اگر کاربر خودش مرحلهٔ دیگری زده، همان سطر
+   کهربایی می‌شود و می‌گوید کجا الصاق می‌شود — هشدار کنارِ همان ردیفی که قرار است زده شود. */
+.vf-pick-row small.vf-pick-usual { font-weight: 700; color: var(--brand-text); }
+.vf-pick-row small.vf-pick-usual.is-off {
+  color: var(--amber-text); background: rgba(245, 158, 11, .1); border: 1px solid rgba(245, 158, 11, .35);
+  border-radius: 7px; padding: 2px 8px; line-height: 1.8;
+}

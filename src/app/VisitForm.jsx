@@ -607,8 +607,10 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   const [subErr, setSubErr] = useState({});
   const [cardsShut, setCardsShut] = useState({});
   const [pickOpen, setPickOpen] = useState(false);
-  /* مرحلهٔ پنجرهٔ الصاق در فرمِ عمل — پیش‌فرض همان تبی که کاربر در آن است. */
+  /* مرحلهٔ پنجرهٔ الصاق در فرمِ عمل — پیش‌فرض همان تبی که کاربر در آن است. `pickExplicit`: کاربر خودش
+     مرحله را گفته (دکمهٔ «الصاقِ فرم به این مرحله» یا زدنِ «الصاق به») — نه پیش‌فرضِ سربرگ (surgery-11). */
   const [pickPhase, setPickPhase] = useState('pre');
+  const [pickExplicit, setPickExplicit] = useState(false);
   /* اندازه‌گیریِ تایپ‌شده ولی «ثبت»‌نخوردهٔ علائمِ حیاتی — به‌ازای کارت؛ «ذخیره» همراهِ خودش می‌برد. */
   const [pendingVitals, setPendingVitals] = useState({});
   const [vitalsCount, setVitalsCount] = useState({});
@@ -689,7 +691,14 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       return next;
     });
   }, [f.topicId, catalog, editing, isSurgery]); // eslint-disable-line react-hooks/exhaustive-deps
-  const openPicker = (ph) => { setPickPhase(ph || phase); setPickOpen(true); };
+  const openPicker = (ph, explicit = false) => { setPickPhase(ph || phase); setPickExplicit(explicit); setPickOpen(true); };
+  /* **مرحلهٔ خودِ فرم** (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-11): «فرمِ جزئیاتِ حینِ عمل» از «الصاقِ فرم»ِ سربرگ بی‌هیچ
+     هشداری به «قبل از عمل» می‌چسبید و سرِ میزِ اتاقِ عمل زیرِ «فرم‌های حینِ عمل» نمی‌آمد. فرمی که کاتالوگ
+     صریحاً به «حین» یا «بعد» بسته (`defaultPhase`) همان‌جا الصاق می‌شود، مگر کاربر خودش مرحلهٔ دیگری گفته
+     باشد — آن‌وقت پنجره کنارِ همان ردیف هشدار می‌دهد. «قبل» پیش‌فرضِ عمومیِ کاتالوگ برای فرمی است که مرحلهٔ
+     خاصی ندارد (علائمِ حیاتی، ASA، فرمِ ساختِ خودتان) — آن‌ها به همان مرحلهٔ انتخابی می‌روند، بی‌هشدار. */
+  const boundPhase = (it) => (isSurgery && (it?.defaultPhase === 'intra' || it?.defaultPhase === 'post') ? it.defaultPhase : null);
+  const pickTarget = (it) => (pickExplicit ? pickPhase : boundPhase(it) ?? pickPhase);
   const removeSub = (slot) => {
     const gone = subList.find((x) => x.slot === slot);
     if (gone) removedData.current[slot] = { key: gone.key, phase: gone.phase, data: gone.builtin ? undefined : (gone.data ?? {}) };
@@ -1981,7 +1990,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     return (
       <div className="vf-phase-subs" data-phase-subforms={ph}>
         {cards}
-        {canAttach && <PhaseAttach phase={ph} label={PHASE_FA[ph]} onClick={() => openPicker(ph)} disabled={busy || !subLoaded} />}
+        {canAttach && <PhaseAttach phase={ph} label={PHASE_FA[ph]} onClick={() => openPicker(ph, true)} disabled={busy || !subLoaded} />}
       </div>
     );
   };
@@ -2645,14 +2654,18 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         visitWord={isSurgery ? 'عمل' : t.visit}
         groups={catalog?.groups ?? []}
         items={attachItems}
-        attached={attachedIn(isSurgery ? pickPhase : '')}
+        attached={isSurgery
+          ? new Set(attachItems.filter((it) => subList.some((x) => x.key === it.key && x.phase === pickTarget(it))).map((it) => it.key))
+          : attachedIn('')}
         pins={prefs.subformPins}
         onPin={pinSub}
-        onAttach={(it) => attachSub(it, isSurgery ? pickPhase : '')}
+        onAttach={(it) => attachSub(it, isSurgery ? pickTarget(it) : '')}
         canBuild={canBuildSubform}
         phases={isSurgery ? PHASE_ITEMS : null}
         phase={pickPhase}
-        onPhase={setPickPhase}
+        onPhase={(k) => { setPickPhase(k); setPickExplicit(true); }}
+        boundOf={isSurgery ? boundPhase : null}
+        explicit={pickExplicit}
       />
 
       {/* میزبان همیشه سوار است و خودش presence را می‌گرداند (OrderSheet.jsx). */}
