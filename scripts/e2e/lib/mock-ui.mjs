@@ -61,8 +61,9 @@ export const launch = () => chromium.launch({
  * `writes` هر درخواستِ غیرِ GET را نگه می‌دارد تا بشود روی «چه چیزی به سرور رفت» ادعا کرد؛
  * `errors` خطاهای JS هر صفحهٔ این context است.
  */
-export async function mockContext(browser, handle, { viewport = { width: 390, height: 844 } } = {}) {
-  const context = await browser.newContext({ viewport, locale: 'fa-IR', serviceWorkers: 'block' });
+export async function mockContext(browser, handle, { viewport = { width: 390, height: 844 }, ...contextOptions } = {}) {
+  /* `contextOptions` به خودِ context می‌رسد — مثلاً `hasTouch` برای تبلتِ لمسیِ پهن (کفِ لمسِ ۴۴px با `pointer: coarse`). */
+  const context = await browser.newContext({ viewport, locale: 'fa-IR', serviceWorkers: 'block', ...contextOptions });
   const writes = [];
   const errors = [];
   context.on('page', (page) => page.on('pageerror', (e) => errors.push(String(e))));

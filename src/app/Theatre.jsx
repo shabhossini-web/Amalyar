@@ -495,8 +495,16 @@ function OpSteps({ v, clinical, canTimes, busy, onAct, onDischarge, onToast, ela
       onToast(u.which === 'start' ? 'شروعِ عمل برگشت — دوباره می‌شود ثبتش کرد' : 'پایانِ عمل برگشت — عمل دوباره در جریان است');
     }
   };
-  const saveFix = async () => {
+  /* **مدتِ بیش از ۱۲ ساعت پیش از ذخیره پرسیده می‌شود** (بستهٔ FF، FF16): پایانِ پیش از شروع یعنی عمل از
+     نیمه‌شب گذشته (`minutesBetween`)، پس یک جابه‌جاییِ اشتباهِ ۱۰:۰۰/۰۸:۰۰ بی‌صدا «۲۲ ساعت» ثبت می‌شد.
+     عددِ مدت همان‌جا گفته می‌شود تا کاربر ببیند چه چیزی را تأیید می‌کند. */
+  const [longFix, setLongFix] = useState(null); // دقیقه، وقتی تأییدِ صریح لازم است
+  useEffect(() => { setLongFix(null); }, [draft, fixing]);
+  const saveFix = async (confirmed = false) => {
     const key = fixing === 'start' ? 'opStartTime' : 'opEndTime';
+    const span = fixing === 'start' ? minutesBetween(draft, v.opEndTime) : minutesBetween(v.opStartTime, draft);
+    if (!confirmed && span != null && span > 12 * 60) { setLongFix(span); return; }
+    setLongFix(null);
     if (await onAct('/times', 'times', { [key]: draft, ...(fixFrom != null ? { expect: { [key]: fixFrom } } : {}) })) {
       setFixing(null); onToast('ساعت اصلاح شد');
     }
@@ -532,8 +540,23 @@ function OpSteps({ v, clinical, canTimes, busy, onAct, onDischarge, onToast, ela
                 {fixing === st.key && (
                   <div className="th-fix">
                     <TimePick label={`ساعتِ ${st.key === 'start' ? 'شروع' : 'پایان'}`} value={draft} onChange={setDraft} className="db-field th-fix-pick" />
-                    <button type="button" className="th-btn primary" onClick={saveFix} disabled={busy === 'times' || !draft}>ذخیرهٔ ساعت</button>
+                    <button type="button" className="th-btn primary" onClick={() => saveFix()} disabled={busy === 'times' || !draft || longFix != null} data-act="fix-save">ذخیرهٔ ساعت</button>
                     <button type="button" className="th-btn" onClick={() => setFixing(null)} disabled={busy === 'times'}>انصراف</button>
+                    {longFix != null && (
+                      <div className="th-fix-long" role="alert" data-fix-long>
+                        <p>
+                          <Alert width="15" height="15" aria-hidden="true" />
+                          <span>با این ساعت مدتِ عمل <b>{faDuration(longFix)}</b> می‌شود — درست است؟</span>
+                        </p>
+                        <small>{st.key === 'start' ? 'شروع بعد از پایانِ ثبت‌شده است' : 'پایان پیش از شروعِ ثبت‌شده است'}؛ یعنی عمل از نیمه‌شب گذشته. اگر نه، ساعت را اصلاح کنید.</small>
+                        <div className="th-fix-long-acts">
+                          <button type="button" className="th-btn" onClick={() => saveFix(true)} disabled={busy === 'times'} data-act="fix-confirm">
+                            {`بله، ${faDuration(longFix)}`}
+                          </button>
+                          <button type="button" className="th-btn" onClick={() => setLongFix(null)} data-act="fix-recheck">اصلاح می‌کنم</button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

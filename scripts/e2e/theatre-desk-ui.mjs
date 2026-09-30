@@ -13,6 +13,8 @@
  *   - FF4: «برگشت»ِ گوشی روی کارتِ دست‌خورده همان پرسشِ «فهرستِ روز» را می‌آورد؛ «برگشت» روی پرسش = ادامه
  *   - FF4: تعویضِ حساب با نوشتهٔ ذخیره‌نشده اول پرسیده می‌شود
  *   - FF14: ورودیِ جامانده از پنجره «فهرستِ روز» را دوضربه‌ای نمی‌کند
+ *   - FF16: «اصلاحِ ساعت»ی که مدت را بیش از ۱۲ ساعت می‌کند پیش از ذخیره با عددِ مدت پرسیده می‌شود
+ *   - FF13: روی تبلتِ لمسیِ پهن «اصلاحِ ساعت» و «بازکردنِ فرمِ عمل» کفِ لمسِ ۴۴px دارند
  *  نباید بیفتد:
  *   - FF1: شرحِ تازه‌ترِ پرونده با پیش‌نویسِ کهنه جایگزین شود — نه از «ذخیره»ِ کارت، نه از پرسشِ «فهرستِ روز»
  *   - FF1: پیش‌نویسِ بی‌پایه (نسخهٔ پیشین) بی‌صدا برگردد
@@ -110,8 +112,8 @@ const vite = await startVite(5231);
 const browser = await launch();
 /** یک مرورگرِ تازه — `seed` پیش‌نویس‌هایی است که پیش از بارگذاریِ صفحه روی «دستگاه» می‌نشینند.
  *  `fromList`: اول فهرستِ روز و بعد لمسِ ردیف — همان مسیری که کارت ورودیِ تاریخچهٔ خودش را می‌گیرد. */
-const open = async (S, { seed = {}, viewport = { width: 390, height: 844 }, fromList = false } = {}) => {
-  const c = await mockContext(browser, makeServer(S), { viewport });
+const open = async (S, { seed = {}, viewport = { width: 390, height: 844 }, fromList = false, ...ctx } = {}) => {
+  const c = await mockContext(browser, makeServer(S), { viewport, ...ctx });
   /* فقط یک بار (نه در هر بارگذاری) و فقط روی سندی که ذخیره‌سازی دارد — `about:blank` ندارد. */
   await c.context.addInitScript((kv) => {
     try {
@@ -377,6 +379,47 @@ try {
       '**باید بیفتد:** پیش از تعویضِ حساب پرسیده شد و «نه» یعنی ماندن', asked);
     ok(await page.locator('[data-report]').inputValue() === 'شرحِ نیمه‌کارهٔ آزمونی', 'نوشته سرِ جایش ماند');
     await context.close();
+  });
+
+  await scene('\n۱۲) FF16 — مدتِ بیش از ۱۲ ساعت پیش از ذخیره پرسیده می‌شود', async () => {
+    const S = { report: null, start: '10:00', end: '11:00' };
+    const { page, writes, context } = await open(S);
+    const timesW = () => writes.filter((w) => w.path === `/theatre/visits/${VID}/times`);
+    await page.locator('[data-act="fix-start"]').click();
+    await page.locator('.th-fix input[type="text"]').fill('13:10');
+    await page.locator('[data-act="fix-save"]').click();
+    await page.locator('[data-fix-long]').waitFor();
+    ok((await page.locator('[data-fix-long]').innerText()).includes('۲۱ ساعت و ۵۰ دقیقه') && timesW().length === 0,
+      '**باید بیفتد:** «۲۱ ساعت و ۵۰ دقیقه؟» پیش از ذخیره، و هنوز چیزی نرفته');
+    await page.locator('[data-act="fix-recheck"]').click();
+    ok(await page.locator('[data-fix-long]').count() === 0 && timesW().length === 0, '«اصلاح می‌کنم» ← کادرِ ساعت می‌ماند و چیزی ذخیره نمی‌شود');
+    await page.locator('[data-act="fix-save"]').click();
+    await page.locator('[data-act="fix-confirm"]').click();
+    await page.locator('.th-toast', { hasText: 'ساعت اصلاح شد' }).waitFor();
+    ok(JSON.stringify(timesW().at(-1)?.body) === '{"opStartTime":"13:10","expect":{"opStartTime":"10:00"}}',
+      'تأییدِ صریح ← ذخیره، با ساعتِ دیده‌شده', JSON.stringify(timesW().at(-1)?.body));
+    /* مدتِ عادی بی‌پرسش می‌رود. */
+    await page.locator('[data-act="fix-end"]').click();
+    await page.locator('.th-fix input[type="text"]').fill('14:00');
+    await page.locator('[data-act="fix-save"]').click();
+    await page.locator('.th-toast', { hasText: 'ساعت اصلاح شد' }).waitFor();
+    ok(await page.locator('[data-fix-long]').count() === 0 && timesW().length === 2, 'مدتِ عادی (۵۰ دقیقه) بی‌پرسش ذخیره شد');
+    await context.close();
+  });
+
+  await scene('\n۱۳) FF13 — کفِ لمسِ ۴۴px روی تبلتِ پهن', async () => {
+    const S = { report: null, start: '10:00', end: null };
+    const h = async (page) => page.evaluate(() => ['[data-act="fix-start"]', '[data-act="open-form"]']
+      .map((q) => document.querySelector(q)?.getBoundingClientRect().height ?? 0));
+    const tab = await open(S, { viewport: { width: 1024, height: 768 }, hasTouch: true });
+    const coarse = await tab.page.evaluate(() => matchMedia('(pointer: coarse)').matches);
+    const [fix] = await h(tab.page);
+    ok(coarse && fix >= 44, '**باید بیفتد:** «اصلاحِ ساعت» روی تبلتِ لمسیِ ۱۰۲۴px دست‌کم ۴۴px است', `coarse=${coarse} fix=${fix}`);
+    await tab.context.close();
+    const desk = await open(S, { viewport: { width: 1280, height: 800 } });
+    const [fixDesk] = await h(desk.page);
+    ok(fixDesk < 44, 'روی دسکتاپِ ماوس‌دار همان پیوندِ جمع‌وجور می‌ماند', `h=${fixDesk}`);
+    await desk.context.close();
   });
 } finally {
   await browser.close();
