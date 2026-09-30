@@ -60,6 +60,13 @@ export const isUnclaimedAccount = (a: { passwordHash?: string | null } | null | 
  */
 const hasNoAccounts = async (db: any): Promise<boolean> => (await db.account.count({ where: { systemKey: null } })) === 0;
 
+/**
+ * نامِ کاربریِ **تازه** دست‌کم یک حرفِ لاتین دارد (بستهٔ PS، PS9) — نامِ کاربریِ تمام‌رقم («۰۹۱۲…») با شمارهٔ موبایلِ
+ * کسِ دیگری اشتباه می‌شد. حساب‌های موجود دست نمی‌خورند؛ شناسهٔ موبایل‌شکل اول با شماره پیدا می‌شود.
+ */
+export const USERNAME_NEEDS_LETTER = 'نام کاربری باید دست‌کم یک حرفِ لاتین داشته باشد — نامِ کاربریِ تمام‌رقم با شمارهٔ موبایل اشتباه می‌شود';
+export const usernameHasLetter = (u: string) => /[a-zA-Z]/.test(u);
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -128,7 +135,7 @@ export class AuthService {
     try {
       // هاستِ WebOTP باید میزبانِ همان شرکت باشد، وگرنه مرورگر کد را اتوفیل نمی‌کند
       // (WebOTP به origin گره خورده است).
-      const res = await this.sms.sendOtp(phone, code, this.tenantContext.current()?.hostname);
+      const res = await this.sms.sendOtp(phone, code, this.tenantContext.current()?.hostname, purpose);
       if (!res.sent && process.env.NODE_ENV === 'production') {
         throw new ServiceUnavailableException('سرویس پیامک موقتاً در دسترس نیست');
       }
@@ -207,6 +214,7 @@ export class AuthService {
       throw new BadRequestException('توکنِ ثبت‌نام نامعتبر است');
     }
     const phone: string = payload.phone;
+    if (!usernameHasLetter(dto.username ?? '')) throw new BadRequestException(USERNAME_NEEDS_LETTER);
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
     const result = await this.prisma.$transaction(async (tx) => {
@@ -322,16 +330,24 @@ export class AuthService {
     return { pending: true, user: this.publicUser(result.account) };
   }
 
+  /**
+   * «نامِ کاربری یا موبایل» ← حساب، **با ترتیبِ روشن** (بستهٔ PS، PS9). تا دیروز یک `findFirst` روی `OR` بود که
+   * ترتیب نداشت: حسابی با نامِ کاربریِ تمام‌رقمِ «۰۹۱۲…» می‌توانست ورود و بازیابیِ صاحبِ آن شماره را بگیرد.
+   * موبایل‌شکل ← اول شماره، بعد نامِ کاربری (حسابِ قدیمیِ تمام‌رقم هنوز با نامش وارد می‌شود)؛ بقیه برعکس.
+   */
+  private async accountByIdentifier(id: string) {
+    const byPhone = () => this.prisma.account.findFirst({ where: { person: { phone: id, phoneScope: 'primary' } }, include: WITH_PERSON });
+    const byUsername = () => this.prisma.account.findFirst({ where: { username: id }, include: WITH_PERSON });
+    return /^09\d{9}$/.test(id) ? (await byPhone()) ?? (await byUsername()) : (await byUsername()) ?? (await byPhone());
+  }
+
   // ── ورود ───────────────────────────────────────────────────
   async login(dto: LoginDto, meta: { ua?: string; ip?: string }) {
     this.rateLimit.hit(`login:${this.tid}:ip:${meta.ip ?? 'unknown'}`, 12, 15 * 60_000);
     this.rateLimit.hit(`login:${this.tid}:id:${dto.identifier.trim().toLowerCase()}`, 8, 15 * 60_000);
-    const id = dto.identifier.trim();
-    // ورود با نام کاربری (روی Account) یا موبایل (روی Person).
-    const account = await this.prisma.account.findFirst({
-      where: { OR: [{ username: id }, { person: { phone: id, phoneScope: 'primary' } }] },
-      include: WITH_PERSON,
-    });
+    const id = toEnDigits(dto.identifier).trim();
+    // ورود با نام کاربری (روی Account) یا موبایل (روی Person) — موبایل‌شکل اول با شماره (PS9).
+    const account = await this.accountByIdentifier(id);
     if (!account) throw new UnauthorizedException('نام کاربری یا رمز عبور اشتباه است');
     if (isTestAccount(account) && !await testAccountsEnabled(this.prisma)) throw new UnauthorizedException('حالت آزمایشی خاموش است');
     if (await provisionalLapsed(this.prisma, account)) throw new UnauthorizedException('مهلت هفت‌روزه تأیید شماره تمام شده؛ حساب غیرفعال است');
@@ -482,10 +498,7 @@ export class AuthService {
   private async resetTarget(identifier: string) {
     const id = toEnDigits(identifier).trim();
     if (!id) return null;
-    const account = await this.prisma.account.findFirst({
-      where: { OR: [{ username: id }, { person: { phone: id, phoneScope: 'primary' } }] },
-      include: WITH_PERSON,
-    });
+    const account = await this.accountByIdentifier(id);
     /* تصاحب‌نشده راهِ خودش را دارد (ثبت‌نام + کد)؛ حسابِ موقت شماره‌اش هنوز تأیید نشده — کدِ بازیابی
        به شماره‌ای که مالکیتش ثابت نشده یعنی تحویلِ حساب به هر کسی که آن شماره دستش است. */
     if (!account || account.status !== 'active' || isUnclaimedAccount(account) || isProvisional(account) || isTestAccount(account)) return null;
@@ -543,7 +556,8 @@ export class AuthService {
       data: { phone: target.phone, codeHash: otpHash(RESET_PURPOSE, target.phone, code), purpose: RESET_PURPOSE, expiresAt: new Date(Date.now() + OTP_TTL_MS) },
     });
     const res = await this.sms.sendOtp(target.phone, code, this.tenantContext.current()?.hostname, RESET_PURPOSE).catch((e) => {
-      this.logger.warn(`password reset sms failed for account ${target.account.id}: ${e?.message ?? e}`);
+      /* فقط نامِ خطا (بستهٔ PS، PS11؛ قاعدهٔ لاگِ PF10): پیامِ خطا ممکن است شماره یا متنِ پیامک را داشته باشد. */
+      this.logger.warn(`password reset sms failed for account ${target.account.id} (${e?.name ?? 'Error'})`);
       return null;
     });
     if (!res || (!res.sent && !res.stub)) {

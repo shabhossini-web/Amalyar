@@ -34,7 +34,7 @@ class TemporaryAccountDto extends StaffProfileDto {
   @IsOptional() @IsBoolean() testAccount?: boolean;
   @IsInt() level!: number;
   @IsString() @MaxLength(30) jobRole!: string;
-  @IsOptional() @Matches(/^[a-zA-Z0-9_.-]{3,40}$/, { message: 'نام کاربری ۳ تا ۴۰ حرف لاتین یا عدد باشد' }) username?: string;
+  @IsOptional() @Matches(/^(?=.*[a-zA-Z])[a-zA-Z0-9_.-]{3,40}$/, { message: 'نام کاربری ۳ تا ۴۰ حرف لاتین یا عدد و دست‌کم یک حرفِ لاتین باشد' }) username?: string;
 }
 
 // مدیریتِ کاربران — فقط سوپرادمین (سطح ۶)

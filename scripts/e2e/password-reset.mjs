@@ -22,6 +22,14 @@
  *  - PF11: هشِ کد HMAC با رازِ سرور است نه SHA-256ِ بی‌کلید (جدولِ otp_codes)
  *  - PF12: «لینک به … پیامک شد» شمارهٔ پرونده را به کسی که شمارهٔ دیگری تایپ کرده نشان نمی‌دهد
  *
+ * دورِ دومِ امنیتی (بستهٔ PS) — همان قاعده، هر بند سنجه‌ای که بی‌اصلاح قرمز می‌شد:
+ *  - PS1: ثبت‌نامِ عمومی ثبت‌نامِ بازِ بیمارِ دیگر را تحویل نمی‌دهد (نه توکن، نه داده، نه شماره) + چرخشِ توکن
+ *  - PS4: بودجهٔ حدسِ کدِ بازیابی فقط با کدِ زنده می‌سوزد · PS5: شبا/نامِ صاحبِ حساب از «تعاریف» عوض نمی‌شود + ممیزی
+ *  - PS6: «آماده‌سازی حسابِ پرتال» شمارهٔ جراح را از سوپرادمین می‌گیرد · PS7: سطلِ مشترکِ پیامکِ عمومی و سقفِ لینک
+ *  - PS8: هشدارِ «به هیچ‌کس ندهید» برای کدِ ثبت‌نام و «ادامه» · PS10: پنلِ پلتفرم (IP از ته، تلاشِ اتمی)
+ *  - PS11: کلیدِ HMACِ کد زیرکلیدِ مشتق است · PS12: شمارهٔ ثبت‌نام روی پروندهٔ موجودِ بی‌شماره نمی‌نشیند
+ *  (PS2، PS3 و PS9 در `test-accounts.mjs` — دیتابیسِ یک‌بارمصرف)
+ *
  * ⚠️ سقفِ نرخ در حافظهٔ سرور است (۱۰ درخواستِ کد در ۱۵ دقیقه برای هر IP): اجرای دوباره روی همان
  * سرور در کمتر از ۱۵ دقیقه ممکن است ۴۲۹ بگیرد — سرور را از نو بالا بیاورید.
  */
@@ -103,9 +111,14 @@ const real = await call('/auth/password/request-otp', { body: { identifier: acc.
 ok(real.status < 300 && /^\d{6}$/.test(real.json?.devCode ?? ''), 'حسابِ فعال ← کد (devCodeِ محیطِ آزمون)', JSON.stringify(real.json));
 /* PF11: هشِ کد در دیتابیس با کلید است — شش رقم با SHA-256ِ بی‌کلید از یک دامپِ دیتابیس در کسری از ثانیه برمی‌گشت. */
 const stored = sql(`SELECT code_hash FROM otp_codes WHERE phone = '${acc.phone}' AND purpose = 'password-reset' AND consumed_at IS NULL ORDER BY id DESC LIMIT 1`);
-const keyed = createHmac('sha256', process.env.JWT_SECRET ?? '').update(`password-reset:${acc.phone}:${real.json?.devCode}`).digest('hex');
+/* PS11: کلیدِ HMAC زیرکلیدِ مشتق از رازِ سرور است (مثلِ `intake-captcha.ts`)، نه خودِ JWT_SECRET — همان راز کلیدِ
+   امضای نشست‌ها هم هست و هر جا با هدفِ دیگری مستقیم به کار رود، دو کاربرد به هم گره می‌خورند. */
+const subkey = createHash('sha256').update(`${process.env.JWT_SECRET ?? ''}|otp-hash`).digest();
+const keyed = createHmac('sha256', subkey).update(`password-reset:${acc.phone}:${real.json?.devCode}`).digest('hex');
+const rawKeyed = createHmac('sha256', process.env.JWT_SECRET ?? '').update(`password-reset:${acc.phone}:${real.json?.devCode}`).digest('hex');
 ok(stored === keyed && stored !== createHash('sha256').update(String(real.json?.devCode)).digest('hex'),
   'PF11: هشِ کد HMAC(رازِ سرور، هدف:شماره:کد) است نه SHA-256ِ خامِ کد', stored.slice(0, 12));
+ok(stored !== rawKeyed, 'PS11: کلیدِ HMAC زیرکلیدِ مشتق است، نه خودِ JWT_SECRET');
 const { devCode: _dev, ...realShape } = real.json ?? {};
 ok(keys(realShape) === keys(ghost.json) && realShape.ttl === ghost.json?.ttl, 'بی devCode، پاسخِ حسابِ موجود و ناموجود هم‌شکل است');
 const again = await call('/auth/password/request-otp', { body: { identifier: acc.username } });
@@ -456,7 +469,8 @@ function fakeAuth({ findDelay = 0, smsDelay = 0, rateLimit = new RateLimitServic
     account: {
       findFirst: async ({ where }) => {
         await later(findDelay);
-        const ids = (where?.OR ?? []).map((w) => w.username ?? w.person?.phone);
+        /* هر دو شکل: `OR`ِ قدیمی و جست‌وجوی جدا با شماره یا نامِ کاربری (PS9). */
+        const ids = [where?.username, where?.person?.phone, ...(where?.OR ?? []).map((w) => w.username ?? w.person?.phone)].filter(Boolean);
         return ids.includes(account.username) || ids.includes(account.person.phone) ? { ...account } : null;
       },
       update: async ({ data }) => { if (data.passwordHash) db.passwords.push(data.passwordHash); return { ...account }; },
@@ -547,6 +561,55 @@ function fakeAuth({ findDelay = 0, smsDelay = 0, rateLimit = new RateLimitServic
 }
 
 {
+  /* PS10 — پنلِ پلتفرم: سطلِ IP از تهِ X-Forwarded-For (همان `clientIp`؛ خانهٔ اول را خودِ فرستنده می‌نویسد)، و شمارشِ
+     تلاشِ کدِ ورود و کدِ عملیاتِ حساس اتمی و پیش از مقایسه (الگوی PF4) — دو حدسِ هم‌زمان روی کدی که یک تلاش بیشتر
+     ندارد هر دو «۴ تلاش» را می‌خواندند و ششمی هم مقایسه می‌شد. */
+  const bak = { e: process.env.PLATFORM_ADMIN_ENABLED, s: process.env.PLATFORM_ADMIN_SECRET, p: process.env.PLATFORM_ADMIN_PHONES };
+  Object.assign(process.env, { PLATFORM_ADMIN_ENABLED: 'true', PLATFORM_ADMIN_SECRET: 'in-process-platform-secret-with-32-plus-characters', PLATFORM_ADMIN_PHONES: '09120000077' });
+  try {
+    const { PlatformAuthService, PlatformController } = requireServer('./dist/platform/platform.module.js');
+    const ips = [];
+    const ctl = new PlatformController({ requestOtp: async (_p, _r, ip) => { ips.push(ip); return {}; } });
+    await ctl.requestOtp({ phone: '09120000077' }, { headers: { 'x-forwarded-for': '1.2.3.4, 10.90.0.9' }, ip: '127.0.0.1' });
+    ok(ips[0] === '10.90.0.9', `PS10: نشانیِ سطلِ پنلِ پلتفرم تهِ X-Forwarded-For است نه خانهٔ جعل‌شدنیِ اول («${ips[0]}»)`);
+
+    const otps = [];
+    let barrier = null;
+    const pick = (where) => otps.filter((o) => o.id === where.id && (!('consumedAt' in where) || !o.consumedAt) && (where.attempts?.lt === undefined || o.attempts < where.attempts.lt));
+    const control = {
+      platformOtp: {
+        findFirst: async ({ where }) => { const hit = otps.filter((o) => o.phoneHash === where.phoneHash && !o.consumedAt).at(-1); const snap = hit ? { ...hit } : null; if (barrier) await barrier(); return snap; },
+        update: async ({ where, data }) => { const o = otps.find((x) => x.id === where.id); if (data.attempts?.increment) o.attempts += data.attempts.increment; return { ...o }; },
+        updateMany: async ({ where, data }) => { const rows = pick(where); for (const o of rows) { if (data.attempts?.increment) o.attempts += data.attempts.increment; if (data.consumedAt) o.consumedAt = data.consumedAt; } return { count: rows.length }; },
+      },
+      platformSession: { updateMany: async () => ({ count: 0 }), create: async ({ data }) => ({ id: 'ps-in', ...data }) },
+      platformAuditEvent: { create: async () => ({}) },
+    };
+    control.$transaction = async (fn) => fn(control);
+    const svc = new PlatformAuthService(control, {}, new RateLimitService());
+    const race = async (hash, run) => {
+      otps.length = 0;
+      otps.push({ id: 1, phoneHash: hash, codeHash: svc.hash('otp', `${hash}:246802`), expiresAt: new Date(Date.now() + 60_000), attempts: 4, consumedAt: null });
+      let waiting = [];
+      barrier = () => new Promise((r) => { waiting.push(r); if (waiting.length === 2) { waiting.forEach((f) => f()); waiting = []; } });
+      const out = await Promise.allSettled([run('135791', '10.91.0.1'), run('246802', '10.91.0.2')]);
+      barrier = null;
+      return out;
+    };
+    const loginHash = svc.hash('phone', '09120000077');
+    const [la, lb] = await race(loginHash, (code, ip) => svc.verifyOtp('09120000077', undefined, code, ip));
+    ok(la.status === 'rejected' && lb.status === 'rejected' && otps[0].attempts <= 5,
+      `PS10: حدسِ ششمِ هم‌زمانِ کدِ ورودِ پلتفرم حتی با کدِ درست رد شد (${la.status}/${lb.status}، تلاش: ${otps[0].attempts})`);
+    const session = { phoneHash: svc.scopeHash('09120000077', 'login') };
+    const [aa, ab] = await race(svc.scopeHash('09120000077', 'delete:7'), (code, ip) => svc.consumeActionOtp(session, 'delete:7', code, ip));
+    ok(aa.status === 'rejected' && ab.status === 'rejected' && otps[0].attempts <= 5,
+      `PS10: کدِ عملیاتِ حساس هم (${aa.status}/${ab.status}، تلاش: ${otps[0].attempts})`);
+  } finally {
+    for (const [k, v] of [['PLATFORM_ADMIN_ENABLED', bak.e], ['PLATFORM_ADMIN_SECRET', bak.s], ['PLATFORM_ADMIN_PHONES', bak.p]]) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  }
+}
+
+{
   /* PF5 — درخواستِ کد: پاسخ منتظرِ یافتنِ حساب و ساختنِ کد نمی‌ماند؛ زمانش نمی‌گوید حساب هست یا نه. */
   const { svc, db, account } = fakeAuth({ findDelay: 300 });
   const hit = await inProd(() => timed(() => svc.requestPasswordReset(account.username, '10.81.0.1')));
@@ -559,7 +622,9 @@ function fakeAuth({ findDelay = 0, smsDelay = 0, rateLimit = new RateLimitServic
 }
 
 {
-  /* PF10 — متنِ پیامکِ بازیابی: «به هیچ‌کس، حتی پشتیبانی، ندهید» + خطِ آخرِ WebOTP؛ کدِ ثبت‌نام همان متنِ قبلی. */
+  /* PF10 — متنِ پیامکِ بازیابی: «به هیچ‌کس، حتی پشتیبانی، ندهید» + خطِ آخرِ WebOTP.
+     PS8 — کدِ ثبت‌نام/تصاحب/تأییدِ شماره و کدِ «ادامهٔ ثبت‌نامِ» بیمار هم همان هشدار را دارند (کدی که حسابی را تحویل
+     می‌دهد یا فرمِ پزشکیِ بیمار را باز می‌کند همان‌قدر ارزش دارد)؛ کدِ بی‌هدف (ورودِ پلتفرم) همان متنِ قبلی. */
   const { SmsService } = requireServer('./dist/sms/sms.service.js');
   const env = { key: process.env.MELI_API_KEY, from: process.env.MELI_FROM, fetch: globalThis.fetch };
   const texts = [];
@@ -568,16 +633,34 @@ function fakeAuth({ findDelay = 0, smsDelay = 0, rateLimit = new RateLimitServic
   try {
     await inTest(() => new SmsService().sendOtp('09121234567', '123456', 'clinic.amalyar.com', 'password-reset'));
     await inTest(() => new SmsService().sendOtp('09121234567', '654321', 'clinic.amalyar.com'));
+    await inTest(() => new SmsService().sendOtp('09121234567', '111222', 'clinic.amalyar.com', 'signup'));
+    await inTest(() => new SmsService().sendOtp('09121234567', '333444', 'clinic.amalyar.com', 'intake-resume:7'));
   } finally {
     globalThis.fetch = env.fetch;
     if (env.key === undefined) delete process.env.MELI_API_KEY; else process.env.MELI_API_KEY = env.key;
     if (env.from === undefined) delete process.env.MELI_FROM; else process.env.MELI_FROM = env.from;
   }
-  const [resetText, signupText] = texts;
+  const [resetText, plainText, signupText, resumeText] = texts;
   ok(/کدِ بازیابیِ رمزِ عمل‌یار: 123456/.test(resetText ?? '') && /حتی پشتیبانی، ندهید/.test(resetText ?? '') && /درخواست نکرده‌اید/.test(resetText ?? ''),
     'PF10: پیامکِ بازیابی می‌گوید کدِ چیست و آن را به هیچ‌کس ندهید', JSON.stringify(resetText));
-  ok((resetText ?? '').endsWith('\n@clinic.amalyar.com #123456') && (signupText ?? '').endsWith('\n@clinic.amalyar.com #654321') && /کد تأیید شما 654321/.test(signupText ?? ''),
-    'PF10: خطِ آخرِ WebOTP در هر دو سرِ جایش؛ پیامکِ ثبت‌نام همان متنِ قبلی');
+  ok((resetText ?? '').endsWith('\n@clinic.amalyar.com #123456') && (plainText ?? '').endsWith('\n@clinic.amalyar.com #654321') && /کد تأیید شما 654321/.test(plainText ?? ''),
+    'PF10: خطِ آخرِ WebOTP سرِ جایش؛ کدِ بی‌هدف همان متنِ قبلی');
+  ok(/111222/.test(signupText ?? '') && /حتی پشتیبانی، ندهید/.test(signupText ?? '') && (signupText ?? '').endsWith('\n@clinic.amalyar.com #111222'),
+    'PS8: پیامکِ کدِ ثبت‌نام/تصاحب می‌گوید کد را به هیچ‌کس، حتی پشتیبانی، ندهید (خطِ WebOTP سرِ جایش)', JSON.stringify(signupText));
+  ok(/333444/.test(resumeText ?? '') && /حتی پشتیبانی، ندهید/.test(resumeText ?? '') && (resumeText ?? '').endsWith('\n@clinic.amalyar.com #333444'),
+    'PS8: کدِ «ادامهٔ ثبت‌نامِ» بیمار هم', JSON.stringify(resumeText));
+}
+
+{
+  /* PS8 — خودِ مسیرها هدفشان را به درگاه می‌گویند؛ بی‌این، متنِ هشدار هرگز به کدِ ثبت‌نام نمی‌رسید. */
+  const auth = fakeAuth();
+  await inTest(() => auth.svc.requestSignupOtp('09127770099', '10.87.0.1'));
+  const intake = fakeIntake({ open: true });
+  const purposes = [];
+  intake.svc.sms.sendOtp = async (to, _code, _host, purpose) => { purposes.push(purpose); return { sent: false, stub: true }; };
+  await inTest(() => intake.svc.resumeRequest('tok', '09127770098', '10.87.0.2'));
+  ok(auth.db.sent.at(-1)?.purpose === 'signup' && /^intake-resume:/.test(purposes[0] ?? ''),
+    `PS8: کدِ ثبت‌نام با هدفِ «signup» و کدِ ادامه با هدفِ خودش به درگاه می‌روند (${auth.db.sent.at(-1)?.purpose} / ${purposes[0]})`);
 }
 
 console.log(`\nسبز: ${pass}   قرمز: ${fail}`);

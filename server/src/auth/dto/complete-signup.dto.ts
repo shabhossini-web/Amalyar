@@ -13,6 +13,8 @@ export class CompleteSignupDto {
 
   @IsString() @MinLength(3) @MaxLength(40)
   @Matches(/^[a-zA-Z0-9_.]+$/, { message: 'نام کاربری فقط حروف/عدد و . یا _' })
+  /* دست‌کم یک حرفِ لاتین (بستهٔ PS، PS9) — تمام‌رقم با شمارهٔ موبایل اشتباه می‌شد. */
+  @Matches(/[a-zA-Z]/, { message: 'نام کاربری باید دست‌کم یک حرفِ لاتین داشته باشد' })
   username: string;
 
   @IsString() @MinLength(6) @MaxLength(128)

@@ -118,9 +118,17 @@ export class SmsService {
     // خطِ آخر = فرمتِ origin-bound WebOTP. میزبان باید میزبانِ همان صفحه باشد،
     // وگرنه مرورگر بی‌صدا اتوفیل نمی‌کند (sanitizeWebOtpHost تک‌منبعِ اعتبارسنجی است).
     const validHost = sanitizeWebOtpHost(webOtpHost) ?? 'amalyar.com';
+    /* «به هیچ‌کس، حتی پشتیبانی، ندهید» برای هر کدی که حسابی را تحویل می‌دهد یا فرمِ پزشکیِ بیمار را باز می‌کند —
+       بازیابی (PF10)، و ثبت‌نام/تصاحب/تأییدِ شماره و «ادامهٔ ثبت‌نامِ» بیمار (بستهٔ PS، PS8): کلاه‌بردارِ تلفنی
+       همین کد را «برای تأییدِ شماره» می‌خواهد. کدِ بی‌هدف (ورودِ پلتفرم) همان متنِ کوتاهِ قبلی. */
+    const warn = 'این کد را به هیچ‌کس، حتی پشتیبانی، ندهید. اگر درخواست نکرده‌اید نادیده بگیرید.';
     const head = purpose === 'password-reset'
-      ? `کدِ بازیابیِ رمزِ عمل‌یار: ${code}\nاین کد را به هیچ‌کس، حتی پشتیبانی، ندهید. اگر درخواست نکرده‌اید نادیده بگیرید.`
-      : `عمل‌یار: کد تأیید شما ${code}`;
+      ? `کدِ بازیابیِ رمزِ عمل‌یار: ${code}\n${warn}`
+      : purpose === 'signup' || purpose?.startsWith('test-account:')
+        ? `کدِ تأییدِ شماره در عمل‌یار: ${code}\n${warn}`
+        : purpose?.startsWith('intake-resume:')
+          ? `کدِ ادامهٔ ثبت‌نام: ${code}\n${warn}`
+          : `عمل‌یار: کد تأیید شما ${code}`;
     const text = `${head}\n${LAGHO}\n@${validHost} #${code}`;
     return this.send(phone, text, { skipLagho: true });
   }

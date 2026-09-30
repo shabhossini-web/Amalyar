@@ -1,4 +1,4 @@
-import { createHmac } from 'crypto';
+import { createHash, createHmac } from 'crypto';
 import { requireJwtSecret } from './security';
 
 /**
@@ -13,5 +13,14 @@ import { requireJwtSecret } from './security';
  * آن فقط کدهای زندهٔ همان پنج دقیقه را باطل می‌کند — همان اثری که روی نشست‌ها هم دارد.
  */
 export function otpHash(purpose: string, phone: string, code: string): string {
-  return createHmac('sha256', requireJwtSecret()).update(`${purpose}:${phone}:${code}`).digest('hex');
+  return createHmac('sha256', otpKey()).update(`${purpose}:${phone}:${code}`).digest('hex');
+}
+
+/**
+ * زیرکلیدِ مشتق برای همین کاربرد (بستهٔ PS، PS11) — مثلِ `intake-captcha.ts`، نه خودِ `JWT_SECRET`: همان راز کلیدِ
+ * امضای نشست‌هاست و هر جا با هدفِ دیگری مستقیم به کار رود، دو کاربرد به هم گره می‌خورند (خروجیِ یکی ورودیِ
+ * دیگری نشود). عوض‌شدنش فقط کدهای زندهٔ همان پنج دقیقه را باطل می‌کند — همان اثرِ PF11.
+ */
+function otpKey(): Buffer {
+  return createHash('sha256').update(`${requireJwtSecret()}|otp-hash`).digest();
 }

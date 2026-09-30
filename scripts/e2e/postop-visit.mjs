@@ -157,7 +157,8 @@ try {
       await page.waitForTimeout(150);
     }
     ok(!sawGhost, '**در هیچ لحظه‌ای فهرستِ هاردکدِ قدیمی (با «پیگیری») دیده نشد**');
-    await page.waitForTimeout(1500);
+    /* تا رسیدنِ فهرستِ واقعی صبر (نه خوابِ ثابتِ ۱٫۵ ثانیه) — زیرِ بارِ CI گاهی هنوز اسکلت بود. */
+    await page.locator('.db-kindrow button').first().waitFor({ timeout: 15000 }).catch(() => {});
     const kindBtns = await page.locator('.db-kindrow button').allInnerTexts();
     ok(kindBtns.length > 0 && !kindBtns.some((x) => x.trim() === 'پیگیری'),
       `فهرستِ نهایی همان فرم‌های واقعی است (${kindBtns.join('، ')})`);

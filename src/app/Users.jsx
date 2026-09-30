@@ -133,7 +133,8 @@ function TemporaryAccountSheet({ onClose, onSaved, testingEnabled }) {
   const [busy, setBusy] = useState(false), [errors, setErrors] = useState({}), [message, setMessage] = useState(''), [result, setResult] = useState(null);
   const save = async () => {
     const next = personErrors(form); if (!form.phone) next.phone = 'شماره همراه لازم است'; if (testAccount && !/^(?=.*[a-zA-Z])[a-zA-Z0-9_.-]{3,40}$/.test(username)) next.username = '۳ تا ۴۰ کاراکتر، شامل حرف لاتین؛ مثل test-doctor';
-    else if (username && !/^[a-zA-Z0-9_.-]{3,40}$/.test(username)) next.username = 'نام کاربری ۳ تا ۴۰ حرف لاتین یا عدد باشد';
+    /* دست‌کم یک حرفِ لاتین (بستهٔ PS، PS9) — تمام‌رقم با شمارهٔ موبایلِ کسِ دیگری اشتباه می‌شد. */
+    else if (username && !/^(?=.*[a-zA-Z])[a-zA-Z0-9_.-]{3,40}$/.test(username)) next.username = 'نام کاربری ۳ تا ۴۰ حرف لاتین یا عدد و دست‌کم یک حرفِ لاتین باشد';
     setErrors(next);
     if (Object.keys(next).length || busy) return;
     setBusy(true); setMessage('');
