@@ -20,7 +20,7 @@
 /* نشانِ صفحه روی ردیفِ فیلد — فقط در فرمِ چندصفحه‌ای دیده می‌شود. */
 .fb-page {
   font-size: 9.5px; font-weight: 800; font-style: normal; padding: 1px 7px; border-radius: 99px;
-  color: #c4b5fd; background: rgba(167, 139, 250, .12); border: 1px solid rgba(167, 139, 250, .3);
+  color: var(--brand-text); background: rgba(167, 139, 250, .12); border: 1px solid rgba(167, 139, 250, .3);
 }
 
 /* ── نقشِ فرم در پیگیریِ پس از عمل (فقط فرمِ زیرپرونده) ─────────────────── */
@@ -112,7 +112,7 @@
 
 /* ستاره‌ی قرمز — همان نشانی که کاربرِ فرم هم می‌بیند، تا فرم‌ساز و فرم یک زبان
    داشته باشند. */
-.fb-star { color: #f87171; font-style: normal; font-weight: 900; }
+.fb-star { color: var(--red-text); font-style: normal; font-weight: 900; }
 
 .fb-tag {
   font-size: 9.5px; font-weight: 800; font-style: normal; padding: 1px 7px; border-radius: 99px;
@@ -165,15 +165,15 @@
 }
 .fb-reset:hover { color: var(--red-text); border-color: rgba(248, 113, 113, .4); }
 
-.fb-warn { font-size: 13px; line-height: 2; color: #fcd34d; margin: 0; }
+.fb-warn { font-size: 13px; line-height: 2; color: var(--amber-text); margin: 0; }
 .fb-warn b { color: #fff; }
 
 .fb-note {
-  font-size: 12px; line-height: 1.9; color: #7dd3fc; margin: 0 0 4px;
+  font-size: 12px; line-height: 1.9; color: rgb(var(--kind-sky)); margin: 0 0 4px;
   background: rgba(56, 189, 248, .08); border: 1px solid rgba(56, 189, 248, .22);
   border-radius: 10px; padding: 9px 11px;
 }
-.fb-note b { color: #bae6fd; }
+.fb-note b { color: rgb(var(--kind-sky)); }
 
 .fb-check {
   display: flex; align-items: center; gap: 9px; cursor: pointer;
@@ -269,7 +269,7 @@
 /* بخشِ نقشِ فیلد — «هر کس قسمتِ خودش را پر کند».
    ⚠️ روی ردیف فقط **نشانِ خواندنی** است؛ تیک‌زدن کارِ ماتریسِ یک‌جای بالاست
    (§۴.۷). چک‌باکس‌های تکرارشده در هر ردیف ردیف را سه‌طبقه می‌کردند. */
-.fb-tag.role { color: #67e8f9; background: rgba(103, 232, 249, .08); border-color: rgba(103, 232, 249, .3); }
+.fb-tag.role { color: var(--cyan); background: rgba(103, 232, 249, .08); border-color: rgba(103, 232, 249, .3); }
 
 /* ── بخش‌های تاشو: ماتریسِ نقش و پیش‌نمایش ──────────────────────────────── */
 .fb-fold {

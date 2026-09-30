@@ -128,6 +128,40 @@ for (const f of css) {
   });
 }
 
+/* ⑦ رنگِ متنِ روشنِ خام (`color: #6ee7b7`) — قاعده بر پایهٔ **روشنایی**، نه فهرست.
+      ⚠️ بازبینیِ UX (۱۴۰۵/۰۷/۰۸): ۱۶۳ جا متنِ وضعیت، برچسب و خطا با شدت‌های
+      ۳۰۰/۴۰۰ِ پالت نوشته شده بود — #6ee7b7 سبزِ «تسویه»، #fcd34d کهربای «در
+      انتظار»، #fda4af و #f87171 رزِ «منقضی/خطا»، #c4b5fd بنفش، #67e8f9 سایان. ②
+      فقط چند هگزِ مشخص را می‌شناخت و هر سایهٔ همسایه از چشمش می‌افتاد؛ روی زمینهٔ
+      روشن این‌ها ۱٫۲ تا ۲٫۸ به ۱ می‌دهند — یعنی «پرداخت شد» یا «منقضی» عملاً نامرئی،
+      در حالی که تمِ تیره کاملاً سالم به‌نظر می‌رسید. حالا هر `color:` هگزی که
+      روشنایی‌اش از ۰٫۲۵ بیشتر است (جز `#fff`ِ روی دکمهٔ گرادیانِ برند) باید توکن
+      باشد: `--green-text` / `--amber-text` / `--red-text` / `--brand-text` / `--cyan`
+      / `rgb(var(--kind-sky))` / `--text1|2`. سطوحِ ورودی (لانچر و ورود، `.theme-dark`)
+      همیشه تیره‌اند و بیرونِ این قاعده‌اند؛ متنِ روشن روی سطحی که عمداً در هر دو تم
+      تیره است (توستِ خطا، آواتارِ گرادیانی) با «تیره در هر دو تم» در همان قاعده. */
+const ALWAYS_DARK = new Set(['src/index.css', 'src/app/launcher.css', 'src/app/login.css']);
+const lin = (c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+const lumOf = (h) => {
+  const x = h.length === 3 ? h.replace(/./g, '$&$&') : h;
+  const [r, g, b] = [0, 2, 4].map((i) => lin(parseInt(x.slice(i, i + 2), 16) / 255));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+for (const f of css) {
+  if (ALWAYS_DARK.has(f)) continue;
+  const raw = fs.readFileSync(f, 'utf8');
+  const txt = strip(raw);
+  for (const m of txt.matchAll(/(?<![-\w])color\s*:\s*#([0-9a-f]{6}|[0-9a-f]{3})\b/gi)) {
+    const h = m[1].toLowerCase();
+    if (h === 'fff' || h === 'ffffff' || lumOf(h) < 0.25) continue;
+    const line = txt.slice(0, m.index).split('\n').length;
+    /* نشانِ «تیره در هر دو تم» هم در بدنهٔ همان قاعده پذیرفته است، هم روی همان خط (حتی بیرونِ آکولاد). */
+    const rule = raw.slice(raw.lastIndexOf('{', m.index) + 1, raw.indexOf('}', m.index));
+    if (DARK_OK.test(rule) || DARK_OK.test(raw.split('\n')[line - 1])) continue;
+    bad.push(`${f}:${line} — متنِ روشنِ خام #${h} (در تمِ روشن محو می‌شود)؛ var(--green-text|--amber-text|--red-text|--brand-text|--cyan|--text1|--text2) بنویسید`);
+  }
+}
+
 if (bad.length) {
   console.error('رنگِ خام یا توکنِ جاافتاده:\n  ' + bad.slice(0, 40).join('\n  ')
     + (bad.length > 40 ? `\n  … و ${bad.length - 40} مورد دیگر` : ''));
