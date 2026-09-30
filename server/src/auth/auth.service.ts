@@ -15,7 +15,7 @@ import { AuditService } from '../audit/audit.service';
 import { toEnDigits } from '../common/identity';
 import { otpHash } from '../common/otp-hash';
 import type { Request, Response } from 'express';
-import { expireProvisional, expireProvisionalInTransaction, isProvisional } from '../accounts/provisional';
+import { expireProvisional, expireProvisionalInTransaction, isProvisional, isSoleActiveSuperAdmin, isVerificationOverdue, provisionalLapsed } from '../accounts/provisional';
 import { isTestAccount, testAccountsEnabled } from '../accounts/test-accounts';
 import { MAX_SET, SESSION_SET_COOKIE, SESSION_TTL_DAYS, SetEntry, cookieBase, readCookie } from './session-cookie';
 
@@ -50,6 +50,15 @@ const WITH_PERSON = { person: true } as const;
 export const isUnclaimedAccount = (a: { passwordHash?: string | null } | null | undefined): boolean =>
   !!a && !a.passwordHash;
 
+/**
+ * «سامانه هنوز هیچ حسابی ندارد» — **تنها** شرطِ «اولین حساب = سوپرادمین» (بستهٔ PS، PS2).
+ *
+ * هشدار: `completeSignup` تا دیروز «سوپرادمینِ فعالی نیست» را می‌سنجید، نه «حسابی نیست» (که `setupStatus`
+ * درست می‌شمرد). سوپرادمینِ تنها که شماره‌اش را عوض می‌کرد و هفت روز تأیید نمی‌کرد غیرفعال می‌شد و اولین
+ * ثبت‌نامِ عمومی **سوپرادمینِ فعال** می‌شد. حالا هر دو از همین می‌خوانند؛ حسابِ سیستمی (ربات) شمرده نمی‌شود.
+ */
+const hasNoAccounts = async (db: any): Promise<boolean> => (await db.account.count({ where: { systemKey: null } })) === 0;
+
 @Injectable()
 export class AuthService {
   private readonly logger = new Logger(AuthService.name);
@@ -74,8 +83,7 @@ export class AuthService {
   }
 
   async setupStatus() {
-    const count = await this.prisma.account.count();
-    return { needsSetup: count === 0 };
+    return { needsSetup: await hasNoAccounts(this.prisma) };
   }
 
   // ── ثبت‌نام: مرحلهٔ ۱ — ارسالِ کدِ یکبارمصرف ────────────────
@@ -177,7 +185,9 @@ export class AuthService {
     if (!isProvisional(user) || dto.phone !== user.person.phone) throw new BadRequestException('شماره باید با شماره حساب شما یکسان باشد');
     if (isTestAccount(user)) await this.consumePhoneOtp(dto, `test-account:${user.id}`, ip);
     else await this.verifySignupOtp(dto, ip);
-    const changed = await this.prisma.account.updateMany({ where: { id: user.id, status: 'active', phoneVerifiedAt: null, verificationDueAt: { gt: new Date() }, person: { phone: dto.phone } }, data: { phoneVerifiedAt: new Date() } });
+    /* آخرین سوپرادمینِ فعال پس از مهلت هم بسته نمی‌شود (PS2) — پس باید بتواند همان موقع شماره را تأیید کند. */
+    const late = isVerificationOverdue(user) && await isSoleActiveSuperAdmin(this.prisma, user.id);
+    const changed = await this.prisma.account.updateMany({ where: { id: user.id, status: 'active', phoneVerifiedAt: null, ...(late ? {} : { verificationDueAt: { gt: new Date() } }), person: { phone: dto.phone } }, data: { phoneVerifiedAt: new Date() } });
     if (!changed.count) { await expireProvisional(this.prisma, user.id); throw new BadRequestException('مهلت تأیید تمام شده یا مشخصات حساب تغییر کرده است'); }
     return this.publicUser(await this.prisma.account.findUniqueOrThrow({ where: { id: user.id }, include: WITH_PERSON }));
   }
@@ -208,10 +218,17 @@ export class AuthService {
       // هویت وصل می‌شود، نه یک Personِ دومِ هم‌شماره.
       const known = await tx.person.findUnique({
         where: { phone_phoneScope: { phone, phoneScope: 'primary' } },
-        include: { account: { select: { id: true, passwordHash: true, verificationDueAt: true, phoneVerifiedAt: true } } },
+        include: { account: { select: { id: true, passwordHash: true, verificationDueAt: true, phoneVerifiedAt: true, level: true } } },
       });
       if (known?.account && !isUnclaimedAccount(known.account) && !isProvisional(known.account)) {
         throw new BadRequestException('این شماره قبلاً ثبت شده است');
+      }
+      /* هشدار — **حسابِ سوپرادمین با کدِ پیامکی تحویل داده نمی‌شود** (بستهٔ PS، PS2؛ همان قاعدهٔ بازیابیِ PF1).
+         سوپرادمینی که شماره‌اش را عوض کرده «موقت» است و این مسیر رمز و نامِ کاربری‌اش را به صاحبِ آن شماره
+         می‌داد — شماره‌ای که شاید اشتباه تایپ شده. حالا که آخرین سوپرادمین پس از مهلت هم فعال می‌ماند، این در
+         بی‌این قفل برای همیشه باز می‌ماند. پیام فقط به دارندهٔ همان شماره می‌رسد (کدِ پیامکی را داده است). */
+      if (known?.account && known.account.level >= LEVEL.SUPER_ADMIN) {
+        throw new BadRequestException('این شماره قبلاً ثبت شده است؛ حسابِ مدیرِ کل با کدِ پیامکی تحویل داده نمی‌شود — با رمزِ همان حساب وارد شوید.');
       }
 
       /**
@@ -246,8 +263,9 @@ export class AuthService {
         return { account: claimed, bootstrap: false, claimed: true };
       }
 
-      const bootstrap =
-        (await tx.account.count({ where: { level: LEVEL.SUPER_ADMIN, status: 'active' } })) === 0;
+      /* فقط وقتی **هیچ** حسابی نیست (PS2) — نه «سوپرادمینِ فعالی نیست». سامانه‌ای که همهٔ سوپرادمین‌هایش غیرفعال
+         شده‌اند با پشتیبانی بازیابی می‌شود، نه با اولین کسی که فرمِ ثبت‌نام را پر کند. */
+      const bootstrap = await hasNoAccounts(tx);
       // هویت و نقش با هم ساخته می‌شوند؛ nested create یعنی اگر یکی شکست بخورد
       // دیگری هم ثبت نمی‌شود و Personِ بی‌نقش جا نمی‌مانَد.
       const account = await tx.account.create({
@@ -308,7 +326,7 @@ export class AuthService {
     });
     if (!account) throw new UnauthorizedException('نام کاربری یا رمز عبور اشتباه است');
     if (isTestAccount(account) && !await testAccountsEnabled(this.prisma)) throw new UnauthorizedException('حالت آزمایشی خاموش است');
-    if (isProvisional(account) && account.verificationDueAt! <= new Date()) { await expireProvisional(this.prisma, account.id); throw new UnauthorizedException('مهلت هفت‌روزه تأیید شماره تمام شده؛ حساب غیرفعال است'); }
+    if (await provisionalLapsed(this.prisma, account)) throw new UnauthorizedException('مهلت هفت‌روزه تأیید شماره تمام شده؛ حساب غیرفعال است');
     /* ⚠️ حسابِ تصاحب‌نشده رمزِ معتبر ندارد و نباید داشته باشد. `bcrypt.compare`
        با هشِ خالی هم false می‌دهد، ولی شرطِ صریح این را از یک جزئیاتِ
        کتابخانه به یک **قاعدهٔ اعلام‌شده** تبدیل می‌کند. */
@@ -327,7 +345,7 @@ export class AuthService {
 
   async issue(account: AccountWithPerson, meta: { ua?: string; ip?: string }) {
     if (isTestAccount(account) && !await testAccountsEnabled(this.prisma)) throw new UnauthorizedException('حالت آزمایشی خاموش است');
-    if (isProvisional(account) && account.verificationDueAt! <= new Date()) { await expireProvisional(this.prisma, account.id); throw new UnauthorizedException('مهلت تأیید شماره تمام شده؛ حساب غیرفعال است'); }
+    if (await provisionalLapsed(this.prisma, account)) throw new UnauthorizedException('مهلت تأیید شماره تمام شده؛ حساب غیرفعال است');
     const active = await this.prisma.session.findMany({
       where: { accountId: account.id, revokedAt: null, expiresAt: { gt: new Date() } },
       orderBy: { createdAt: 'asc' },
@@ -366,7 +384,7 @@ export class AuthService {
     if (!session || session.revokedAt || session.expiresAt < new Date()) return null;
     if (isTestAccount(session.account) && !await testAccountsEnabled(this.prisma)) return null;
     if (session.accountId !== sub || session.account.status !== 'active') return null;
-    if (isProvisional(session.account) && session.account.verificationDueAt! <= new Date()) { await expireProvisional(this.prisma, sub); return null; }
+    if (await provisionalLapsed(this.prisma, session.account)) return null;
     /* جراحِ فعالِ متصل به شخصِ همین حساب — یک‌بار این‌جا، تا object-authz (`ownVisitWhere`)
        پزشکِ مطب را «خودش» بشمارد بی‌آنکه هر سرویس دوباره بپرسد. */
     const surgeon = session.account.personId
@@ -665,6 +683,8 @@ export class AuthService {
       isTestAccount: isTestAccount(a),
       phoneVerifiedAt: a.phoneVerifiedAt,
       verificationDueAt: a.verificationDueAt,
+      /* مهلتِ تأییدِ شماره گذشته ولی حساب باز است — فقط آخرین سوپرادمینِ فعال (PS2)؛ کلاینت هشدارِ جدا می‌دهد. */
+      verificationOverdue: isVerificationOverdue(a),
       personId: a.personId,
       firstName: p?.firstName ?? null,
       lastName: p?.lastName ?? null,

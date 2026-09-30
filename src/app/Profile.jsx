@@ -91,7 +91,9 @@ export default function Profile() {
         <PageHeader title="پروفایل من" icon={User} />
 
         {user.verificationDueAt && !user.phoneVerifiedAt && <section className="glass us-card pf-card"><h2 className="pf-h2">تأیید حساب موقت</h2>
-          <p>شماره {user.phone} را تا {faDate(user.verificationDueAt)} تأیید کنید. حساب تأییدنشده بعد از مهلت غیرفعال می‌شود.</p>
+          {user.verificationOverdue
+            ? <p>مهلتِ تأییدِ شمارهٔ <bdi dir="ltr">{user.phone}</bdi> ({faDate(user.verificationDueAt)}) گذشته است. حسابتان فقط چون تنها مدیرِ کلِ فعالِ سامانه هستید بسته نشد — همین حالا شماره را تأیید کنید.</p>
+            : <p>شماره <bdi dir="ltr">{user.phone}</bdi> را تا {faDate(user.verificationDueAt)} تأیید کنید. حساب تأییدنشده بعد از مهلت غیرفعال می‌شود.</p>}
           <button className="us-btn" disabled={phoneBusy} onClick={() => verifyPhone(false)}>دریافت کد پیامکی</button>
           <label className="lg-field"><span>کد تأیید</span><input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={phoneCode} onChange={e => setPhoneCode(toEnDigits(e.target.value).replace(/[^0-9]/g, ''))} /></label>
           <button className="lg-btn" disabled={phoneBusy || phoneCode.length < 5} onClick={() => verifyPhone(true)}>تأیید شماره</button>

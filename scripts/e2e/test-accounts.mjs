@@ -9,6 +9,7 @@ const { PrismaClient } = require('../../server/node_modules/@prisma/client');
 const { JwtService } = require('../../server/node_modules/@nestjs/jwt');
 const { AuthService } = require('../../server/dist/auth/auth.service');
 const { AccountsService } = require('../../server/dist/accounts/accounts.service');
+const { otpHash: cls_otpHash } = require('../../server/dist/common/otp-hash');
 const db = new PGlite(); await db.waitReady;
 const server = createServer(db, { logLevel: 0 });
 let prisma, count = 0, sent = [];
@@ -92,5 +93,51 @@ try {
   assert.ok(audits.some(a => a.action === 'account.testing.mode'));
   assert.equal(JSON.stringify(audits, (_, v) => typeof v === 'bigint' ? String(v) : v).includes(a.temporaryPassword), false);
   pass('reenabling never silently reactivates old accounts; data retained; audit contains no password');
+
+  /* PS2 — «اولین حساب = سوپرادمین» یعنی «هیچ حسابی نیست»، نه «سوپرادمینِ فعالی نیست». تا دیروز: سوپرادمینِ تنها
+     شماره‌اش را در پروفایل عوض می‌کرد، هفت روز تأیید نمی‌کرد، انقضای حسابِ موقت غیرفعالش می‌کرد و **اولین
+     ثبت‌نامِ عمومی** سوپرادمینِ فعالِ سامانه می‌شد. */
+  const { expireProvisional } = require('../../server/dist/accounts/provisional');
+  const past = new Date(Date.now() - 60_000);
+  const full = async (id) => prisma.account.findUnique({ where: { id }, include: { person: true } });
+  const boss = await auth.issue(await full(admin.id), {});
+  await prisma.account.update({ where: { id: admin.id }, data: { phoneVerifiedAt: null, verificationDueAt: past } });
+  assert.ok(await auth.validateSession(boss.sid, admin.id), 'آخرین سوپرادمینِ فعال با گذشتنِ مهلت بیرون نمی‌افتد');
+  await expireProvisional(prisma);
+  assert.equal((await prisma.account.findUnique({ where: { id: admin.id } })).status, 'active', 'انقضای دوره‌ای هم تنها سوپرادمین را غیرفعال نمی‌کند');
+  assert.equal((await prisma.session.findUnique({ where: { id: boss.sid } })).revokedAt, null);
+  assert.equal((await auth.issue(await full(admin.id), {})).user.verificationOverdue, true, 'کلاینت می‌داند مهلت گذشته (هشدار)');
+  const kept = await prisma.auditEvent.findMany({ where: { action: 'account.verification.overdue_kept', entityId: String(admin.id) } });
+  assert.equal(kept.length, 1, 'یک ردِ ممیزی، نه یکی به‌ازای هر درخواست');
+  await prisma.otpCode.create({ data: { phone: '09121110000', purpose: 'signup', codeHash: cls_otpHash('signup', '09121110000', '246810'), expiresAt: new Date(Date.now() + 60_000) } });
+  const late = await auth.verifyPhone(await full(admin.id), { phone: '09121110000', code: '246810' }, 'fixture');
+  assert.ok(late.phoneVerifiedAt, 'و پس از مهلت هم می‌تواند شماره را تأیید کند');
+  pass('PS2: last active superadmin survives the seven-day expiry, is warned, audited once, and can still verify');
+
+  /* دو سوپرادمینِ اصلیِ دیرکرده ← یکی می‌ماند (نه هر دو غیرفعال، نه هر دو معاف). */
+  await prisma.account.update({ where: { id: admin.id }, data: { phoneVerifiedAt: null, verificationDueAt: past } });
+  const boss2 = await accounts.createTemporary({ firstName: 'مدیر', lastName: 'دوم', phone: '09121110009', username: 'boss-two', level: 6, jobRole: 'secretary' }, admin.id);
+  await prisma.account.update({ where: { id: boss2.account.id }, data: { verificationDueAt: past } });
+  await expireProvisional(prisma);
+  const bosses = await prisma.account.count({ where: { level: 6, status: 'active', person: { phoneScope: 'primary' } } });
+  assert.equal(bosses, 1, `دقیقاً یک سوپرادمینِ فعال ماند (${bosses})`);
+  pass('PS2: with two overdue superadmins exactly one stays active');
+
+  /* سوپرادمینِ موقت با ثبت‌نامِ عمومی (فقط کدِ پیامکی به همان شماره) تصاحب نمی‌شود — همان قاعدهٔ بازیابیِ PF1. */
+  const liveBoss = await prisma.account.findFirst({ where: { level: 6, status: 'active', person: { phoneScope: 'primary' } }, include: { person: true } });
+  const claimToken = await jwt.signAsync({ phone: liveBoss.person.phone, purpose: 'signup' });
+  await assert.rejects(() => auth.completeSignup({ signupToken: claimToken, username: 'claimer', password: 'claim-password-1', firstName: 'غریبه', lastName: 'تصاحب', selfie: 'fixture' }, {}), /قبلاً ثبت/);
+  assert.equal((await prisma.account.findUnique({ where: { id: liveBoss.id } })).username, liveBoss.username);
+  pass('PS2: a provisional superadmin cannot be claimed by public signup (SMS-only)');
+
+  /* و اگر با همهٔ این‌ها سوپرادمینِ فعالی نماند (مثلاً دستی غیرفعال شد)، ثبت‌نامِ عمومی سطح نمی‌گیرد. */
+  await prisma.account.updateMany({ where: { level: 6 }, data: { status: 'disabled' } });
+  const strangerToken = await jwt.signAsync({ phone: '09121119999', purpose: 'signup' });
+  const stranger = await auth.completeSignup({ signupToken: strangerToken, username: 'first-come', password: 'stranger-password-1', firstName: 'غریبه', lastName: 'اول', selfie: 'fixture' }, {});
+  const row = await prisma.account.findUnique({ where: { id: stranger.user.id } });
+  assert.equal(stranger.pending, true); assert.equal(row.level, 1); assert.equal(row.status, 'pending');
+  assert.equal(stranger.bootstrap, undefined);
+  assert.deepEqual(await auth.setupStatus(), { needsSetup: false });
+  pass('PS2: no active superadmin is not "first account" — public signup stays level 1 and pending');
   console.log(`${count} shared-phone test account scenarios passed`);
 } finally { if (prisma) await prisma.$disconnect(); await new Promise(r => server.close(r)); await db.close(); }
