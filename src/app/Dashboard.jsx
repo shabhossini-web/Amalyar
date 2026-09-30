@@ -1335,7 +1335,9 @@ export default function Dashboard() {
           {!denied && visits === null && <div className="us-empty">در حال بارگذاری…</div>}
           {denied && <div className="us-empty">دسترسیِ کافی برای این بخش ندارید — مدیرِ سامانه باید سطحِ شما را ارتقا دهد.</div>}
           {!denied && visits?.length === 0 && (
-            <div className="us-empty">{q || status !== 'all' ? 'موردی مطابقِ جستجو پیدا نشد' : t.emptyList}</div>
+            /* فهرستِ خالی زیرِ یک فیلتر «اولین مراجعه را ثبت کن» نیست (DF11) — مرحلهٔ جامانده، نوع یا جستجوی پیشرفته. */
+            <div className="us-empty">{q || status !== 'all' ? 'موردی مطابقِ جستجو پیدا نشد'
+              : missing !== 'all' || kind !== 'all' || advCount ? 'نتیجه‌ای با این فیلتر نیست' : t.emptyList}</div>
           )}
           {asTable && visits?.length > 0 && (
             <VisitTable
