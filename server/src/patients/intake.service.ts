@@ -692,7 +692,8 @@ export class IntakeService {
        sms.sendOtp` می‌کرد، پس زمانِ پاسخ (تا ۲۰ ثانیه) می‌گفت این شماره روی این لینک ثبت‌نامِ باز دارد — همان
        چیزی که پاسخِ یکسان پنهانش می‌کرد. حالا یافتن، ساختنِ کد و پیامک همه پس از پاسخ‌اند. */
     setImmediate(() => {
-      this.issueResumeCode(link.id, phone).catch((e) => this.logger.warn(`intake resume code for link ${link.id} failed: ${e?.message ?? e}`));
+      /* فقط نامِ خطا: پیامِ خطای Prisma آرگومان‌ها (شماره) را هم چاپ می‌کند. */
+      this.issueResumeCode(link.id, phone).catch((e) => this.logger.warn(`intake resume code for link ${link.id} failed (${e?.name ?? 'Error'})`));
     });
     return answer;
   }

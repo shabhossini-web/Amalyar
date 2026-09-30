@@ -492,7 +492,8 @@ export class AuthService {
        شناسه حساب دارد. یافتنِ حساب، ساختنِ کد و پیامک همه پس از پاسخ‌اند (زمینهٔ شرکت با AsyncLocalStorage
        همراهِ کار می‌رود). */
     setImmediate(() => {
-      this.issueResetCode(identifier).catch((e) => this.logger.warn(`password reset code could not be issued: ${e?.message ?? e}`));
+      /* فقط نامِ خطا: پیامِ خطای Prisma آرگومان‌ها (شماره) را هم چاپ می‌کند — قاعدهٔ لاگ (PF10). */
+      this.issueResetCode(identifier).catch((e) => this.logger.warn(`password reset code could not be issued (${e?.name ?? 'Error'})`));
     });
     return same;
   }
