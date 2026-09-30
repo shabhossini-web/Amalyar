@@ -70,10 +70,11 @@ export default function Profile() {
     setPwErr('');
     setSavingPw(true);
     try {
-      await changePassword(curPw, newPw);
+      const r = await changePassword(curPw, newPw);
       setCurPw('');
       setNewPw('');
-      setToast('رمز عبور تغییر کرد');
+      /* پس‌کی‌ها هم با تغییرِ رمز پاک می‌شوند (بستهٔ PS، PS3) — کاربر باید بداند چرا اثر انگشت دیگر کار نمی‌کند. */
+      setToast(`رمز عبور تغییر کرد.${r?.passkeysRemoved ? ' اثر انگشت/پس‌کیِ این حساب هم پاک شد؛ پس از ورودِ دوباره، از منوی حساب «فعال‌سازی ورود با اثر انگشت» را دوباره بزنید.' : ''}`);
     } catch (e2) {
       setPwErr(e2.message);
     } finally {

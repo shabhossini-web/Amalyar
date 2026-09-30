@@ -94,6 +94,50 @@ try {
   assert.equal(JSON.stringify(audits, (_, v) => typeof v === 'bigint' ? String(v) : v).includes(a.temporaryPassword), false);
   pass('reenabling never silently reactivates old accounts; data retained; audit contains no password');
 
+  /* PS3 — پس‌کی و نشست در همهٔ مسیرهای «اعتبارنامه عوض شد» می‌روند، نه فقط در بازیابیِ رمز (PF6). کسی که رمز را
+     دزدیده بود ممکن است اثر انگشتِ خودش را هم ثبت کرده باشد؛ با ماندنِ پس‌کی، عوض‌کردنِ رمز او را بیرون نمی‌کرد. */
+  const passkey = (accountId, tag) => prisma.webauthnCredential.create({ data: { accountId, credId: `ps3-${tag}-${accountId}`, publicKey: 'AAAA', name: 'آزمونی' } });
+  const keysOf = (accountId) => prisma.webauthnCredential.count({ where: { accountId } });
+  const liveOf = (accountId) => prisma.session.count({ where: { accountId, revokedAt: null } });
+  const pw = await accounts.createTemporary({ firstName: 'آزمونی', lastName: 'رمز', phone: '09121110021', username: 'ps3-password', level: 2, jobRole: 'technician' }, admin.id);
+  await prisma.account.update({ where: { id: pw.account.id }, data: { phoneVerifiedAt: new Date() } });
+  await auth.login({ identifier: 'ps3-password', password: pw.temporaryPassword }, {});
+  await passkey(pw.account.id, 'pw');
+  const changed = await auth.changePassword(pw.account.id, pw.temporaryPassword, 'ps3-new-password-1');
+  assert.equal(await keysOf(pw.account.id), 0, 'تغییرِ رمز پس‌کی‌های حساب را پاک می‌کند');
+  assert.equal(changed.passkeysRemoved, 1, 'و تعدادشان را برای پیامِ موفقیت می‌گوید');
+  assert.equal(await liveOf(pw.account.id), 0);
+  pass('PS3: changing the password also removes passkeys (and still revokes sessions)');
+
+  /* تصاحبِ حسابِ موقت با ثبت‌نام (کدِ پیامکی): رمز عوض می‌شد ولی نشستِ رمزِ موقت و پس‌کیِ ثبت‌شده با آن می‌ماند. */
+  const temp = await accounts.createTemporary({ firstName: 'آزمونی', lastName: 'تصاحب', phone: '09121110022', username: 'ps3-claim-old', level: 2, jobRole: 'technician' }, admin.id);
+  const tempLogin = await auth.login({ identifier: 'ps3-claim-old', password: temp.temporaryPassword }, {});
+  await passkey(temp.account.id, 'claim');
+  const claimSignup = await jwt.signAsync({ phone: '09121110022', purpose: 'signup' });
+  const claimedNow = await auth.completeSignup({ signupToken: claimSignup, username: 'ps3-claim-new', password: 'ps3-claim-password-1', firstName: 'آزمونی', lastName: 'تصاحب', selfie: 'fixture' }, {});
+  assert.equal(claimedNow.claimed, true);
+  assert.ok((await prisma.session.findUnique({ where: { id: tempLogin.sid } })).revokedAt, 'نشستِ رمزِ موقت با تصاحب بسته شد');
+  assert.equal(await auth.validateSession(tempLogin.sid, temp.account.id), null);
+  assert.equal(await keysOf(temp.account.id), 0, 'پس‌کیِ پیش از تصاحب پاک شد');
+  assert.ok(await auth.validateSession(claimedNow.sid, temp.account.id), 'نشستِ خودِ تصاحب زنده است');
+  pass('PS3: claiming a provisional account revokes earlier sessions and passkeys');
+
+  /* تغییرِ شماره در «کاربران»: نشست‌های آن حساب بسته می‌شوند — جز نشستِ جاریِ خودِ کسی که شمارهٔ خودش را عوض می‌کند. */
+  const moved = await accounts.createTemporary({ firstName: 'آزمونی', lastName: 'شماره', phone: '09121110023', username: 'ps3-phone', level: 2, jobRole: 'technician' }, admin.id);
+  const movedLogin = await auth.login({ identifier: 'ps3-phone', password: moved.temporaryPassword }, {});
+  const adminFull = await prisma.account.findUnique({ where: { id: admin.id }, include: { person: true } });
+  const adminA = await auth.issue(adminFull, {});
+  const adminB = await auth.issue(adminFull, {});
+  await accounts.updateProfile(moved.account.id, { phone: '09121110024' }, { id: admin.id, sid: adminA.sid });
+  assert.equal(await auth.validateSession(movedLogin.sid, moved.account.id), null, 'نشستِ حسابی که شماره‌اش عوض شد بسته شد');
+  const beforeSelf = await prisma.account.findUnique({ where: { id: admin.id }, include: { person: true } });
+  await accounts.updateProfile(admin.id, { phone: '09121110025' }, { id: admin.id, sid: adminA.sid });
+  assert.ok(await auth.validateSession(adminA.sid, admin.id), 'نشستِ جاریِ خودِ مدیر می‌ماند');
+  assert.equal(await auth.validateSession(adminB.sid, admin.id), null, 'نشستِ دیگرِ همان مدیر بسته شد');
+  assert.ok((await prisma.auditEvent.findMany({ where: { action: 'account.phone.change', entityId: String(moved.account.id) } })).length === 1);
+  await prisma.account.update({ where: { id: admin.id }, data: { phoneVerifiedAt: beforeSelf.phoneVerifiedAt, verificationDueAt: beforeSelf.verificationDueAt, person: { update: { phone: beforeSelf.person.phone } } } });
+  pass('PS3: a phone change revokes that account\'s sessions except the editor\'s own current one');
+
   /* PS2 — «اولین حساب = سوپرادمین» یعنی «هیچ حسابی نیست»، نه «سوپرادمینِ فعالی نیست». تا دیروز: سوپرادمینِ تنها
      شماره‌اش را در پروفایل عوض می‌کرد، هفت روز تأیید نمی‌کرد، انقضای حسابِ موقت غیرفعالش می‌کرد و **اولین
      ثبت‌نامِ عمومی** سوپرادمینِ فعالِ سامانه می‌شد. */

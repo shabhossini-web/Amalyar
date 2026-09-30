@@ -253,11 +253,16 @@ export class AuthService {
           },
           include: WITH_PERSON,
         });
+        /* هشدار — تصاحب یعنی **اعتبارنامهٔ تازه** (بستهٔ PS، PS3): رمز عوض شد، پس نشست‌های رمزِ موقت و
+           پس‌کی‌هایی که با آن ثبت شده بودند هم می‌روند — کسی که رمزِ موقت را داشت (مثلاً از پیامی که به جای
+           دیگری رفت) نباید پس از تحویلِ حساب به صاحبِ شماره داخل بماند. نشستِ خودِ تصاحب پس از تراکنش ساخته می‌شود. */
+        await tx.session.updateMany({ where: { accountId: claimed.id, revokedAt: null }, data: { revokedAt: new Date() } });
+        const passkeysRemoved = (await tx.webauthnCredential.deleteMany({ where: { accountId: claimed.id } })).count;
         await tx.auditEvent.create({
           data: {
             actorId: claimed.id, action: 'account.claim', entityType: 'account',
             entityId: String(claimed.id),
-            afterJson: { username: claimed.username, level: claimed.level },
+            afterJson: { username: claimed.username, level: claimed.level, passkeysRemoved },
           },
         });
         return { account: claimed, bootstrap: false, claimed: true };
@@ -598,17 +603,15 @@ export class AuthService {
     if (!account) throw new UnauthorizedException();
     const ok = await bcrypt.compare(current, account.passwordHash);
     if (!ok) throw new BadRequestException('رمزِ فعلی اشتباه است');
-    await this.prisma.$transaction([
-      this.prisma.account.update({
-        where: { id },
-        data: { passwordHash: await bcrypt.hash(next, 12) },
-      }),
-      this.prisma.session.updateMany({
-        where: { accountId: id, revokedAt: null },
-        data: { revokedAt: new Date() },
-      }),
-    ]);
-    return { ok: true, sessionsRevoked: true };
+    const passwordHash = await bcrypt.hash(next, 12);
+    /* هشدار — پس‌کی‌ها هم در همان تراکنش (بستهٔ PS، PS3؛ همان قاعدهٔ بازیابیِ PF6): کسی که رمز را دزدیده بود
+       ممکن است اثر انگشتِ خودش را هم ثبت کرده باشد؛ بی‌این، عوض‌کردنِ رمز او را بیرون نمی‌کرد. */
+    const passkeysRemoved = await this.prisma.$transaction(async (tx) => {
+      await tx.account.update({ where: { id }, data: { passwordHash } });
+      await tx.session.updateMany({ where: { accountId: id, revokedAt: null }, data: { revokedAt: new Date() } });
+      return (await tx.webauthnCredential.deleteMany({ where: { accountId: id } })).count;
+    });
+    return { ok: true, sessionsRevoked: true, passkeysRemoved };
   }
 
   async logout(sid: string) {
