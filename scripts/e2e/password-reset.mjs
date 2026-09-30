@@ -261,6 +261,21 @@ ok(resumed.status < 300 && back.status < 300 && back.json?.data?.nationalId === 
 const stale = await call(`/public/intake/form/${own.json?.token}`, { method: 'GET' });
 ok(!!resumed.json?.token && resumed.json.token !== own.json?.token && stale.status === 404,
   `PS1: ادامه با کد توکنِ فرم را نو می‌کند؛ توکنِ پیشین دیگر باز نمی‌کند (${stale.status})`);
+/* PS12 — پروندهٔ **بی‌شماره** (کارکنان بی‌موبایل ساخته‌اند): ثبت‌نامِ عمومی با کدِ ملی و نامِ خانوادگیِ درست
+   تا دیروز شمارهٔ **ثبت‌نام‌کننده** را روی خودِ پرونده می‌نشاند — از آن به بعد «ادامه با موبایل + کد»، یادآوری‌ها
+   و لینک‌های همان بیمار به گوشیِ او می‌رفت. حالا پرونده دست نمی‌خورد تا کارکنان با تأییدِ ثبت‌نام بپذیرندش؛
+   کارِ خودِ ثبت‌نام (لینکِ ادامه، «ادامه با موبایل + کد») با شمارهٔ خودِ همان ثبت‌نام پیش می‌رود. */
+const bareNid = nid(Number(run) * 10 + 9);
+const bareId = Number(sql(`INSERT INTO patients (code, first_name, last_name, national_id) VALUES ('AM-PS12-${run}', 'آزمونی', 'بی‌شماره', '${bareNid}') RETURNING id`).split('\n')[0]);
+const bareRegPhone = `0931${run}4`;
+const onBare = await register(link, { lastName: 'بی‌شماره', nationalId: bareNid, phone: bareRegPhone });
+ok(onBare.status < 300 && !!onBare.json?.token, `ثبت‌نام روی پروندهٔ بی‌شماره پذیرفته شد (${onBare.status})`, msg(onBare));
+const bareAfter = sql(`SELECT coalesce(phone, '') FROM patients WHERE id = ${bareId}`);
+ok(bareAfter === '', `PS12: شمارهٔ ثبت‌نام‌کننده روی پروندهٔ موجودِ بی‌شماره ننشست («${bareAfter}»)`);
+ok(await notices(bareRegPhone) === 1, 'PS12: لینکِ ادامهٔ همین ثبت‌نام همچنان به شمارهٔ خودِ ثبت‌نام‌کننده رفت');
+const bareReq = await call(`/public/intake/link/${link.token}/resume/request`, { body: { phone: bareRegPhone }, ip: '10.66.0.3' });
+const bareBack = await call(`/public/intake/link/${link.token}/resume/verify`, { body: { phone: bareRegPhone, code: bareReq.json?.devCode }, ip: '10.66.0.3' });
+ok(bareBack.status < 300 && !!bareBack.json?.token, `PS12: «ادامه با موبایل + کد» با شمارهٔ همان ثبت‌نام کار می‌کند (${bareReq.status}/${bareBack.status})`, msg(bareBack));
 /* PF7 — سه بیمارِ تازه، یک شماره: سقفِ «یک پیامک در ده دقیقه» فقط به‌ازای ثبت‌نام بود، پس هر ثبت‌نام یک
    پیامکِ دیگر به همان شماره می‌فرستاد. سقفِ تازه: دو پیامک در ساعت به هر شماره، بی‌صدا. */
 const bombed = `0937${run}1`;

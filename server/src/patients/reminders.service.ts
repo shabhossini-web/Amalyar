@@ -6,7 +6,7 @@ import { cancelSms, type CancelKind } from '../common/cancel-reasons';
 import { SmsService, meliCodeText, meliErrorCodeOf } from '../sms/sms.service';
 import { SettingsService } from '../config/settings.service';
 import { TenantContext } from '../tenant/tenant-context';
-import { toEnDigits } from '../common/identity';
+import { submissionPhone, toEnDigits } from '../common/identity';
 import { faDateStr } from './summary.service';
 import { renderSms } from '../common/sms-template';
 import { sendReminders } from '../reminders/send-reminders';
@@ -454,12 +454,17 @@ export class RemindersService {
       const a = await this.prisma.appointment.findUnique({
         where: { id: appointmentId },
         select: {
-          id: true, patientId: true, date: true, startMin: true, status: true,
+          id: true, patientId: true, date: true, startMin: true, status: true, submissionId: true,
           topic: { select: { name: true } },
           patient: { select: { phone: true } },
         },
       });
       if (!a) return;
+      /* نوبتی که یک ثبت‌نامِ عمومی گرفته و پرونده‌اش هنوز شماره ندارد ← شمارهٔ همان ثبت‌نام (بستهٔ PS، PS12):
+         فرمِ عمومی دیگر شماره را روی پروندهٔ موجود نمی‌نشاند، ولی کسی که نوبت گرفته باید یادآوری‌اش را بگیرد. */
+      const own = a.submissionId && !String(a.patient?.phone ?? '').trim()
+        ? await this.prisma.intakeSubmission.findUnique({ where: { id: a.submissionId }, select: { data: true } })
+        : null;
       await this.prisma.reminder.updateMany({
         where: { appointmentId, kind: 'appointment', status: 'pending' },
         data: { status: 'cancelled' },
@@ -476,7 +481,7 @@ export class RemindersService {
       await this.prisma.reminder.create({
         data: {
           patientId: a.patientId, appointmentId, kind: 'appointment', dueAt,
-          phone: String(a.patient?.phone ?? '').trim() || null,
+          phone: String(a.patient?.phone ?? '').trim() || submissionPhone(null, own?.data) || null,
           text: `${brand.name ? brand.name + '\n' : ''}${renderSms(cfg.appointmentText, { date: faDateStr(a.date), time, topic })}`,
         },
       });

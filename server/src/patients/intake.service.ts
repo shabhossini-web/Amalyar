@@ -26,7 +26,7 @@ import { OTHER_PX, procedureLabel } from './visit-coding';
 import { PortalService } from './portal.service';
 import { renderSms } from '../common/sms-template';
 import { RemindersService } from './reminders.service';
-import { isValidNationalId, toEnDigits } from '../common/identity';
+import { isValidNationalId, mobileOf, submissionPhone, toEnDigits } from '../common/identity';
 import { SmsService } from '../sms/sms.service';
 import { SettingsService } from '../config/settings.service';
 import { SETTING_BY_KEY } from '../config/settings-registry';
@@ -639,10 +639,11 @@ export class IntakeService {
    * واقعی که بعداً ثبت‌نام می‌کرد پیامکی با **همان** توکن می‌گرفت و هر چه در فرم می‌نوشت به دستِ او هم می‌رسید.
    * بهای کم: برگهٔ بازِ قبلی دیگر باز نمی‌شود — لینکِ تازه همان لحظه پیامک شده است.
    */
-  private async sendContinueLink(patientId: number, sub: { id: number; token: string }, title: string, linkId: number, opts: { rotate?: boolean } = {}): Promise<string | null> {
+  private async sendContinueLink(patientId: number, sub: { id: number; token: string; data?: unknown }, title: string, linkId: number, opts: { rotate?: boolean } = {}): Promise<string | null> {
     const patient = await this.prisma.patient.findFirst({ where: { id: patientId, deletedAt: null }, select: { phone: true } });
-    const to = toEnDigits(String(patient?.phone ?? '')).replace(/[^0-9]/g, '');
-    if (!/^09\d{9}$/.test(to)) return null;
+    /* پروندهٔ بی‌شماره ← شمارهٔ خودِ همین ثبت‌نام (PS12). */
+    const to = patient ? submissionPhone(patient.phone, sub.data) : null;
+    if (!to) return null;
     /* سطلِ ثبت‌نام به‌ازای **شناسه** نه توکن — توکن با `rotate` عوض می‌شود و سقف نباید با آن صفر شود. */
     const bySub = `intake-link-sms:${this.tid}:sub:${sub.id}`;
     const byPhone = `intake-link-sms:${this.tid}:phone:${to}`;
@@ -680,7 +681,14 @@ export class IntakeService {
 
   private async openByPhone(linkId: number, phone: string) {
     return this.prisma.intakeSubmission.findFirst({
-      where: { linkId, status: { in: ['pending_fill', 'pending_payment', 'pending_approval'] }, patient: { phone, deletedAt: null } },
+      where: {
+        linkId, status: { in: ['pending_fill', 'pending_payment', 'pending_approval'] },
+        OR: [
+          { patient: { phone, deletedAt: null } },
+          /* پروندهٔ بی‌شماره (PS12): فقط ثبت‌نامی که با **همین** شماره ساخته شده — کد به همان شماره می‌رود. */
+          { patient: { deletedAt: null, OR: [{ phone: null }, { phone: '' }] }, data: { path: ['phone'], equals: phone } },
+        ],
+      },
       orderBy: { id: 'desc' },
       select: { id: true, token: true },
     });
@@ -2623,8 +2631,12 @@ export class IntakeService {
         if (current.status !== 'pending_approval' || current.updatedAt.getTime() !== row.updatedAt.getTime()) {
           throw new ConflictException('اطلاعات ثبت‌نام تغییر کرده است؛ صفحه را تازه کنید');
         }
-        const patient = await tx.patient.findFirst({ where: { id: row.patientId!, deletedAt: null }, select: { id: true } });
+        const patient = await tx.patient.findFirst({ where: { id: row.patientId!, deletedAt: null }, select: { id: true, phone: true } });
         if (!patient) throw new BadRequestException('پرونده فعال نیست');
+        /* شمارهٔ ثبت‌نام روی پروندهٔ **بی‌شماره** با تأییدِ کارکنان می‌نشیند (PS12) — فرمِ عمومی دیگر خودش
+           نمی‌نشاندش؛ کارتِ «هویت» همین شماره را پیش از تأیید نشان می‌دهد. پیش از پیامکِ تأیید، تا همان برود. */
+        const phoneFromIntake = !String(patient.phone ?? '').trim() ? mobileOf((current.data as any)?.phone) : null;
+        if (phoneFromIntake) await tx.patient.update({ where: { id: patient.id }, data: { phone: phoneFromIntake } });
         await tx.$queryRaw`SELECT id FROM appointments WHERE submission_id = ${id} FOR UPDATE`;
         const appointment = await tx.appointment.findUnique({ where: { submissionId: id } });
         if (!!appointment !== !!held || (appointment && held && (
@@ -2661,7 +2673,8 @@ export class IntakeService {
           reviewedAt: new Date(), approvalKey: key, approvalResult: response } });
         await this.audit.record({ actorId: user?.id, action: visit ? 'intake.approve' : 'intake.approve.record',
           entityType: 'intake_submission', entityId: id,
-          after: { visitId: visit?.id ?? null, charged: visit ? row.amount : 0, discount: row.discountAmount, paid: visit && pay ? paidAmount : 0 } }, tx);
+          after: { visitId: visit?.id ?? null, charged: visit ? row.amount : 0, discount: row.discountAmount, paid: visit && pay ? paidAmount : 0,
+            ...(phoneFromIntake ? { phoneFromIntake: true } : {}) } }, tx);
         await this.events.emit({ type: 'intake.approved', refType: 'intake_submission', refId: id,
           patientId: row.patientId, visitId: visit?.id ?? null, actorId: user?.id ?? null }, tx);
         if (queueNotice && visit) await queueNotice(tx, row.patientId!, visit.id, id, user?.id ?? null);
@@ -2803,8 +2816,11 @@ export class IntakeService {
     }) => {
       if (!o.patientId) return null;
       const patient = await tx.patient.findFirst({ where: { id: o.patientId, deletedAt: null }, select: { phone: true } });
-      const phone = toEnDigits(String(patient?.phone ?? '')).replace(/[^0-9]/g, '');
-      if (!/^09\d{9}$/.test(phone)) return null;
+      if (!patient) return null;
+      /* برگشت و رد پیامِ **همین ثبت‌نام** است — پروندهٔ بی‌شماره ← شمارهٔ خودِ ثبت‌نام (PS12). */
+      const own = mobileOf(patient.phone) ? null : await tx.intakeSubmission.findUnique({ where: { id: o.submissionId }, select: { data: true } });
+      const phone = submissionPhone(patient.phone, own?.data);
+      if (!phone) return null;
       const body = `${brand.name ? brand.name + '\n' : ''}${renderSms(o.template, o.vars)}`;
       const reminder = await tx.reminder.upsert({ where: { dedupeKey: o.dedupeKey }, update: {}, create: {
         patientId: o.patientId, kind: 'notice', dueAt: new Date(), phone, text: body, status: 'pending', dedupeKey: o.dedupeKey,

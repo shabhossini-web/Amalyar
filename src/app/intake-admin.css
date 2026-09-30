@@ -289,6 +289,7 @@
 .ia-id dt { font-size: 10.5px; color: var(--text3); }
 .ia-id dd { margin: 0; font-size: 13px; font-weight: 700; color: var(--text1); overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
 .ia-id dd[dir="ltr"] { text-align: end; }
+.ia-id-hint { font-size: 11px; line-height: 1.6; color: var(--amber-text); }
 .ia-id-edit { display: grid; gap: 8px; }
 /* فیش‌ها و مدارک — چندتایی، کنارِ هم. */
 .ia-docs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
