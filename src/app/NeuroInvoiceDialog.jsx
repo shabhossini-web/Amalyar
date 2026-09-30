@@ -17,7 +17,7 @@ const NONE = [];
 /** دو راهِ «با قلمِ مبلغِ کل چه شود؟» — کلید همان کلیدِ `billing.options`ِ سرور است. */
 const LUMP_CHOICES = [['replace', 'جایگزینِ همین قلم شود'], ['keep', 'کنارش بماند']];
 /** «مانده ۸٬۹۹۸» / «اضافه‌پرداخت ۳۹٬۹۹۱٬۰۰۲» / «تسویه» — برچسب و مبلغ هر دو از سرور (`payState*`، قانون ۱۵). */
-const payText = (b) => `${b.payStateFa}${b.payState === 'due' ? ` ${fmtMoney(b.due)}` : b.payState === 'overpaid' ? ` ${fmtMoney(b.overpaid)}` : ''}`;
+const payText = (b) => `${b.payStateFa}${b.payState === 'due' ? ` ${fmtMoney(b.due)} تومان` : b.payState === 'overpaid' ? ` ${fmtMoney(b.overpaid)} تومان` : ''}`;
 
 /**
  * پاپ‌آپِ صدورِ فاکتورِ نورومانیتورینگ — الگوی ملک‌طب.
@@ -215,7 +215,7 @@ export default function NeuroInvoiceDialog({ visit, billing, intent, onClose, on
                   {LUMP_CHOICES.map(([key, label]) => (
                     <div key={key} className={choice === key ? 'on' : undefined}>
                       <dt>{label}</dt>
-                      <dd>جمع {fmtMoney(bill.options[key].total)} · <span className={`nv-pay ${bill.options[key].payState}`}>{payText(bill.options[key])}</span></dd>
+                      <dd>جمع {fmtMoney(bill.options[key].total)} تومان · <span className={`nv-pay ${bill.options[key].payState}`}>{payText(bill.options[key])}</span></dd>
                     </div>
                   ))}
                 </dl>
@@ -274,8 +274,8 @@ export default function NeuroInvoiceDialog({ visit, billing, intent, onClose, on
               <div className="nv-after" aria-live="polite">
                 <span>جمعِ صورت‌حساب پس از ثبت</span>
                 <b>
-                  {after.total === bill.before.total ? <>{fmtMoney(after.total)} <small>بی‌تغییر</small></> : (
-                    <><s>{fmtMoney(bill.before.total)}</s> <ArrowStart width="13" height="13" /><span className="db-sr"> به </span> {fmtMoney(after.total)}</>
+                  {after.total === bill.before.total ? <>{fmtMoney(after.total)} تومان <small>بی‌تغییر</small></> : (
+                    <><s>{fmtMoney(bill.before.total)}</s> <ArrowStart width="13" height="13" /><span className="db-sr"> به </span> {fmtMoney(after.total)} تومان</>
                   )}
                 </b>
                 <em className={`nv-pay ${after.payState}`}>{payText(after)}</em>

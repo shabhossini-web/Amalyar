@@ -48,7 +48,7 @@ export default function InvoicePanel({ visit, billing, neuro, onToast, reload })
       {/* یک پاپ‌آپ برای همهٔ خدمات — نه یکی‌یکی. وضعیتِ فعلی همین‌جا خلاصه می‌شود تا کاربر بداند چه روی فاکتور است. */}
       <div className="nv-launch-sum">
         {neuroLines.length
-          ? <><b>{neuroLines.map(c => c.neuroDetail.label ?? c.title).join(' · ')}</b><small>{neuroLines[0].neuroDetail.hours} ساعت · مالک دستگاه: {neuroLines[0].neuroDetail.deviceOwner === 'hospital' ? 'بیمارستان' : 'شرکت'}{neuroCons.length ? ` · ${neuroCons.length.toLocaleString('fa-IR')} قلم مصرفی` : ''}{info?.lumpKept ? ` · کنارِ ${lump.map(c => c.title).join('، ')} (به انتخابِ شما)` : ''}</small></>
+          ? <><b>{neuroLines.map(c => c.neuroDetail.label ?? c.title).join(' · ')}</b><small>{Number(neuroLines[0].neuroDetail.hours ?? 0).toLocaleString('fa-IR')} ساعت · مالک دستگاه: {neuroLines[0].neuroDetail.deviceOwner === 'hospital' ? 'بیمارستان' : 'شرکت'}{neuroCons.length ? ` · ${neuroCons.length.toLocaleString('fa-IR')} قلم مصرفی` : ''}{info?.lumpKept ? ` · کنارِ ${lump.map(c => c.title).join('، ')} (به انتخابِ شما)` : ''}</small></>
           : lump.length
             ? <><b>روی صورت‌حساب: {lump.map(c => `${c.title} · ${fmtMoney(c.amount)} تومان`).join('، ')}</b><small>این قلمِ مبلغِ کل است، نه ریزِ خدمات. برای فاکتور خدمات را انتخاب کنید؛ همان‌جا می‌گویید جایگزینِ این قلم شوند یا کنارش بمانند.</small></>
             : <><b>هنوز خدمتِ نورومانیتورینگی روی این صورت‌حساب نیست</b><small>خدمات با تیکِ پیش‌فرضِ شرکت و مدتِ عمل پیش‌پر می‌آیند؛ فقط تأیید کنید.</small></>}

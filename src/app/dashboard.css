@@ -831,8 +831,11 @@ a.db-defbtn { text-decoration: none; }
 .bl-splitacts .db-submit { flex: 1; }
 .bl-mini {
   padding: 10px 14px; border-radius: 12px; font: inherit; font-size: 12.5px; cursor: pointer;
-  color: #fff; background: rgba(var(--veil-rgb), .07); border: 1px solid rgba(var(--veil-rgb), .16);
+  /* `--text1` نه `#fff`: در تمِ روشن متنِ سفید روی زمینهٔ روشن نامرئی بود — «ثبتِ خدمات روی صورت‌حساب» خوانده نمی‌شد. */
+  color: var(--text1); background: rgba(var(--veil-rgb), .07); border: 1px solid rgba(var(--veil-rgb), .16);
 }
+.bl-mini:disabled { opacity: .55; cursor: default; }
+.bl-mini:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 .bl-mini.warn { flex: 1; color: var(--amber-text); border-color: rgba(251, 191, 36, .3); }
 
 /* پرداختِ سهم داخلِ تبِ تسویه */
