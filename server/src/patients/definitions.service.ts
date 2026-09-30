@@ -15,6 +15,16 @@ const STAFF_ROLE_FA: Record<string, string> = { driver: 'راننده', courier:
 
 /** پیامِ ردِ عوض‌کردنِ شمارهٔ صاحبِ حساب از «تعاریف» (PF1) — آزمونِ `password-reset.mjs` همین را می‌سنجد. */
 export const ACCOUNT_PHONE_LOCKED = 'شمارهٔ کسی که حسابِ کاربری دارد فقط از «مدیریتِ کاربران» عوض می‌شود.';
+/**
+ * فیلدهای هویتیِ صاحبِ حساب که از «تعاریف» عوض نمی‌شوند (بستهٔ PS، PS5) — هر کدام با نامِ خودش در پیام.
+ * شماره راهِ بازیابی است (PF1)، شبا مقصدِ پرداختِ سهم، و نام و عکس همان چیزی که همکاران در پیام‌رسان و
+ * پرتال می‌بینند؛ مسیرِ درستِ همه «مدیریتِ کاربران» است (سوپرادمین، `accounts.service.updateProfile`).
+ */
+const ACCOUNT_LOCKED_FIELDS: [key: string, label: string][] = [
+  ['phone', 'شمارهٔ'], ['iban', 'شبای'], ['firstName', 'نامِ'], ['lastName', 'نامِ خانوادگیِ'], ['photo', 'عکسِ'],
+];
+/** قبل/بعدِ ممیزیِ ویرایشِ هر تعریفِ شخص — برای **همهٔ** اشخاص، حساب‌دار یا نه (PS5). */
+const AUDITED_PERSON_FIELDS = ['iban', 'phone', 'nationalId'] as const;
 
 /**
  * تعریف‌های عملیاتیِ ماژولِ بیماران: جراحان و بیمارستان‌ها (+ فهرستِ کارشناسان).
@@ -48,12 +58,26 @@ export class DefinitionsService {
    * (`completeSignup`، `connect`) برای کلیدِ خارجی `FOR KEY SHARE` می‌گیرد و پشتِ این `FOR UPDATE`
    * می‌ماند؛ بی‌قفل، حساب درست پس از سنجش ساخته می‌شد و شماره باز هم عوض.
    */
-  private async refuseAccountPhone(tx: any, personId: number, patch: Record<string, unknown>) {
-    if (patch.phone === undefined) return;
+  private async refuseAccountIdentity(tx: any, personId: number, patch: Record<string, unknown>) {
     await tx.$queryRaw`SELECT id FROM people WHERE id = ${personId} FOR UPDATE`;
-    const p = await tx.person.findUnique({ where: { id: personId }, select: { phone: true, account: { select: { id: true } } } });
-    const same = String(patch.phone ?? '') === String(p?.phone ?? '');
-    if (p?.account && !same) throw new ForbiddenException(ACCOUNT_PHONE_LOCKED);
+    const p = await tx.person.findUnique({ where: { id: personId }, include: { account: { select: { id: true } } } });
+    if (!p) throw new NotFoundException('شخص یافت نشد');
+    /* هشدار — شبا، نام و عکس هم (بستهٔ PS، PS5): سطحِ ۵ شبای «دکتر X» را حسابِ خودش می‌کرد و سهمِ بعدی به
+       آن واریز می‌شد، بی هیچ ردی. مقدارِ **یکسان** (فرم همهٔ فیلدها را می‌فرستد) مثلِ قبل می‌گذرد. */
+    if (p.account) {
+      for (const [key, label] of ACCOUNT_LOCKED_FIELDS) {
+        if (patch[key] === undefined || String(patch[key] ?? '') === String((p as any)[key] ?? '')) continue;
+        throw new ForbiddenException(key === 'phone' ? ACCOUNT_PHONE_LOCKED : `${label} کسی که حسابِ کاربری دارد فقط از «مدیریتِ کاربران» عوض می‌شود.`);
+      }
+    }
+    return p;
+  }
+
+  /** ممیزیِ ویرایشِ تعریفِ یک شخص (PS5) — قبل/بعدِ شبا، شماره و کدِ ملی، در همان تراکنش. */
+  private async auditPersonEdit(tx: any, action: string, before: any, patch: Record<string, unknown>, extra: Record<string, unknown>, actorId?: number | null) {
+    const pick = (src: any) => Object.fromEntries(AUDITED_PERSON_FIELDS.map((k) => [k, src?.[k] ?? null]));
+    const after = { ...pick(before), ...Object.fromEntries(AUDITED_PERSON_FIELDS.filter((k) => patch[k] !== undefined).map((k) => [k, patch[k] ?? null])) };
+    await this.audit.record({ actorId: actorId ?? null, action, entityType: 'person', entityId: before.id, before: pick(before), after: { ...after, ...extra } }, tx);
   }
 
   /// جراح = نقش روی Person؛ نام و تلفن از همان‌جا می‌آیند، نه از خودِ رکوردِ جراح.
@@ -105,12 +129,13 @@ export class DefinitionsService {
     return this.surgeonView(row);
   }
 
-  async updateSurgeon(id: number, dto: PersonInput & { specialty?: string; licenseNo?: string; active?: boolean }) {
+  async updateSurgeon(id: number, dto: PersonInput & { specialty?: string; licenseNo?: string; active?: boolean }, user?: any) {
     const s = await this.prisma.surgeon.findUnique({ where: { id } });
     if (!s) throw new NotFoundException('جراح یافت نشد');
     const personPatch = buildPersonPatch(dto, false);
     const updated = await this.prisma.$transaction(async (tx) => {
-      await this.refuseAccountPhone(tx, s.personId, personPatch);
+      const before = await this.refuseAccountIdentity(tx, s.personId, personPatch);
+      await this.auditPersonEdit(tx, 'definitions.surgeon.update', before, personPatch, { surgeonId: id, fields: Object.keys(personPatch) }, user?.id);
       return tx.surgeon.update({
         where: { id },
         data: {
@@ -196,12 +221,13 @@ export class DefinitionsService {
     return this.staffView(row);
   }
 
-  async updateTransportStaff(id: number, dto: PersonInput & { role?: string; vehicle?: string; notes?: string; active?: boolean }) {
+  async updateTransportStaff(id: number, dto: PersonInput & { role?: string; vehicle?: string; notes?: string; active?: boolean }, user?: any) {
     const s = await this.prisma.transportStaff.findUnique({ where: { id } });
     if (!s) throw new NotFoundException('نیرو یافت نشد');
     const personPatch = buildPersonPatch(dto, false);
     const updated = await this.prisma.$transaction(async (tx) => {
-      await this.refuseAccountPhone(tx, s.personId, personPatch);
+      const before = await this.refuseAccountIdentity(tx, s.personId, personPatch);
+      await this.auditPersonEdit(tx, 'definitions.transport_staff.update', before, personPatch, { transportStaffId: id, fields: Object.keys(personPatch) }, user?.id);
       return tx.transportStaff.update({
         where: { id },
         data: {

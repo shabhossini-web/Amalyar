@@ -171,6 +171,23 @@ const drv = await call('/transport-staff', { body: { firstName: 'آزمونی', 
 await newAccount('5', bearer, true, { phone: drvPhone });
 const drvHijack = await call(`/transport-staff/${drv.json?.id}`, { method: 'PATCH', body: { phone: attacker }, bearer });
 ok(drvHijack.status === 403 && msg(drvHijack) === LOCKED, `شمارهٔ رانندهٔ صاحبِ حساب هم (${drvHijack.status})`);
+/* PS5 — شبا (مقصدِ پرداختِ سهم)، نام و عکسِ صاحبِ حساب هم از «تعاریف» عوض نمی‌شوند، و هر ویرایشِ تعریف ردِ ممیزیِ
+   قبل/بعدِ شبا، شماره و کدِ ملی دارد. تا دیروز سطحِ ۵ شبای «دکتر X» را حسابِ خودش می‌کرد، بی هیچ ردی. */
+const IBAN_A = 'IR820540102680020817909002', IBAN_B = 'IR062960000000100324200001';
+const ibanHijack = await call(`/surgeons/${sg?.id}`, { method: 'PATCH', body: { phone: doc.phone, iban: IBAN_A }, bearer });
+ok(ibanHijack.status === 403 && /فقط از «مدیریتِ کاربران» عوض می‌شود/.test(msg(ibanHijack)) && /شبا/.test(msg(ibanHijack)),
+  `PS5: شبای جراحِ صاحبِ حساب از «تعاریف» عوض نمی‌شود (${ibanHijack.status} «${msg(ibanHijack)}»)`);
+const nameHijack = await call(`/surgeons/${sg?.id}`, { method: 'PATCH', body: { firstName: 'غریبه' }, bearer });
+ok(nameHijack.status === 403 && /نام/.test(msg(nameHijack)), `PS5: نامِ صاحبِ حساب هم (${nameHijack.status} «${msg(nameHijack)}»)`);
+const drvIban = await call(`/transport-staff/${drv.json?.id}`, { method: 'PATCH', body: { iban: IBAN_A }, bearer });
+ok(drvIban.status === 403, `PS5: شبای رانندهٔ صاحبِ حساب هم (${drvIban.status})`);
+const sgNow = ((await call('/surgeons', { method: 'GET', bearer })).json ?? []).find((x) => x.id === sg?.id);
+const sameAll = await call(`/surgeons/${sg?.id}`, { method: 'PATCH', body: { firstName: sgNow?.firstName, lastName: sgNow?.lastName, phone: sgNow?.phone, iban: sgNow?.iban ?? '', specialty: 'آزمونی ۲' }, bearer });
+ok(sameAll.status < 300, `PS5: فرمِ تعاریف با همان مقادیر (نام، شماره، شبا) مثلِ قبل ذخیره می‌شود (${sameAll.status})`, msg(sameAll));
+const bareIban = await call(`/surgeons/${bare.json?.id}`, { method: 'PATCH', body: { iban: IBAN_B }, bearer });
+const bareAudit = sql(`SELECT before_json::text || ' → ' || after_json::text FROM audit_events WHERE action = 'definitions.surgeon.update' AND entity_id = '${bare.json?.personId ?? ''}' ORDER BY id DESC LIMIT 1`);
+ok(bareIban.status < 300 && bareAudit.includes(IBAN_B) && /"phone"/.test(bareAudit) && /"nationalId"/.test(bareAudit),
+  `PS5: شبای جراحِ بی‌حساب عوض می‌شود و ممیزی قبل/بعد دارد (${bareIban.status} ${bareAudit.slice(0, 120)})`);
 /* ج) سوپرادمین بازیابیِ فقط‌پیامکی ندارد — همان پاسخِ بی‌صدا، بی‌کد. */
 const boss = await newAccount('6', bearer, true, { level: 6 });
 const bossReq = await call('/auth/password/request-otp', { body: { identifier: boss.username } });
