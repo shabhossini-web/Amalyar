@@ -365,7 +365,11 @@ function DayList({ day, visits, busy, onOpen, techLabel }) {
       {visits.map((v) => (
         <li key={v.id}>
           <button type="button" className={`th-item${team ? ' has-owner' : ''}${busy === `open-${v.id}` ? ' busy' : ''}`} data-visit-id={v.id} onClick={() => onOpen(v.id)}>
-            <span className="th-item-time" dir="ltr">{v.opStartTime ? faTime(v.opStartTime) : '—'}</span>
+            {/* ساعتِ نامعلوم «ساعت؟»ِ کم‌رنگ است، نه یک «—»ِ درشتِ فیروزه‌ای که شبیهِ دکمهٔ «جمع‌کردن» بود
+                (بازبینیِ UX ۱۴۰۵/۰۷ — company-22). خودِ ردیف میز را باز می‌کند و «ثبتِ شروع» اولِ همان است. */}
+            {v.opStartTime
+              ? <span className="th-item-time" dir="ltr">{faTime(v.opStartTime)}</span>
+              : <span className="th-item-time is-empty" data-no-time title="ساعتِ شروع هنوز ثبت نشده">ساعت؟</span>}
             <span className="th-item-name">{v.patient}</span>
             {team && (
               <span className="th-item-owner">

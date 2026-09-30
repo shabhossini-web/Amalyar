@@ -42,6 +42,8 @@
 .th-item:hover, .th-item:focus-visible { border-color: rgba(var(--brand-2-rgb), .55); outline: none; }
 .th-item.busy { opacity: .6; }
 .th-item-time { grid-row: 1 / span 2; font-size: 15px; font-weight: 800; color: var(--cyan); font-variant-numeric: tabular-nums; }
+/* ساعتِ نامعلوم (company-22): کم‌رنگ و کوچک — خبر است، نه کنترل. */
+.th-item-time.is-empty { font-size: 12px; font-weight: 600; color: var(--text3); }
 .th-item-name { font-size: 15px; font-weight: 800; }
 .th-item-sub { grid-column: 2; font-size: 12px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .th-item-side { grid-column: 3; grid-row: 1 / span 2; display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
