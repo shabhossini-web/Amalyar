@@ -38,7 +38,8 @@ npm run build && node dist/main.js
 > سنجهٔ HTTPِ خودِ کوکی/CSRF/چندحسابی: `node scripts/e2e/cookie-auth.mjs`.
 
 کاربر: از مسیرِ `auth/signup/*` یک سوپرادمین با `admin` / `test1234` بسازید.
-کدِ OTP در پاسخ برنمی‌گردد و در `otp_codes` به‌شکلِ sha256 ذخیره می‌شود.
+کدِ OTP در پاسخ برنمی‌گردد (جز `devCode`ِ محیطِ `NODE_ENV=test`) و در `otp_codes` به‌شکلِ HMAC-SHA256 با `JWT_SECRET`
+ذخیره می‌شود (`server/src/common/otp-hash.ts`؛ پیامِ `هدف:شماره:کد`) — نه sha256ِ خامِ کد.
 
 ## اجرا
 

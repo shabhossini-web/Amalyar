@@ -13,6 +13,7 @@ import { RateLimitService } from '../common/rate-limit.service';
 import { TenantContext } from '../tenant/tenant-context';
 import { AuditService } from '../audit/audit.service';
 import { toEnDigits } from '../common/identity';
+import { otpHash } from '../common/otp-hash';
 import type { Request, Response } from 'express';
 import { expireProvisional, expireProvisionalInTransaction, isProvisional } from '../accounts/provisional';
 import { isTestAccount, testAccountsEnabled } from '../accounts/test-accounts';
@@ -68,7 +69,8 @@ export class AuthService {
    * شرکت‌هاست؛ بی‌این پیشوند هشت ورودِ غلط با «admin» در شرکتِ الف، «admin»ِ همهٔ شرکت‌ها را قفل می‌کرد.
    */
   private get tid() {
-    return this.tenantContext.current()?.tenantId ?? '-';
+    /* `current?.()`: آزمون‌های درونِ فرایند (company-operations، test-accounts) زمینهٔ شرکتِ نیمه‌ساختگی می‌دهند. */
+    return this.tenantContext.current?.()?.tenantId ?? '-';
   }
 
   async setupStatus() {
@@ -110,7 +112,7 @@ export class AuthService {
 
     const code = String(randomInt(100000, 1000000)); // ۶ رقمی
     const otp = await this.prisma.otpCode.create({
-      data: { phone, codeHash: sha256(code), purpose, expiresAt: new Date(Date.now() + OTP_TTL_MS) },
+      data: { phone, codeHash: otpHash(purpose, phone, code), purpose, expiresAt: new Date(Date.now() + OTP_TTL_MS) },
     });
     try {
       // هاستِ WebOTP باید میزبانِ همان شرکت باشد، وگرنه مرورگر کد را اتوفیل نمی‌کند
@@ -155,7 +157,7 @@ export class AuthService {
     });
     if (!slot.count) throw new BadRequestException('تعداد تلاش زیاد است؛ کد جدید بگیرید');
 
-    if (sha256(dto.code) !== otp.codeHash) throw new BadRequestException('کد تأیید اشتباه است');
+    if (otpHash(purpose, dto.phone, dto.code) !== otp.codeHash) throw new BadRequestException('کد تأیید اشتباه است');
     const consumed = await this.prisma.otpCode.updateMany({ where: { id: otp.id, consumedAt: null, expiresAt: { gt: new Date() } }, data: { consumedAt: new Date() } });
     if (!consumed.count) throw new BadRequestException('کد قبلاً استفاده شده یا منقضی است');
 
@@ -509,9 +511,9 @@ export class AuthService {
     if (recent) return null;
     const code = String(randomInt(100000, 1000000));
     const otp = await this.prisma.otpCode.create({
-      data: { phone: target.phone, codeHash: sha256(code), purpose: RESET_PURPOSE, expiresAt: new Date(Date.now() + OTP_TTL_MS) },
+      data: { phone: target.phone, codeHash: otpHash(RESET_PURPOSE, target.phone, code), purpose: RESET_PURPOSE, expiresAt: new Date(Date.now() + OTP_TTL_MS) },
     });
-    const res = await this.sms.sendOtp(target.phone, code, this.tenantContext.current()?.hostname).catch((e) => {
+    const res = await this.sms.sendOtp(target.phone, code, this.tenantContext.current()?.hostname, RESET_PURPOSE).catch((e) => {
       this.logger.warn(`password reset sms failed for account ${target.account.id}: ${e?.message ?? e}`);
       return null;
     });
@@ -549,7 +551,7 @@ export class AuthService {
       where: { id: otp.id, consumedAt: null, attempts: { lt: OTP_MAX_ATTEMPTS } }, data: { attempts: { increment: 1 } },
     });
     if (!slot.count) throw new BadRequestException(RESET_BAD);
-    if (sha256(toEnDigits(dto.code).trim()) !== otp.codeHash) throw new BadRequestException(RESET_BAD);
+    if (otpHash(RESET_PURPOSE, target.phone, toEnDigits(dto.code).trim()) !== otp.codeHash) throw new BadRequestException(RESET_BAD);
     const passwordHash = await bcrypt.hash(dto.password, 12);
     const passkeysRemoved = await this.prisma.$transaction(async (tx) => {
       const consumed = await tx.otpCode.updateMany({

@@ -84,8 +84,9 @@ try {
   const driver = await accounts.createTemporary({ firstName: 'راننده', lastName: 'آزمایشی', phone: '09120000005', level: 2, jobRole: 'driver' }, user.id);
   assert.ok(await prisma.transportStaff.findFirst({ where: { person: { account: { id: driver.account.id } } } }));
   pass('superadmin provisional account logs in, links doctor/transport identity, and cannot duplicate phone');
-  const { createHash } = await import('node:crypto');
-  await prisma.otpCode.create({ data: { phone: doctor.person.phone, purpose: 'signup', codeHash: createHash('sha256').update('123456').digest('hex'), expiresAt: new Date(Date.now() + 60000) } });
+  /* هشِ کد با همان تابعِ سرور (HMAC با رازِ سرور، بستهٔ PF) — نه SHA-256ِ خام که دیگر پذیرفته نمی‌شود. */
+  const otpHash = cls('common/otp-hash', 'otpHash');
+  await prisma.otpCode.create({ data: { phone: doctor.person.phone, purpose: 'signup', codeHash: otpHash('signup', doctor.person.phone, '123456'), expiresAt: new Date(Date.now() + 60000) } });
   await assert.rejects(() => auth.verifyPhone(doctor, { phone: '09120000002', code: '123456' }, 'fixture'));
   const verified = await auth.verifyPhone(doctor, { phone: doctor.person.phone, code: '123456' }, 'fixture');
   assert.ok(verified.phoneVerifiedAt); assert.equal(verified.level, 2);

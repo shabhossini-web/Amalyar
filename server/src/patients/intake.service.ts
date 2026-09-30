@@ -2,7 +2,7 @@ import {
   BadRequestException, ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, ServiceUnavailableException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { createHash, randomBytes, randomInt } from 'crypto';
+import { randomBytes, randomInt } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { EventsService } from '../work/events.service';
@@ -36,6 +36,7 @@ import { jalaliMonthRange, toJalali } from '../common/jalali';
 import { referrerStats } from './crm-referrers';
 import { sniffMime } from '../common/file-type';
 import { RateLimitService } from '../common/rate-limit.service';
+import { otpHash } from '../common/otp-hash';
 
 /** سال و ماهِ شمسیِ یک تاریخ — برای گرفتنِ تقویمِ همان ماه (قانون ۱۴). */
 function jalaliYm(d: Date): [number, number] {
@@ -85,7 +86,6 @@ const ON_RECORD_PHONE = 'شمارهٔ ثبت‌شده در پرونده';
 /** کدِ «ادامه با موبایل» — همان قراردادِ کدِ ورود (`auth.service.ts`): ۵ دقیقه، ۵ تلاش. */
 const RESUME_OTP_TTL_MS = 5 * 60_000;
 const RESUME_OTP_MAX_ATTEMPTS = 5;
-const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
 
 /** سقفِ فهرستِ «پیگیری‌نشده» — فهرستِ کارِ امروزِ منشی است، نه آرشیو.
     خروجی `capped` و `total` را هم می‌دهد تا بریدگی **دیده شود** (W1.1). */
@@ -194,7 +194,7 @@ export class IntakeService {
 
   /** شرکتِ همین درخواست در کلیدِ سطلِ سقفِ نرخ — `RateLimitService` یکی است برای همهٔ شرکت‌ها (بستهٔ PF). */
   private get tid() {
-    return this.tenant.current()?.tenantId ?? '-';
+    return this.tenant.current?.()?.tenantId ?? '-';
   }
 
   private token() {
@@ -712,7 +712,7 @@ export class IntakeService {
     if (recent) return null; // کدِ همین دقیقه هنوز معتبر است — پیامکِ دوم نه
     const code = String(randomInt(100000, 1000000));
     const otp = await this.prisma.otpCode.create({
-      data: { phone, codeHash: sha256(code), purpose, expiresAt: new Date(Date.now() + RESUME_OTP_TTL_MS) },
+      data: { phone, codeHash: otpHash(purpose, phone, code), purpose, expiresAt: new Date(Date.now() + RESUME_OTP_TTL_MS) },
     });
     const res = await this.sms.sendOtp(phone, code, this.tenant.current()?.hostname).catch(() => null);
     if (!res || (!res.sent && !res.stub)) {
@@ -738,7 +738,7 @@ export class IntakeService {
       where: { id: otp.id, consumedAt: null, attempts: { lt: RESUME_OTP_MAX_ATTEMPTS } }, data: { attempts: { increment: 1 } },
     });
     if (!slot.count) throw wrong();
-    if (sha256(code) !== otp.codeHash) throw wrong();
+    if (otpHash(purpose, phone, code) !== otp.codeHash) throw wrong();
     const consumed = await this.prisma.otpCode.updateMany({
       where: { id: otp.id, consumedAt: null, expiresAt: { gt: new Date() } }, data: { consumedAt: new Date() },
     });

@@ -18,12 +18,15 @@
  *  - PF5: درخواستِ کدِ بازیابی بیرون از محیطِ آزمون منتظرِ یافتنِ حساب نمی‌ماند (درونِ فرایند)
  *  - PF6: بازیابی پس‌کی‌های حساب را هم پاک می‌کند و تعدادشان را می‌گوید
  *  - PF7: ثبت‌نامِ بیمار برای بمبارانِ پیامکیِ یک شماره به کار نمی‌آید (سقفِ بی‌صدا به‌ازای شماره و لینک)
+ *  - PF10: متنِ پیامکِ بازیابی می‌گوید کد را به هیچ‌کس ندهید؛ خطِ آخرِ WebOTP سرِ جایش (درونِ فرایند)
+ *  - PF11: هشِ کد HMAC با رازِ سرور است نه SHA-256ِ بی‌کلید (جدولِ otp_codes)
  *  - PF12: «لینک به … پیامک شد» شمارهٔ پرونده را به کسی که شمارهٔ دیگری تایپ کرده نشان نمی‌دهد
  *
  * ⚠️ سقفِ نرخ در حافظهٔ سرور است (۱۰ درخواستِ کد در ۱۵ دقیقه برای هر IP): اجرای دوباره روی همان
  * سرور در کمتر از ۱۵ دقیقه ممکن است ۴۲۹ بگیرد — سرور را از نو بالا بیاورید.
  */
 import { execSync } from 'node:child_process';
+import { createHash, createHmac } from 'node:crypto';
 import { captchaFor } from './lib/captcha.mjs';
 const API = process.env.E2E_API ?? 'http://localhost:3101/api';
 /* دیتابیسِ همان شرکت — فقط برای چیدنِ حالتی که از بیرون ساختنی نیست (مثلِ صفرکردنِ تلاش‌های یک کد). */
@@ -78,7 +81,11 @@ async function newAccount(tag, adminBearer, approve = true, { phone: fixedPhone,
 }
 
 console.log('۰) آماده‌سازی: مدیر + حسابِ فعال + حسابِ در انتظار');
-const admin = await call('/auth/login', { body: { identifier: 'admin', password: 'test1234' } });
+/* `E2E_ADMIN_TOKEN` (اختیاری): روی دیتابیسِ مشترک هر ورودِ تازهٔ مدیر یک نشست می‌سازد و از دهمی به بعد قدیمی‌ترین
+   نشستِ **دیگران** باطل می‌شود؛ با این توکن آزمون اصلاً /auth/login مدیر را صدا نمی‌زند. CI دیتابیسِ تازه دارد. */
+const admin = process.env.E2E_ADMIN_TOKEN
+  ? { status: 200, json: { accessToken: process.env.E2E_ADMIN_TOKEN } }
+  : await call('/auth/login', { body: { identifier: 'admin', password: 'test1234' } });
 ok(admin.status < 300 && !!admin.json?.accessToken, `ورودِ مدیر (${admin.status})`);
 const acc = await newAccount('1', admin.json?.accessToken);
 const pending = await newAccount('2', admin.json?.accessToken, false);
@@ -94,6 +101,11 @@ ok(ghost.status < 300 && ghost.json?.ok === true && !ghost.json?.devCode, 'نا�
 ok(ghostPhone.status < 300 && keys(ghostPhone.json) === keys(ghost.json), 'موبایلِ ناموجود ← همان پاسخ');
 const real = await call('/auth/password/request-otp', { body: { identifier: acc.username } });
 ok(real.status < 300 && /^\d{6}$/.test(real.json?.devCode ?? ''), 'حسابِ فعال ← کد (devCodeِ محیطِ آزمون)', JSON.stringify(real.json));
+/* PF11: هشِ کد در دیتابیس با کلید است — شش رقم با SHA-256ِ بی‌کلید از یک دامپِ دیتابیس در کسری از ثانیه برمی‌گشت. */
+const stored = sql(`SELECT code_hash FROM otp_codes WHERE phone = '${acc.phone}' AND purpose = 'password-reset' AND consumed_at IS NULL ORDER BY id DESC LIMIT 1`);
+const keyed = createHmac('sha256', process.env.JWT_SECRET ?? '').update(`password-reset:${acc.phone}:${real.json?.devCode}`).digest('hex');
+ok(stored === keyed && stored !== createHash('sha256').update(String(real.json?.devCode)).digest('hex'),
+  'PF11: هشِ کد HMAC(رازِ سرور، هدف:شماره:کد) است نه SHA-256ِ خامِ کد', stored.slice(0, 12));
 const { devCode: _dev, ...realShape } = real.json ?? {};
 ok(keys(realShape) === keys(ghost.json) && realShape.ttl === ghost.json?.ttl, 'بی devCode، پاسخِ حسابِ موجود و ناموجود هم‌شکل است');
 const again = await call('/auth/password/request-otp', { body: { identifier: acc.username } });
@@ -401,6 +413,29 @@ function fakeAuth({ findDelay = 0, smsDelay = 0 } = {}) {
   ok(JSON.stringify(hit.r) === JSON.stringify(miss.r) && !hit.r?.devCode, 'PF5: هر دو پاسخ یکی و بی‌کد');
   await later(450);
   ok(db.otps.length === 1 && db.sent.length === 1, 'PF5: کد در پس‌زمینه ساخته و پیامک شد (فقط برای حسابِ موجود)');
+  ok(db.sent[0]?.purpose === 'password-reset', `PF10: کدِ بازیابی با هدفِ خودش به درگاه می‌رود (${db.sent[0]?.purpose})`);
+}
+
+{
+  /* PF10 — متنِ پیامکِ بازیابی: «به هیچ‌کس، حتی پشتیبانی، ندهید» + خطِ آخرِ WebOTP؛ کدِ ثبت‌نام همان متنِ قبلی. */
+  const { SmsService } = requireServer('./dist/sms/sms.service.js');
+  const env = { key: process.env.MELI_API_KEY, from: process.env.MELI_FROM, fetch: globalThis.fetch };
+  const texts = [];
+  process.env.MELI_API_KEY = 'in-process-key'; process.env.MELI_FROM = 'in-process-line';
+  globalThis.fetch = async (_url, init) => { texts.push(JSON.parse(init.body).text); return { ok: true, status: 200, json: async () => ({ recIds: [3741437414] }) }; };
+  try {
+    await inTest(() => new SmsService().sendOtp('09121234567', '123456', 'clinic.amalyar.com', 'password-reset'));
+    await inTest(() => new SmsService().sendOtp('09121234567', '654321', 'clinic.amalyar.com'));
+  } finally {
+    globalThis.fetch = env.fetch;
+    if (env.key === undefined) delete process.env.MELI_API_KEY; else process.env.MELI_API_KEY = env.key;
+    if (env.from === undefined) delete process.env.MELI_FROM; else process.env.MELI_FROM = env.from;
+  }
+  const [resetText, signupText] = texts;
+  ok(/کدِ بازیابیِ رمزِ عمل‌یار: 123456/.test(resetText ?? '') && /حتی پشتیبانی، ندهید/.test(resetText ?? '') && /درخواست نکرده‌اید/.test(resetText ?? ''),
+    'PF10: پیامکِ بازیابی می‌گوید کدِ چیست و آن را به هیچ‌کس ندهید', JSON.stringify(resetText));
+  ok((resetText ?? '').endsWith('\n@clinic.amalyar.com #123456') && (signupText ?? '').endsWith('\n@clinic.amalyar.com #654321') && /کد تأیید شما 654321/.test(signupText ?? ''),
+    'PF10: خطِ آخرِ WebOTP در هر دو سرِ جایش؛ پیامکِ ثبت‌نام همان متنِ قبلی');
 }
 
 console.log(`\nسبز: ${pass}   قرمز: ${fail}`);
