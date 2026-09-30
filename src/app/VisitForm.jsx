@@ -177,9 +177,11 @@ const VISIT_DOC_CATEGORIES = {
 const PHASE_DOC_CATS = Object.entries(VISIT_DOC_CATEGORIES).map(([key, label]) => ({ key, label }));
 
 export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClose, onSaved, onToast }) {
-  const { t, defaultKind = 'surgery', kind: tenantKind, services: offered = [], serviceCatalog = [] } = useConfig();
+  const { t, defaultKind = 'surgery', kind: tenantKind, services: offered = [], serviceCatalog = [], vertical } = useConfig();
   /* خدمتِ مراجعه (`Visit.service`) فقط در شرکتِ **دوخدمته** پرسیده می‌شود؛ تک‌خدمته را سرور خودش پر می‌کند. */
   const pickService = tenantKind === 'company' && offered.length > 1;
+  /* خدمتِ اصلیِ شرکت — همان حوزهٔ نصب اگر جزوِ بستهٔ خدمات است، وگرنه اولیِ بسته (company-24: پیش‌انتخاب). */
+  const mainService = offered.includes(vertical) ? vertical : offered[0] ?? '';
   const editing = !!initial?.id;
   /* prefill = ادامهٔ یک تصمیم («کاندیدای جراحی» در ویزیتِ قبلی): پرونده از
      قبل معلوم است، پس نه گامِ انتخابِ بیمار لازم است نه انتخابِ نوعِ فرم.
@@ -539,6 +541,23 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   /* تعریفِ فرمِ همین نوع — برچسب، ستاره و روشن/خاموشِ فیلدهای هسته‌ای، به‌علاوهٔ
      فیلدهای دلخواهی که سوپرادمین ساخته. */
   const fd = useFormDef(f.kind);
+  /* **فرمِ تک‌نوع** (company-24): وقتی نصب فقط یک فرمِ مراجعه دارد، پرسشِ «برای چه آمده؟» با تنها گزینه‌اش
+     پنهان است و همان نوع خودش انتخاب می‌شود؛ اگر چیزِ دیگری هم در گامِ ۲ نیست (نصبِ تک‌خدمته)، خودِ گام پریده
+     می‌شود. */
+  const onlyKind = !editing && (fd.kinds?.length ?? 0) === 1 && !!fd.kinds[0]?.kind;
+  const skipKindStep = onlyKind && !pickService;
+  useEffect(() => {
+    if (!onlyKind) return;
+    const only = fd.kinds[0].kind;
+    setF((s2) => (s2.kind === only ? s2 : { ...s2, kind: only }));
+  }, [onlyKind, fd.kinds]);
+  /* فهرستِ نوع‌ها دیرتر از «بعدی» رسید و گامِ ۲ خالی ماند؟ همان‌جا به «تکمیل» برو، نه صفحه‌ای بی‌پرسش. */
+  useEffect(() => { if (step === 2 && skipKindStep) setStep(3); }, [step, skipKindStep]);
+  /* خدمتِ اصلی از پیش انتخاب است (company-24) — «بی‌پیش‌انتخاب» یعنی یک لمسِ اجباری روی همان گزینهٔ همیشگی. */
+  useEffect(() => {
+    if (editing || !pickService || !mainService) return;
+    setF((s2) => (s2.service ? s2 : { ...s2, service: mainService }));
+  }, [editing, pickService, mainService]);
   /* ── پیش‌فرض‌های شرحِ عمل (درخواستِ مالک ۱۴۰۵/۰۷/۰۱) ──
      چیپ‌های «قالبِ آماده» بالای کادر و «افزودن به پیش‌فرض» زیرش. عمل‌ها از
      **همین فرم** خوانده می‌شوند نه از مراجعهٔ ذخیره‌شده: فرمِ ساخت هنوز مراجعه
@@ -632,7 +651,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
      نیستند: خودکارند نه نوشتهٔ کاربر، و پرسشی که بی‌دلیل می‌آید کاربر را به «دور ریختن»ِ بی‌نگاه عادت
      می‌دهد. در ویرایش هر دو فقط با دستِ کاربر عوض می‌شوند و حساب‌اند. */
   const unsavedSnap = JSON.stringify([
-    editing ? f : { ...f, kind: undefined, preOpImmediate: undefined },
+    /* خدمتِ پیش‌انتخاب‌شدهٔ شرکت (company-24) هم خودکار است، نه نوشتهٔ کاربر. */
+    editing ? f : { ...f, kind: undefined, preOpImmediate: undefined, service: undefined },
     extra,
     subList.map((e) => [e.slot, e.data ?? null]),
     pendingVitals,
@@ -887,7 +907,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
        باید برای اصلاحش دوباره به عقب برگردد. */
     if (step === 2 && pickService && !f.service) { setStepErr('خدمتِ این مراجعه را انتخاب کنید'); return; }
     setStepErr('');
-    setStep((s) => Math.min(3, s + 1));
+    setStep((s) => Math.min(3, s + (s === 1 && skipKindStep ? 2 : 1)));
   };
 
   // تشخیص با `title` ساخته می‌شود، بقیهٔ تعاریف با `name`.
@@ -2011,6 +2031,11 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   /* نامِ گامِ دوم در نشانگر — «ویزیت یا عمل» (همان پرسشِ گام)؛ جز این «نوعِ مراجعه». تا پاسخِ
      سرور نرسیده همان «نوعِ مراجعه»، نه فهرستِ چهارتاییِ پشتیبان. */
   const kindStepLabel = fd.kinds?.length === 2 ? fd.kinds.map(kindLabel).join(' یا ') : 'نوعِ مراجعه';
+  /* گام‌های ثبتِ تازه — شماره‌ٔ درونیِ گام همان ۱/۲/۳ است؛ وقتی گامِ ۲ چیزی برای پرسیدن ندارد (فرمِ تک‌نوع در
+     نصبِ تک‌خدمته) پریده می‌شود و گامِ «خدمت»ِ شرکتِ دوخدمته نامِ خودش را می‌گیرد (company-24). */
+  const stepList = skipKindStep
+    ? [{ n: 1, label: t.record }, { n: 3, label: 'تکمیل' }]
+    : [{ n: 1, label: t.record }, { n: 2, label: onlyKind && pickService ? 'خدمت' : kindStepLabel }, { n: 3, label: 'تکمیل' }];
 
   const attachItems = (catalog?.items ?? []).filter((x) => attachableOn(x, f.kind));
   const canBuildSubform = (myTools ?? []).some((x) => x.key === 'forms');
@@ -2030,10 +2055,12 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   };
 
   /* خدمتِ مراجعه (شرکتِ دوخدمته) — در ثبتِ تازه گامِ دوم، در ویرایش زیرِ سربرگ. */
+  /* ⚠️ توضیح به زبانِ کاربر (company-24): «ویرایشگرِ اقلامِ پرتالِ جراح…» برای مدیر معنایی نداشت. وقتی فرم
+     تک‌نوع است و پرسشِ نوع پنهان، همین «خدمت» گامِ ۲ است و شمارهٔ گام را می‌گیرد. */
   const serviceEl = pickService ? (<div data-core="service" className={coreErr.service ? 'vf-bad' : undefined}>
     <div className="db-sect">
-      <b>خدمت</b>
-      <small>این {t.visit} مالِ کدام خدمتِ شرکت است؟ ویرایشگرِ اقلامِ پرتالِ جراح فقط برای «ایمپلنت» باز می‌شود.</small>
+      <b>{!editing && onlyKind && <i>{faNum(2)}</i>}خدمت</b>
+      <small>این {t.visit} مالِ کدام خدمتِ شرکت است؟{offered.includes('implant') ? ' برای ایمپلنت، اقلامِ لازم را هم می‌پرسیم.' : ''}</small>
     </div>
     <div className="db-kindbox">
       <div className="db-kindrow" role="radiogroup" aria-label={`خدمتِ این ${t.visit}`}>
@@ -2171,14 +2198,14 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       {/* نشانگرِ گام — کاربر باید بداند کجای کار است و چند قدم مانده. */}
       {!editing && (
         <ol className="db-steps" aria-label="گام‌های ثبت">
-          {[t.record, kindStepLabel, 'تکمیل'].map((label, i) => (
-            <li key={label} className={step === i + 1 ? 'on' : step > i + 1 ? 'done' : ''}>
+          {stepList.map(({ n, label }, i) => (
+            <li key={n} className={step === n ? 'on' : step > n ? 'done' : ''}>
               {/* برگشت فقط به گامِ **گذشته** — پرشِ رو به جلو همان دور زدنِ
                   اعتبارسنجیِ گام است. */}
               <button
                 type="button"
-                disabled={step <= i + 1}
-                onClick={() => { setStepErr(''); setStep(i + 1); }}
+                disabled={step <= n}
+                onClick={() => { setStepErr(''); setStep(n); }}
               >
                 <i>{faNum(i + 1)}</i>{label}
               </button>
@@ -2364,6 +2391,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       {/* ⚠️ پرسش به زبانِ پذیرش است نه سامانه (بازبینیِ UX ۱۴۰۵/۰۷، clinic-daily-04): «برای چه
           آمده؟ ویزیت یا عمل». عنوانِ فرم («فرمِ ویزیت / فرمِ جراحی») فقط مالِ فرم‌ساز است؛ منشی‌ای که
           «فرمِ جراحی» می‌خواند نمی‌داند نوعِ مراجعه را انتخاب می‌کند یا یک سند را. */}
+      {/* فرمِ تک‌نوع (company-24): پرسشی با یک گزینه پرسش نیست — پنهان، و گامِ ۲ فقط «خدمت» است. */}
+      {!onlyKind && (<>
       <div className="db-sect">
         <b>{!editing && <i>{faNum(2)}</i>}برای چه آمده؟</b>
         <small>فرمِ گامِ بعد بر همین پایه چیده می‌شود.</small>
@@ -2397,6 +2426,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         </div>
         )}
       </div>
+      </>)}
       {serviceEl}
 
       </>)}

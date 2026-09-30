@@ -4,7 +4,9 @@
  *
  *  باید بیفتد:
  *   - فرم‌ساز برای فرمی که مراجعه می‌سازد انتخابگرِ خدمت دارد و `{service}` را PATCH می‌کند
- *   - فرمِ ثبتِ مراجعه در شرکتِ دوخدمته خدمت را می‌پرسد و بی‌انتخاب از گامِ «نوع» جلو نمی‌رود
+ *   - فرمِ ثبتِ مراجعه در شرکتِ دوخدمته خدمت را می‌پرسد — گامِ ۲ «خدمت» نام دارد، خدمتِ اصلی پیش‌انتخاب است،
+ *     پرسشِ «نوعِ فرم» با تنها گزینه‌اش پنهان است و توضیح به زبانِ کاربر (بازبینیِ UX، company-24)
+ *   - شرکتِ تک‌خدمته با فرمِ تک‌نوع گامِ ۲ را نمی‌بیند (چیزی برای پرسیدن ندارد)
  *   - انتخاب همان `service` است که به سرور می‌رود
  *   - سربرگِ فرم نامِ خدمتِ انتخاب‌شده را می‌گوید (`serviceTitles`ِ سرور)، نه «خدمت»ِ مشترک
  *  نباید بیفتد:
@@ -87,7 +89,7 @@ try {
     await p.locator('input[required]').first().fill('بیمارِ');
     await p.locator('input[required]').nth(1).fill('خدمت');
     await p.locator('.db-stepnav .db-submit').click();
-    await p.locator('.db-kindbox').first().waitFor();
+    await p.locator('.db-kindbox, .db-formcard').first().waitFor();
     return { ...mc, p };
   };
   let v = await newVisit(['ionm', 'implant']);
@@ -95,11 +97,11 @@ try {
   ok(await group.count() === 1 && (await group.getByRole('radio').allInnerTexts()).join('|') === 'نورومانیتورینگ|ایمپلنت و تجهیزات',
     '**شرکتِ دوخدمته خدمتِ مراجعه را می‌پرسد**', (await group.getByRole('radio').allInnerTexts()).join('|'));
   if (process.env.SHOT) await v.p.screenshot({ path: process.env.SHOT + '-visit-service.png', fullPage: true });
-  await v.p.locator('.db-kindbox .db-kindrow button').first().click();
-  await v.p.locator('.db-stepnav .db-submit').click();
-  await v.p.waitForTimeout(300);
-  ok(await v.p.locator('.db-formcard').count() === 0, '**بی‌انتخابِ خدمت به گامِ بعد نمی‌رود**');
-  ok(await v.p.getByText('خدمتِ این مراجعه را انتخاب کنید').count() > 0, 'و پیامش همین را می‌گوید، کنارِ همان انتخابگر');
+  ok(await v.p.locator('.db-kindrow button[data-kind]').count() === 0, '**فرمِ تک‌نوع: پرسشِ «نوعِ فرم» با تنها گزینه‌اش پنهان است** (company-24)');
+  ok((await v.p.locator('.db-steps li').nth(1).innerText()).includes('خدمت'), 'گامِ ۲ همان نامِ پرسشش را دارد: «خدمت»');
+  ok(await group.getByRole('radio', { name: 'نورومانیتورینگ' }).getAttribute('aria-checked') === 'true', '**خدمتِ اصلیِ شرکت پیش‌انتخاب است**');
+  ok((await v.p.locator('[data-core="service"] .db-sect small').innerText()).includes('برای ایمپلنت، اقلامِ لازم را هم می‌پرسیم'),
+    'توضیح به زبانِ کاربر — نه «ویرایشگرِ اقلامِ پرتالِ جراح»');
   await group.getByRole('radio', { name: 'ایمپلنت و تجهیزات' }).click();
   ok(await group.getByRole('radio', { name: 'ایمپلنت و تجهیزات' }).getAttribute('aria-checked') === 'true', 'انتخاب نشست (aria-checked)');
   await v.p.locator('.db-stepnav .db-submit').click();
@@ -116,9 +118,8 @@ try {
 
   v = await newVisit(['ionm']);
   ok(await v.p.getByRole('radiogroup', { name: /خدمتِ این/ }).count() === 0, 'شرکتِ تک‌خدمته خدمت نمی‌پرسد');
-  await v.p.locator('.db-kindbox .db-kindrow button').first().click();
-  await v.p.locator('.db-stepnav .db-submit').click();
   await v.p.locator('.db-formcard').waitFor();
+  ok(await v.p.locator('.db-steps li').count() === 2, '**تک‌فرم و تک‌خدمت: گامِ ۲ چیزی برای پرسیدن ندارد و پریده می‌شود** (company-24)');
   const head1 = (await v.p.locator('[data-visit-title]').first().innerText()).trim();
   ok(head1 === 'نورومانیتورینگ', 'شرکتِ تک‌خدمته: سربرگ «نورومانیتورینگ»', head1);
   await v.p.locator('.db-stepnav .db-submit, .db-sheet .db-submit').last().click();

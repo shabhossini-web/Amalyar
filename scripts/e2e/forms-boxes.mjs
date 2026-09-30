@@ -70,9 +70,10 @@ ok('شیت باز شد', await page.locator('.db-sheet').count() > 0);
   await inp.nth(0).fill('باکس'); await inp.nth(1).fill('آزما');
   await page.locator('.db-stepnav button').last().click();
   await page.waitForTimeout(700);
-  ok('گامِ نوعِ فرم آمد', await page.locator('.db-kindrow').count() > 0);
-  await page.locator('.db-stepnav button').last().click();
+  /* فرمِ تک‌نوع در نصبِ تک‌خدمته گامِ «نوع» ندارد و «بعدی» مستقیم به «تکمیل» می‌رود (بازبینیِ UX، company-24). */
+  if (await page.locator('.db-stepnav button').count()) await page.locator('.db-stepnav button').last().click();
   await page.waitForTimeout(1200);
+  ok('گامِ «تکمیل» آمد', await page.locator('.db-formcard').count() > 0);
 }
 
 console.log('\n۲) باکسِ عکس رندر می‌شود');

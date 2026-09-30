@@ -94,7 +94,8 @@ try {
   await page.waitForTimeout(500);
   const kindBtn = page.locator('.db-sheet .db-kindrow button').first();
   if (await kindBtn.count()) await kindBtn.click();
-  await page.locator('.db-stepnav .db-submit').click();
+  /* فرمِ تک‌نوع در نصبِ تک‌خدمته گامِ «نوع» ندارد و «بعدی» مستقیم به «تکمیل» می‌رود (بازبینیِ UX، company-24). */
+  if (await page.locator('.db-stepnav .db-submit').count()) await page.locator('.db-stepnav .db-submit').click();
   /* ⚠️ `:visible`: کادرِ «تاریخِ تولد»ِ گامِ ۱ پنهان در DOM می‌ماند و اولین
      `.jd-wrap` همان است، نه تاریخِ مراجعه. */
   const dateInput = page.locator('.db-sheet .jd-wrap:visible input').first();

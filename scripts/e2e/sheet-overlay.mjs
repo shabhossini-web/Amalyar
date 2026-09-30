@@ -67,7 +67,8 @@ const toSurgeryTabs = async () => {
   const sk = p.locator('.db-kindrow button[data-kind="surgery"]');
   await sk.first().waitFor({ timeout: 5000 }).catch(() => {});
   if (await sk.count()) await sk.first().click();
-  await p.locator('.db-stepnav .db-submit').click();
+  /* فرمِ تک‌نوع در نصبِ تک‌خدمته گامِ «نوع» ندارد (company-24) — «بعدی»ِ دوم فقط اگر هنوز در گامِ ۲ایم. */
+  if (await p.locator('.db-stepnav .db-submit').count()) await p.locator('.db-stepnav .db-submit').click();
   await p.locator('.db-sheet .db-phasetabs').waitFor({ timeout: 8000 });
 };
 /* نام‌ها تایپ شده‌اند، پس بستن اول می‌پرسد (clinic-daily-08) — «دور ریختن». */
