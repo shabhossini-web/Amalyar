@@ -335,3 +335,54 @@
   .fb-side .df-sheet-body { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
   .fb-side .df-sheet-head, .fb-side .df-sheet-foot { flex: 0 0 auto; }
 }
+
+/* ── چیدمان: موبایل یک ستون، دسکتاپِ پهن سه ستون (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-25) ─────────────
+   قاب‌ها در موبایل همان ستونِ فلکسیِ `.lx-shell` را ادامه می‌دهند تا فاصله‌ها و کشیدگیِ بچه‌ها مثلِ
+   قبل بماند. `min-width: 0` تا نوارِ اسکرولیِ فرم‌ها ظرفش را پهن نکند. */
+.fb-work, .fb-nav, .fb-body { display: flex; flex-direction: column; min-width: 0; }
+.fb-newform-t { display: none; }
+
+@media (min-width: 1100px) {
+  /* ستونِ ۴۶۸ پیکسلیِ لانچر برای فرم‌ساز تنگ بود: فرمِ ۹ فیلدی دو صفحه اسکرول می‌خورد. */
+  .fb .lx-shell { max-width: 1320px; }
+  /* `overflow: hidden`ِ `.lx`/`.df` ظرفِ اسکرول می‌سازد و ستون‌های چسبان را از کار می‌اندازد؛ `clip`
+     همان برش را دارد بی‌آنکه ظرفِ اسکرول بسازد. */
+  .fb.lx.df { overflow: clip; }
+  .fb .df-head { max-width: none; margin: 0 0 18px; }
+  .fb-work {
+    display: grid; grid-template-columns: 220px minmax(0, 1fr) minmax(340px, 400px);
+    gap: 22px; align-items: start;
+  }
+  /* فهرستِ فرم‌ها و پیش‌نمایش با اسکرولِ فیلدها همراه می‌مانند؛ زیرِ نوارِ بالای پوسته (~۶۲px). */
+  .fb-nav, .fb-live { position: sticky; top: 76px; max-height: calc(100dvh - 92px); overflow-y: auto; }
+  /* جا برای حلقهٔ فوکوس و سایهٔ قرص — ظرفِ اسکرولی لبه‌هایش را می‌بُرد. */
+  .fb-nav { padding: 4px; }
+  .fb-body .fb-meta { margin-top: 0; }
+
+  /* فرم‌ها = فهرستِ کناری: همان Tabs (نقش‌های ARIA و قرصِ لغزان) عمودی چیده می‌شود. */
+  .fb-tabrow { flex-direction: column; align-items: stretch; gap: 10px; }
+  .fb-tabrow > :first-child { flex: 0 0 auto; }
+  .fb-tabrow .ui-tabs {
+    flex-direction: column; gap: 4px; margin: 0; padding: 0; max-width: none; overflow: visible;
+    -webkit-mask-image: none; mask-image: none;
+  }
+  .fb-tabrow .ui-tabs button { padding: 10px 14px; border-radius: 12px; text-align: start; }
+  .fb-tabrow .ui-tabs .ui-tab-in { white-space: normal; justify-content: flex-start; text-align: start; }
+  .fb-tabrow .ui-tab-pill { border-radius: 12px; }
+  .fb-newform { width: 100%; height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    font: inherit; font-size: 13px; font-weight: 800; }
+  .fb-newform-t { display: inline; }
+
+  /* دسته‌بندی قابِ خودش را دارد (inset) و تا عرضِ محتوایش — فیلتر است نه خودِ فرم. */
+  .fb-scope.ui-tabs { margin: 0 0 16px; margin-inline-end: auto; max-width: 760px; }
+
+  /* پیش‌نمایشِ همیشه‌باز — سطحِ کار، مات (قانونِ شیشهٔ منضبط). */
+  .fb-live {
+    padding: 14px; border-radius: 16px;
+    background: var(--row-bg); border: 1px solid rgba(var(--brand-soft-rgb), .16);
+  }
+  .fb-live-head { display: grid; gap: 3px; margin-bottom: 12px; }
+  .fb-live-head b { font-size: 13.5px; font-weight: 900; color: var(--text1); }
+  .fb-live-head small { font-size: 11.5px; line-height: 1.8; color: var(--text3); }
+  .fb-live .ui-tabs { margin: 0 0 12px; }
+}

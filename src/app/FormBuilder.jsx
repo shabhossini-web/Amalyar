@@ -72,6 +72,25 @@ const SCOPE_FA = { visit: 'مراجعه', record: 'زیرپرونده', intake: 
 /** نامِ فارسیِ نقش‌های یک فیلد — خالی یعنی «عمومی» (همه پر می‌کنند). */
 const roleNamesOf = (field) => fieldRoles(field).map((v) => JOB_ROLES.find((r) => r.v === v)?.l ?? v);
 
+/**
+ * «دسکتاپِ پهن» (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-25): فرم‌ساز روی ۱۲۸۰ پیکسل یک ستونِ ۴۳۰ پیکسلی بود و
+ * پیش‌نمایشِ زنده بسته و بالای فهرست. از این پهنا به بعد سه ستون است — فهرستِ فرم‌ها | فیلدها |
+ * پیش‌نمایشِ همیشه‌باز. پیش‌نمایش در JSX است نه فقط CSS: `<details>`ِ بسته را CSS باز نمی‌کند.
+ */
+const WIDE = '(min-width: 1100px)';
+function useWide() {
+  const [wide, setWide] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.(WIDE).matches);
+  useEffect(() => {
+    const mq = window.matchMedia?.(WIDE);
+    if (!mq) return undefined;
+    const sync = () => setWide(mq.matches);
+    sync();
+    mq.addEventListener?.('change', sync);
+    return () => mq.removeEventListener?.('change', sync);
+  }, []);
+  return wide;
+}
+
 export default function FormBuilder() {
   const stagger = useStagger();
   const { verticalLabel } = useConfig();
@@ -100,6 +119,7 @@ export default function FormBuilder() {
   /* حالتِ «جابه‌جایی» (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-18) — فقط موبایل از آن استفاده می‌کند: پیکان‌ها
      ۴۴ پیکسلی‌اند و کنارِ چهار کلیدِ ۴۴ پیکسلیِ ردیف جا نمی‌شوند، پس یا این یا آن. دسکتاپ هر دو را با هم دارد. */
   const [reorder, setReorder] = useState(false);
+  const wide = useWide();
 
   useEffect(() => { document.title = 'عمل‌یار — فرم‌ساز'; }, []);
   useEffect(() => {
@@ -229,6 +249,41 @@ export default function FormBuilder() {
     } catch (e) { setToast(e.message); } finally { setBusy(false); }
   };
 
+  /* پیش‌نمایشِ زنده — یک بدنه، دو قاب: در دسکتاپِ پهن ستونِ همیشه‌بازِ کنارِ فیلدها، در موبایل همان
+     آکاردئونِ بسته (ارتفاعِ صفحه را برنمی‌گرداند). */
+  const previewBody = form && (
+    <>
+      {form.pages > 1 && (
+        <Tabs
+          variant="inset"
+          label="صفحهٔ پیش‌نمایش"
+          value={String(Math.min(previewPage, form.pages))}
+          onChange={(k) => setPreviewPage(Number(k))}
+          items={Array.from({ length: form.pages }, (_, i) => ({ key: String(i + 1), label: `صفحهٔ ${toFa(i + 1)}` }))}
+        />
+      )}
+      <DynForm
+        fields={form.fields.filter((f) => f.active !== false
+          && (form.pages > 1 ? (f.page ?? 1) === Math.min(previewPage, form.pages) : true))}
+        values={preview}
+        errors={{}}
+        onChange={setPreview}
+      />
+    </>
+  );
+  const shownForms = forms?.filter((f) => scopeFilter === 'all' || f.scope === scopeFilter) ?? [];
+  /* فهرستِ کناریِ دسکتاپ عمودی است: بالا/پایین هم فرم را عوض می‌کند (چپ/راستِ خودِ Tabs سرِ جایش). */
+  const onListKey = (e) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const i = shownForms.findIndex((f) => f.key === tab);
+    const j = e.key === 'ArrowDown' ? Math.min(shownForms.length - 1, i + 1) : Math.max(0, i - 1);
+    if (i < 0 || j === i) return;
+    e.preventDefault();
+    setTab(shownForms[j].key);
+    const box = e.currentTarget;
+    requestAnimationFrame(() => box?.querySelectorAll('[role="tab"]')[j]?.focus());
+  };
+
   return (
     <div className="lx df fb">
       <div className="lx-bg" aria-hidden="true" />
@@ -260,29 +315,37 @@ export default function FormBuilder() {
                 setToast('فرم پیگیری آماده است؛ پس از بازبینی روشن کنید و روزهای ارسال را در نوع عمل تعریف کنید.');
               } catch (e) { setToast(e.message); } finally { setBusy(false); }
             }}>آماده‌سازی فرم پیگیری خودکار</button>
-            <Tabs label="کاربرد فرم" value={scopeFilter} onChange={scope => {
+            {/* دسته‌بندی «زبانه» است و فرم‌ها «فهرست» (surgery-25) — دو ردیفِ چیپِ هم‌شکل نمی‌گفتند کدام
+                فیلتر است و کدام خودِ فرم؛ در دسکتاپ دسته قابِ جدا می‌گیرد و فرم‌ها فهرستِ کناری‌اند. */}
+            <Tabs label="کاربرد فرم" variant={wide ? 'inset' : 'fill'} className="fb-scope" value={scopeFilter} onChange={scope => {
               setScopeFilter(scope);
               const candidates = forms.filter(f => scope === 'all' || f.scope === scope);
               setTab(cur => candidates.some(f => f.key === cur) ? cur : candidates[0]?.key ?? '');
             }} items={[{ key: 'all', label: 'همه' }, { key: 'intake', label: 'ثبت‌نام مراجع' }, { key: 'visit', label: 'مراجعه و درمان' }, { key: 'subform', label: 'زیرفرم‌های مراجعه' }, { key: 'record', label: 'پیگیری و زیرپرونده' }]} />
-            <div className="fb-tabrow">
-              <Tabs
-                variant="scroll"
-                label="فرم‌ها"
-                value={tab}
-                onChange={setTab}
-                items={forms.filter(f => scopeFilter === 'all' || f.scope === scopeFilter).map((f) => ({ key: f.key, label: f.title }))}
-              />
-              {/* ⚠️ ساختنِ فرم = ساختنِ یک **نوعِ تازه‌ی مراجعه**. مطبی که
-                  مسیرش «ویزیت → درمان → پیگیری» است، «درمان» را خودش
-                  می‌سازد؛ ما ترتیب را تحمیل نمی‌کنیم. */}
-              <button type="button" className="fb-newform" onClick={() => setNewForm(true)} title="فرمِ تازه">
-                <Plus width="15" height="15" />
-              </button>
-            </div>
+            {/* سه ستونِ دسکتاپ (surgery-25): fb-nav | fb-body | fb-live — در موبایل همه زیرِ هم. */}
+            <div className="fb-work">
+              <div className="fb-nav">
+                {/* بالا/پایین برای فهرستِ عمودیِ دسکتاپ؛ چپ/راست و Home/End را خودِ Tabs دارد. */}
+                <div className="fb-tabrow" onKeyDown={wide ? onListKey : undefined}>
+                  <Tabs
+                    variant="scroll"
+                    label="فرم‌ها"
+                    value={tab}
+                    onChange={setTab}
+                    items={shownForms.map((f) => ({ key: f.key, label: f.title }))}
+                  />
+                  {/* ⚠️ ساختنِ فرم = ساختنِ یک **نوعِ تازه‌ی مراجعه**. مطبی که
+                      مسیرش «ویزیت → درمان → پیگیری» است، «درمان» را خودش
+                      می‌سازد؛ ما ترتیب را تحمیل نمی‌کنیم. */}
+                  <button type="button" className="fb-newform" onClick={() => setNewForm(true)} title="فرمِ تازه" aria-label="فرمِ تازه">
+                    <Plus width="15" height="15" aria-hidden="true" />
+                    <span className="fb-newform-t" aria-hidden="true">فرمِ تازه</span>
+                  </button>
+                </div>
+              </div>
 
             {form && (
-              <>
+              <div className="fb-body">
                 <div className="fb-meta">
                   {/* ⚠️ نامِ **نوعِ فرم** از کاتالوگِ سرور، نه دو چیپِ جداگانه.
                       تا دیروز این‌جا «مراجعه» + کلیدِ خامِ انگلیسیِ `surgery`
@@ -368,28 +431,15 @@ export default function FormBuilder() {
                     یک بازسازیِ دوم. فرم‌سازِ دومی ساخته نمی‌شود (§۴.۷)، پس هر
                     نوعِ فیلدِ تازه همین‌جا هم خودش را نشان می‌دهد.
                     مقادیر جایی ذخیره نمی‌شوند و آپلود در دسترس نیست. */}
-                <details className="fb-fold fb-preview">
-                  <summary>پیش‌نمایشِ زنده</summary>
-                  <p className="fb-fold-note">
-                    همان کادرهایی که کاربر می‌بیند. چیزی که این‌جا می‌نویسید ذخیره نمی‌شود.
-                  </p>
-                  {form.pages > 1 && (
-                    <Tabs
-                      variant="inset"
-                      label="صفحهٔ پیش‌نمایش"
-                      value={String(Math.min(previewPage, form.pages))}
-                      onChange={(k) => setPreviewPage(Number(k))}
-                      items={Array.from({ length: form.pages }, (_, i) => ({ key: String(i + 1), label: `صفحهٔ ${toFa(i + 1)}` }))}
-                    />
-                  )}
-                  <DynForm
-                    fields={form.fields.filter((f) => f.active !== false
-                      && (form.pages > 1 ? (f.page ?? 1) === Math.min(previewPage, form.pages) : true))}
-                    values={preview}
-                    errors={{}}
-                    onChange={setPreview}
-                  />
-                </details>
+                {!wide && (
+                  <details className="fb-fold fb-preview">
+                    <summary>پیش‌نمایشِ زنده</summary>
+                    <p className="fb-fold-note">
+                      همان کادرهایی که کاربر می‌بیند. چیزی که این‌جا می‌نویسید ذخیره نمی‌شود.
+                    </p>
+                    {previewBody}
+                  </details>
+                )}
 
                 {/* هستهٔ ثابتِ مطب (بستهٔ ۶) — توضیح یک‌بار بالای فهرست، نه روی هر ردیف. */}
                 {form.fields.some((f) => f.core) && (
@@ -505,8 +555,18 @@ export default function FormBuilder() {
                     بازگرداندن به قالبِ {verticalLabel || 'حوزه'}
                   </button>
                 </div>
-              </>
+              </div>
             )}
+            {wide && form && (
+              <aside className="fb-live" aria-labelledby="fb-live-title">
+                <header className="fb-live-head">
+                  <b id="fb-live-title">پیش‌نمایشِ زنده</b>
+                  <small>همان کادرهایی که کاربر می‌بیند. چیزی که این‌جا می‌نویسید ذخیره نمی‌شود.</small>
+                </header>
+                {previewBody}
+              </aside>
+            )}
+            </div>
           </>
         )}
       </div>
