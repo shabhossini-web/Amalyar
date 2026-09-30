@@ -1,6 +1,6 @@
 import AssistedTextarea from '../ui/AssistedTextarea.jsx';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { api, apiBlobUrl, apiStream, apiUpload } from '../lib/api.js';
 import VoiceNote, { VoiceClip } from '../ui/VoiceNote.jsx';
@@ -1548,6 +1548,18 @@ export default function PatientRecord() {
      همان‌جا خوانده می‌شود، و هر ثبتی «پاسخ» را تازه می‌کند. */
   const things = useThings({ patientId: Number(id), onChanged: loadLive, toast: say });
   const openThing = things.open;
+  /* **مقصدِ یک کار از بیرونِ پرونده** — زنگِ کارها (`WorkBell`، بازبینیِ خصمانه R12) پرونده را با
+     `state.open` باز می‌کند و همان پاپ‌آپ («ثبتِ وضعیت»، «بارگذاریِ گزارش»، سفارش…) این‌جا باز
+     می‌شود؛ پرونده میزبانِ پاپ‌آپ‌هاست. `replace` با `state: null` تا «بازگشت» دوباره بازش نکند.
+     کلیدِ `location.key`، نه mountِ اول: زنگ روی خودِ همین پرونده هم می‌تواند بزند. */
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    const spec = location.state?.open;
+    if (!spec?.type) return;
+    openThing({ ...spec, patientId: spec.patientId ?? Number(id) });
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.key]);
 
   useEffect(() => {
     document.title = rec ? `پروندهٔ ${rec.fullName} — عمل‌یار` : 'پروندهٔ بیمار — عمل‌یار';
