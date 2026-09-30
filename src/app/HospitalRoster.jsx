@@ -11,7 +11,7 @@ const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 /**
  * برنامهٔ حضورِ روز — کارشناسِ هر بیمارستان و ساعتِ حضورش، و تخصیصِ بیماران.
  *
- * ⚠️ واژهٔ «عمل/مراجعه» از `useTerms()` (قانونِ ۲۴) — همان واژه‌ای که سرِ صفحهٔ چینش و
+ * واژهٔ «عمل/مراجعه» از `useTerms()` (قانونِ ۲۴) — همان واژه‌ای که سرِ صفحهٔ چینش و
  * خانه‌های تقویم می‌گویند؛ تا دیروز بالای صفحه «۹ عمل» بود و این‌جا «۲ مراجعه» (company-18).
  * رقم و ساعت فارسی (`faNum`، `faTime`).
  */
@@ -109,7 +109,7 @@ function Duty({ duty, busy, onSave, onRemove }) {
   return <div className="roster-duty"><b>{duty.name}{!duty.active && ' (غیرفعال)'}</b><label>ساعت حضور<TimePick value={value} onChange={setValue} disabled={busy} /></label><button type="button" disabled={busy || !value || badTime(value) || normTime(value) === duty.arriveTime} onClick={() => onSave(normTime(value))}>ثبت ساعت</button><button type="button" disabled={busy} onClick={onRemove}>حذف حضور</button></div>;
 }
 /**
- * ردیفِ «افزودنِ حضور». ⚠️ پس از ثبتِ موفق **خالی** می‌شود (company-18): تا دیروز همان
+ * ردیفِ «افزودنِ حضور». پس از ثبتِ موفق **خالی** می‌شود (company-18): تا دیروز همان
  * کارشناس انتخاب‌شده می‌ماند و دکمه دوباره فعال بود — انگار ذخیره نشده بود.
  */
 function NewDuty({ techs, disabled, onSave }) {
