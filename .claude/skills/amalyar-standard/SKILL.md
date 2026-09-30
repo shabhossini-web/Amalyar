@@ -39,29 +39,28 @@ description: >
 ## ۲) اسکلتِ استانداردِ صفحهٔ /app
 
 ```jsx
-import { Link } from 'react-router-dom';
-import ProfileMenu from './ProfileMenu.jsx';
-import './launcher.css'; import './users.css';
+import PageHeader from '../ui/PageHeader.jsx';
+import Toast, { useToast } from '../ui/Toast.jsx';
+import './reports.css';            // ریشه: .rp { --page-w: var(--maxw); padding: 20px 14px 40px; … }
 
 export default function Reports() {
-  const [toast, setToast] = useState('');
-  // useEffect: document.title = 'عمل‌یار — گزارش‌ها' + تایمرِ toast
+  const { msg: toast, show: setToast } = useToast();
   return (
-    <div className="lx">
-      <div className="lx-bg" aria-hidden="true" /><div className="lx-grid" aria-hidden="true" />
-      <div className="lx-shell us-shell">
-        <header className="us-head">
-          <Link to="/app" className="lx-back">… لانچر</Link>
-          <h1>گزارش‌ها</h1>
-          <div className="us-head-left"><ProfileMenu onToast={setToast} /></div>
-        </header>
-        {/* محتوا: کارت‌های `glass us-card` */}
-      </div>
-      <div className={`lx-toast${toast ? ' on' : ''}`}>{toast}</div>
+    <div className="rp">
+      <div className="rp-bg" aria-hidden="true" />
+      <PageHeader tool="reports">{/* اکشن‌های صفحه (اختیاری) */}</PageHeader>
+      {/* محتوا: کارت‌های `glass` با max-width: var(--page-w) */}
+      <Toast msg={toast} />
     </div>
   );
 }
 ```
+
+- **سربرگ فقط `PageHeader`** (بازبینیِ UX ۱۴۰۵/۰۷، shell-15): بازگشتِ «امروز»، عنوان و آیکون از کاشیِ
+  همان `tool` در `tools.jsx` (نامِ کاشی = عنوانِ صفحه، قانونِ ۲۴)، `document.title` را هم خودش می‌گذارد.
+  نوارِ بالا و `ProfileMenu` در پوسته‌اند (`Shell.jsx`) — صفحه تکرارشان نمی‌کند.
+- **عرض:** `--page-w` روی ریشه = `var(--maxw)` (فهرست/جدول) یا `var(--maxw-form)` (فرم).
+- **توست:** `Toast`/`useToast` از `src/ui/` — نه `lx-toast`ِ دست‌ساز.
 
 ## ۳) کامپوننت‌های قفل‌شده — کی/چطور
 
