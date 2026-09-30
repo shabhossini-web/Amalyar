@@ -9,10 +9,13 @@
  *   - FF1: «ادامه با نوشتهٔ من» فقط با «ذخیره»ِ صریح جایگزین می‌کند؛ ۴۰۹ِ سرور کارت را تازه می‌کند
  *   - FF2: بارگذاریِ برنامه پیش‌نویسِ کهنه و خراب را جارو می‌کند
  *   - FF2: خروج و تعویضِ حساب پیش‌نویس‌های همان کاربر را پاک می‌کنند
+ *   - FF3: «برگرداندن» فقط ساعتی را برمی‌دارد که همین لمس نوشت (`expect`)؛ ۴۰۹ کارت را تازه می‌کند
  *  نباید بیفتد:
  *   - FF1: شرحِ تازه‌ترِ پرونده با پیش‌نویسِ کهنه جایگزین شود — نه از «ذخیره»ِ کارت، نه از پرسشِ «فهرستِ روز»
  *   - FF1: پیش‌نویسِ بی‌پایه (نسخهٔ پیشین) بی‌صدا برگردد
  *   - FF2: نوشتهٔ یک کاربر پس از تعویضِ حساب زیرِ کلیدِ کاربرِ بعدی بنشیند
+ *   - FF3: لمسی که ساعتی ننوشت (کسِ دیگری پیش‌تر زده بود) نوارِ «برگرداندن» بگیرد
+ *   - FF3: «برگرداندن» ساعتی را پاک کند که در این فاصله کسِ دیگری عوض کرده
  */
 import { startVite, launch, mockContext } from './lib/mock-ui.mjs';
 
@@ -65,10 +68,28 @@ const makeServer = (S) => ({ path, method, body }) => {
     S.report = (body?.body ?? '').trim() || null;
     return cardOf(S);
   }
+  /* همان قراردادِ سرور: ساعتِ موجود بازنویسی نمی‌شود و `stamped` می‌گوید این درخواست نوشت یا نه. */
   if (path === `/theatre/visits/${VID}/start` && method === 'POST') {
     const stamped = !S.start;
     if (!S.start) S.start = '10:15';
     return { ...cardOf(S), stamped };
+  }
+  if (path === `/theatre/visits/${VID}/finish` && method === 'POST') {
+    const stamped = !S.end;
+    if (!S.end) S.end = '11:40';
+    return { ...cardOf(S), stamped };
+  }
+  /* `expect`: ساعتی که میز دید؛ اگر فرق کند ۴۰۹ — نیامدنش یعنی رفتارِ قدیم (بی‌سنجش). */
+  if (path === `/theatre/visits/${VID}/times` && method === 'POST') {
+    for (const [k, f] of [['opStartTime', 'start'], ['opEndTime', 'end']]) {
+      if (body?.expect && k in body.expect && (S[f] ?? null) !== (body.expect[k] ?? null)) {
+        return { status: 409, body: { message: 'ساعت را کسِ دیگری ثبت یا عوض کرده است — کارت تازه شد؛ اگر هنوز لازم است، دوباره اصلاحش کنید.' } };
+      }
+    }
+    if (body && 'opStartTime' in body) S.start = body.opStartTime || null;
+    if (body && 'opEndTime' in body) S.end = body.opEndTime || null;
+    S.timesWrites = (S.timesWrites ?? 0) + 1;
+    return cardOf(S);
   }
   if (method === 'GET') return [];
   return undefined;
@@ -238,6 +259,41 @@ try {
     const keys = await draftKeys(page);
     ok(!keys.some((k) => k.startsWith(`amalyar_draft:${UID}:`)), '**باید بیفتد:** خروج پیش‌نویس‌های همان کاربر را پاک کرد', keys.join(' '));
     ok(keys.includes('amalyar_draft:8:50:opReport'), 'پیش‌نویسِ کاربرِ دیگرِ دستگاه دست نخورد (خروجِ او پاکش می‌کند)');
+    await context.close();
+  }
+
+  console.log('\n۸) FF3 — «برگرداندن» فقط ساعتِ خودِ همین لمس');
+  {
+    const S = { report: null, start: null, end: null };
+    const { page, writes, context } = await open(S);
+    const timesW = () => writes.filter((w) => w.path === `/theatre/visits/${VID}/times`);
+    await page.locator('[data-act="start"]').click();
+    await page.locator('[data-act="undo"]').waitFor();
+    ok((await page.locator('.th-undo').innerText()).includes('۱۰:۱۵'), 'لمسی که نوشت نوارِ برگرداندن با همان ساعت گرفت');
+    await page.locator('[data-act="undo"]').click();
+    await page.locator('[data-act="start"]').waitFor();
+    ok(JSON.stringify(timesW().at(-1)?.body) === '{"opStartTime":null,"expect":{"opStartTime":"10:15"}}',
+      '**باید بیفتد:** «برگرداندن» مقدارِ دیده‌شده را می‌فرستد', JSON.stringify(timesW().at(-1)?.body));
+    ok(S.start === null, 'و ساعت برداشته شد');
+
+    /* دستگاهِ دیگر پیش‌تر «شروع» زده بود و این کارت هنوز نمی‌داند. */
+    S.start = '09:00';
+    await page.locator('[data-act="start"]').click();
+    await page.locator('.th-step[data-step="start"][data-state="done"]').waitFor();
+    ok(await page.locator('[data-act="undo"]').count() === 0, '**نباید بیفتد:** لمسی که چیزی ننوشت نوارِ «برگرداندن» نمی‌گیرد');
+    ok((await page.locator('.th-toast').innerText()).includes('از پیش'), 'و گفته می‌شود که ساعت از پیش ثبت شده بود');
+    ok(S.start === '09:00', 'ساعتِ دیگری سرِ جایش ماند');
+
+    /* «پایان» را همین لمس می‌نویسد؛ پیش از «برگرداندن» دستگاهِ دیگر آن را اصلاح می‌کند. */
+    await page.locator('[data-act="finish"]').click();
+    await page.locator('[data-act="undo"]').waitFor();
+    S.end = '11:55';
+    const before = timesW().length;
+    await page.locator('[data-act="undo"]').click();
+    await page.locator('.th-toast', { hasText: 'کسِ دیگری' }).waitFor();
+    ok(timesW().length === before + 1 && S.end === '11:55', '**نباید بیفتد:** «برگرداندن» ساعتِ اصلاح‌شدهٔ دیگری را پاک نکرد', `end=${S.end}`);
+    await page.locator('.th-step[data-step="end"] .th-step-at', { hasText: '۱۱:۵۵' }).waitFor();
+    ok(true, '۴۰۹ کارت را تازه کرد و ساعتِ واقعی دیده می‌شود');
     await context.close();
   }
 } finally {

@@ -412,27 +412,45 @@ function OpSteps({ v, clinical, canTimes, busy, onAct, onDischarge, onToast, ela
   const [undo, setUndo] = useState(null); // {which, at}
   const [fixing, setFixing] = useState(null); // 'start' | 'end'
   const [draft, setDraft] = useState('');
+  /* ساعتی که «اصلاحِ ساعت» با آن باز شد — همراهِ ذخیره می‌رود تا اصلاحِ هم‌زمانِ کسِ دیگر بی‌صدا
+     بازنویسی نشود (بستهٔ FF، FF3). */
+  const [fixFrom, setFixFrom] = useState(null);
+  const timeAt = (k) => (k === 'start' ? v.opStartTime : k === 'end' ? v.opEndTime : null) ?? null;
   useEffect(() => {
     if (!undo) return undefined;
     const h = setTimeout(() => setUndo(null), 10000);
     return () => clearTimeout(h);
   }, [undo]);
+  /* ساعتی که زیرِ دستِ کاربر عوض شد (دستگاهِ دیگر، فرمِ عمل، تازه‌شدنِ کارت پس از ۴۰۹) نوارِ «برگرداندن»
+     و کادرِ اصلاح را می‌بندد — هر دو دربارهٔ مقداری بودند که دیگر روی کارت نیست. */
+  useEffect(() => {
+    if (undo && timeAt(undo.which) !== undo.at) setUndo(null);
+    if (fixing && fixFrom != null && timeAt(fixing) !== fixFrom) setFixing(null);
+  }, [v.opStartTime, v.opEndTime]); // eslint-disable-line react-hooks/exhaustive-deps
   const cancelled = v.state === 'cancelled';
   const stamp = async (which) => {
-    if (await onAct(which === 'start' ? '/start' : '/finish', which === 'start' ? 'start' : 'finish')) {
-      setUndo({ which });
-    }
+    const r = await onAct(which === 'start' ? '/start' : '/finish', which === 'start' ? 'start' : 'finish');
+    if (!r) return;
+    const at = (which === 'start' ? r.visit?.opStartTime : r.visit?.opEndTime) ?? null;
+    /* نوارِ «برگرداندن» فقط وقتی همین لمس ساعت را نوشت (FF3). اگر کسِ دیگری پیش‌تر زده بود، کارت همان
+       ساعت را نشان می‌دهد و گفته می‌شود — برداشتنِ ساعتِ او کارِ این لمس نیست. */
+    if (r.stamped === true && at) setUndo({ which, at });
+    else if (r.stamped === false && at) onToast(`${which === 'start' ? 'شروعِ' : 'پایانِ'} عمل از پیش ساعتِ ${faTime(at)} ثبت شده بود — دوباره ثبت نشد`);
   };
   const revert = async () => {
     const u = undo;
     setUndo(null);
-    if (await onAct('/times', 'times', u.which === 'start' ? { opStartTime: null } : { opEndTime: null })) {
+    const key = u.which === 'start' ? 'opStartTime' : 'opEndTime';
+    /* فقط همان ساعتی که این لمس نوشت برداشته می‌شود؛ اگر در این فاصله عوض شده، سرور ۴۰۹ می‌دهد. */
+    if (await onAct('/times', 'times', { [key]: null, expect: { [key]: u.at } })) {
       onToast(u.which === 'start' ? 'شروعِ عمل برگشت — دوباره می‌شود ثبتش کرد' : 'پایانِ عمل برگشت — عمل دوباره در جریان است');
     }
   };
   const saveFix = async () => {
     const key = fixing === 'start' ? 'opStartTime' : 'opEndTime';
-    if (await onAct('/times', 'times', { [key]: draft })) { setFixing(null); onToast('ساعت اصلاح شد'); }
+    if (await onAct('/times', 'times', { [key]: draft, ...(fixFrom != null ? { expect: { [key]: fixFrom } } : {}) })) {
+      setFixing(null); onToast('ساعت اصلاح شد');
+    }
   };
   const steps = [
     { key: 'start', label: 'شروعِ عمل', verb: 'ثبتِ شروع', act: 'start', at: v.opStartTime, wait: '' },
@@ -458,7 +476,7 @@ function OpSteps({ v, clinical, canTimes, busy, onAct, onDischarge, onToast, ela
                 {state === 'wait' && <small id={`th-wait-${st.key}`}>{cancelled ? 'عمل لغو شده است' : st.wait}</small>}
                 {done && canTimes && t && fixing !== st.key && (
                   <button type="button" className="th-link" data-act={`fix-${st.key}`}
-                          onClick={() => { setFixing(st.key); setDraft(t); setUndo(null); }}>
+                          onClick={() => { setFixing(st.key); setDraft(t); setFixFrom(t); setUndo(null); }}>
                     <Pencil width="13" height="13" aria-hidden="true" /> اصلاحِ ساعت
                   </button>
                 )}
@@ -491,7 +509,7 @@ function OpSteps({ v, clinical, canTimes, busy, onAct, onDischarge, onToast, ela
         <div className="th-undo" role="status">
           <span>
             {undo.which === 'start' ? 'شروعِ عمل' : 'پایانِ عمل'} ساعتِ{' '}
-            <b dir="ltr">{faTime(undo.which === 'start' ? v.opStartTime : v.opEndTime)}</b> ثبت شد
+            <b dir="ltr">{faTime(undo.at)}</b> ثبت شد
           </span>
           {canTimes && <button type="button" className="th-link" data-act="undo" onClick={revert} disabled={busy === 'times'}>برگرداندن</button>}
         </div>
