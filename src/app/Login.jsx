@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import Mark from '../components/Mark.jsx';
 import SelfieCapture from './SelfieCapture.jsx';
@@ -58,6 +58,19 @@ export default function Login() {
   const [fpDev, setFpDev] = useState('');
   /* پیامِ موفقیت روی فرمِ ورود (پس از رمزِ تازه). */
   const [notice, setNotice] = useState('');
+  /* فوکوس با عوض‌شدنِ نما (بستهٔ PF، PF13): «رمز را فراموش کرده‌ام» ← سرتیترِ بازیابی؛ «بازگشت» ← همان پیوند؛
+     رمزِ تازه ذخیره شد ← کادرِ رمز. بی این، فوکوس روی دکمه‌ای می‌ماند که دیگر در صفحه نیست. نمای «کد» خودش
+     کادرِ کد را فوکوس می‌کند (`OtpInput`). */
+  const forgotBtn = useRef(null);
+  const fpHead = useRef(null);
+  const fpMove = useRef(null);
+  useEffect(() => {
+    const m = fpMove.current;
+    fpMove.current = null;
+    if (m === 'ask') fpHead.current?.focus();
+    else if (m === 'login') forgotBtn.current?.focus();
+    else if (m === 'password') document.querySelector('.lg-form input[autocomplete="current-password"]')?.focus();
+  }, [forgot]);
 
   /* سایتِ معرفیِ همین شرکت — منتشر شده؟ (بی‌احراز؛ شکست یعنی «نیست»). هشدار: «بازگشت به سایت» فقط وقتی
      ریشهٔ دامنه جای دیگری جز همین صفحه است (بازبینیِ UX، بندِ ۱۱۱): روی دامنهٔ مطبی که سایتش منتشر
@@ -181,9 +194,9 @@ export default function Login() {
   };
 
   const openForgot = () => {
-    setErr(''); setNotice(''); setFpCode(''); setFpPass(''); setFpDev(''); setForgot('ask');
+    setErr(''); setNotice(''); setFpCode(''); setFpPass(''); setFpDev(''); fpMove.current = 'ask'; setForgot('ask');
   };
-  const closeForgot = () => { setErr(''); setForgot(null); };
+  const closeForgot = () => { setErr(''); fpMove.current = 'login'; setForgot(null); };
 
   const sendResetCode = async (e) => {
     e.preventDefault();
@@ -210,6 +223,7 @@ export default function Login() {
     setBusy(true);
     try {
       const r = await api('/auth/password/reset', { method: 'POST', body: { identifier: toEnDigits(identifier).trim(), code: c, password: fpPass } });
+      fpMove.current = 'password';
       setForgot(null);
       setPassword('');
       setFpPass('');
@@ -388,7 +402,7 @@ export default function Login() {
             {field('رمز عبور',
               <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)}
                 placeholder="رمز عبور" autoComplete="current-password" required />)}
-            <button type="button" className="lg-link lg-forgot" onClick={openForgot} disabled={busy}>رمز را فراموش کرده‌ام</button>
+            <button type="button" className="lg-link lg-forgot" ref={forgotBtn} onClick={openForgot} disabled={busy}>رمز را فراموش کرده‌ام</button>
             <label className="lg-remember">
               <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
               <span className="lg-check" aria-hidden="true" />
@@ -410,7 +424,7 @@ export default function Login() {
         {/* ── بازیابیِ رمز: شناسه ← کد + رمزِ تازه ── */}
         {tab === 'login' && forgot === 'ask' && (
           <form onSubmit={sendResetCode} className="lg-form">
-            <h2 className="lg-title">بازیابیِ رمز</h2>
+            <h2 className="lg-title" ref={fpHead} tabIndex={-1}>بازیابیِ رمز</h2>
             <p className="lg-fp-text">نام کاربری یا شمارهٔ موبایلِ حسابتان را بنویسید؛ یک کدِ ۶رقمی به موبایلِ همان حساب پیامک می‌شود.</p>
             {field('نام کاربری یا موبایل',
               <input type="text" value={identifier} onChange={(e) => setIdentifier(e.target.value)}
@@ -438,7 +452,7 @@ export default function Login() {
               <PasswordInput value={fpPass} onChange={(e) => setFpPass(e.target.value)}
                 placeholder="حداقل ۶ نویسه" autoComplete="new-password" required />)}
             <button className="lg-btn" type="submit" disabled={busy}>{busy ? '…' : 'ذخیرهٔ رمزِ تازه'}</button>
-            <button type="button" className="lg-link" onClick={() => { setForgot('ask'); setFpCode(''); setErr(''); }} disabled={busy}>
+            <button type="button" className="lg-link" onClick={() => { fpMove.current = 'ask'; setForgot('ask'); setFpCode(''); setErr(''); }} disabled={busy}>
               <Back width="15" height="15" aria-hidden="true" /> کد نرسید؟ ارسالِ دوباره
             </button>
             <button type="button" className="lg-link" onClick={closeForgot} disabled={busy}>بازگشت به ورود</button>

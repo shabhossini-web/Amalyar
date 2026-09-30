@@ -198,7 +198,7 @@
 }
 
 /* تب‌های «ورود / ثبت‌نام» — هر تب نیمی از عرض و دستِ‌کم ۴۴ پیکسل (بازبینیِ UX، بندِ ۱۱۴؛ تا دیروز ۳۷×۴۲). */
-/* `margin-inline: 0`: حاشیهٔ خودکارِ `.ui-tabs` در ستونِ فلکسِ کارت نمی‌گذاشت نوار کش بیاید. ⚠️ با `.lg-card`
+/* `margin-inline: 0`: حاشیهٔ خودکارِ `.ui-tabs` در ستونِ فلکسِ کارت نمی‌گذاشت نوار کش بیاید. هشدار: با `.lg-card`
    جلو: `ui.css`ِ کامپوننتِ Tabs بعد از این فایل بار می‌شود و قاعدهٔ هم‌وزنش برنده بود. */
 .lg-card .lg-tabs { margin-inline: 0; }
 /* `auto` نه `0`: روی دامنهٔ مطب تبِ دوم «درخواستِ حسابِ کارمند» است و از نیمِ نوار بلندتر (بندِ ۱۰۸). */
@@ -208,6 +208,9 @@
 /* نامِ مطب/شرکت زیرِ نشان — کارکن مطمئن شود واردِ سامانهٔ درست شده. */
 .lg-tenant { margin-top: 6px; font-size: 15px; font-weight: 800; color: var(--text2); text-align: center; line-height: 1.6; }
 .lg-fp-text { font-size: 13.5px; line-height: 1.8; color: var(--text2); text-align: center; }
+/* سرتیترِ بازیابی فوکوس می‌گیرد (tabIndex=-1، PF13): حلقه فقط برای کیبورد. */
+.lg-title:focus { outline: none; }
+.lg-title:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; border-radius: 6px; }
 /* پیوندهای متنیِ کارت (بازگشت، ارسالِ دوباره، فراموشیِ رمز) — هدفِ لمسیِ ۴۴ پیکسل (بندِ ۱۱۴). */
 .lg-link { min-height: 44px; }
 .lg-link:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 8px; }

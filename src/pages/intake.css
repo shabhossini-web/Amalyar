@@ -425,6 +425,13 @@
 .ik-sum dt { flex: 0 0 auto; color: var(--text2); }
 .ik-sum dt::after { content: ':'; }
 .ik-sum dd { margin: 0; min-width: 0; font-weight: 700; color: var(--text1); overflow-wrap: anywhere; }
+/* سرتیترِ ویرایشِ مرحلهٔ واریز (بستهٔ PF، PF8/PF13): فوکوس با «ویرایش» این‌جا می‌آید و می‌گوید تغییرات تا
+   «ذخیرهٔ تغییرات» ثبت نمی‌شوند — پیش‌نویسِ خودکار در این حالت خاموش است. */
+.ik-edit-head { display: grid; gap: 2px; }
+.ik-edit-head h2 { margin: 0; font-size: 16px; font-weight: 900; color: var(--text1); }
+.ik-edit-head h2:focus { outline: none; }
+.ik-edit-head h2:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; border-radius: 6px; }
+.ik-edit-head p { margin: 0; font-size: 13px; line-height: 1.8; color: var(--text2); }
 /* خطای کدِ تخفیف همان زیرِ کادرش. */
 .ik-code-err { margin-top: -3px; }
 /* پس از «ثبت و مرحلهٔ بعد» بخشِ واریز زیرِ نوارِ بالای گوشی گم نشود. */
