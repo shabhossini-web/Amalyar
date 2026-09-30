@@ -647,7 +647,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   /* **تغییرِ ذخیره‌نشده** (بازبینیِ UX ۱۴۰۵/۰۷ — clinic-daily-08، surgery-07): پزشک روی گوشی شکایت و
      شرحِ حال را نوشت و یک لمسِ پس‌زمینه یا ضربدر همه را بی‌پرسش دور ریخت. عکسِ دادهٔ فرم وقتی فرم
      «آرام گرفت» (ویرایش: بعد از رسیدنِ زیرفرم‌ها) مبنا می‌شود و هر فرقی با آن یعنی بستن اول بپرسد.
-     ⚠️ در **ثبتِ تازه** نوع (با حوزه هم‌گام می‌شود) و «ارسالِ فوری» (از تاریخ مشتق می‌شود) در مبنا
+     در **ثبتِ تازه** نوع (با حوزه هم‌گام می‌شود) و «ارسالِ فوری» (از تاریخ مشتق می‌شود) در مبنا
      نیستند: خودکارند نه نوشتهٔ کاربر، و پرسشی که بی‌دلیل می‌آید کاربر را به «دور ریختن»ِ بی‌نگاه عادت
      می‌دهد. در ویرایش هر دو فقط با دستِ کاربر عوض می‌شوند و حساب‌اند. */
   const unsavedSnap = JSON.stringify([
@@ -987,7 +987,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     /* ⚠️ مراجعهٔ تازه در شرکتِ دوخدمته بی‌خدمت ثبت نمی‌شود: پرتالِ جراح ویرایشگرِ اقلام را فقط برای
        مراجعهٔ ایمپلنتی باز می‌کند، و مراجعهٔ دستیِ بی‌خدمت هیچ نشانه‌ای از ایمپلنتی‌بودن نداشت. */
     if (pickService && !editing && !f.service) problems.service = 'خدمتِ این مراجعه را انتخاب کنید';
-    /* ⚠️ ستاره‌ی فیلدهای هسته‌ای هم این‌جا سنجیده می‌شود، نه فقط دلخواه‌ها. سرور هر دو را می‌سنجد؛
+    /* ستاره‌ی فیلدهای هسته‌ای هم این‌جا سنجیده می‌شود، نه فقط دلخواه‌ها. سرور هر دو را می‌سنجد؛
        این‌جا فقط زودتر و کنارِ خودِ فیلد گفته می‌شود. */
     const builtinVals = {
       surgeonId: f.surgeonId, hospitalId: f.hospitalId, techId: f.techId,
@@ -1056,7 +1056,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
        زدنِ Enter روی کادرِ کد ملی در گامِ ۱ مراجعه‌ای نیم‌ساخته می‌فرستاد و
        کاربر خطایی می‌دید که ربطی به کاری که کرده بود نداشت. */
     if (!editing && step < 3) { goNext(); return; }
-    /* ⚠️ هر خطای فیلدِ هسته **کنارِ خودِ فیلد** (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-08): قرمز، متن زیرش،
+    /* هر خطای فیلدِ هسته **کنارِ خودِ فیلد** (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-08): قرمز، متن زیرش،
        اسکرول و فوکوس، و پیامِ کنارِ دکمه تا اصلاح بماند — نه یک toastِ ۲٫۶ثانیه‌ای روی دکمه در
        حالی که فیلد ۱۳۴۷ پیکسل بالاتر است. همان کاری که زیرفرم‌ها از قبل می‌کردند. */
     const core = parseCore();
@@ -1289,7 +1289,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   const complaintSourceKind = initial?.chiefComplaintFrom?.kind ?? 'clinic';
   const complaintSourceWord = kindOf(complaintSourceKind).label;
   const complaintSourceLabel = complaintSourceIso ? `${complaintSourceWord}ِ ${faDate(complaintSourceIso)}` : `${complaintSourceWord}ِ مرتبط`;
-  /* خطای زندهٔ فیلدهای هسته (surgery-08) — ⚠️ این‌جا و نه کنارِ `parseCore`: سنجش در رندر اجرا می‌شود
+  /* خطای زندهٔ فیلدهای هسته (surgery-08) — این‌جا و نه کنارِ `parseCore`: سنجش در رندر اجرا می‌شود
      و به `inheritedComplaint`ِ بالا نیاز دارد (پیش از اعلامش خطای TDZ می‌داد). */
   const liveCore = errKeys.length ? parseCore().problems : null;
   const coreErr = liveCore ? Object.fromEntries(errKeys.filter((k) => liveCore[k]).map((k) => [k, liveCore[k]])) : {};
@@ -1478,7 +1478,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   /* «مدتِ علائم» (فیلدِ فرم‌سازِ قالبِ قدیمیِ مطب) کنارِ شکایت می‌نشیند، نه در جعبهٔ جدای
      «اطلاعاتِ تکمیلی» — آن جعبه فقط همین یک کادر را داشت (طرحِ مصوبِ ۱۴۰۵/۰۷/۰۳). */
   const durationField = fd.customFields.find((x) => x.key === INLINE_KEYS.duration && x.type === 'text') ?? null;
-  /* ⚠️ بازبینیِ UX ۱۴۰۵/۰۷ (surgery-21): کادر برچسبِ دسترس‌پذیر نداشت (یک `span` داخلِ `div`، تنها کادرِ
+  /* بازبینیِ UX ۱۴۰۵/۰۷ (surgery-21): کادر برچسبِ دسترس‌پذیر نداشت (یک `span` داخلِ `div`، تنها کادرِ
      بی‌نامِ فرمِ عمل) و شکایتِ ارثی فقط جای‌نگهدارِ کم‌رنگی بود که با اولین حرف ناپدید می‌شد. حالا
      ارثی یک متنِ فقط‌خواندنیِ دیدنی است با دکمهٔ «نوشتنِ شکایتِ جدا»؛ کادر فقط وقتی باز می‌شود که
      کاربر واقعاً شکایتِ دیگری برای همین عمل دارد — و «برگشت به ارثی» همان خالی‌کردن است. */
@@ -2021,7 +2021,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   /* **برچسبِ نوعِ مراجعه از واژه‌نامهٔ حوزه** (clinic-daily-04): «ویزیت» و «عمل»، نه عنوانِ فرم.
      نوعی که حوزه واژه‌ای برایش ندارد (پیگیری/مشاوره یا نوعِ ساختِ فرم‌ساز) از پشتیبان یا همان
      عنوانِ بی‌پیشوندِ «فرمِ» می‌آید — همان قاعدهٔ `visitTitle`.
-     ⚠️ اگر دو نوع به یک واژه برسند (نورومانیتورینگ به هر دو «مراجعه» می‌گوید)، واژه چیزی را از هم
+     اگر دو نوع به یک واژه برسند (نورومانیتورینگ به هر دو «مراجعه» می‌گوید)، واژه چیزی را از هم
      جدا نمی‌کند و همان عنوانِ بی‌پیشوند برمی‌گردد — دو دکمهٔ هم‌نام از یک دکمهٔ فنی بدتر است. */
   const kindChoices = fd.kinds ?? Object.entries(KINDS).map(([kind, k]) => ({ kind, title: k.label }));
   const plainTitle = (k) => String(k.title ?? kindOf(k.kind).label).replace(/^\s*فرم(?:ِ)?\s+/, '');
@@ -2055,7 +2055,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   };
 
   /* خدمتِ مراجعه (شرکتِ دوخدمته) — در ثبتِ تازه گامِ دوم، در ویرایش زیرِ سربرگ. */
-  /* ⚠️ توضیح به زبانِ کاربر (company-24): «ویرایشگرِ اقلامِ پرتالِ جراح…» برای مدیر معنایی نداشت. وقتی فرم
+  /* توضیح به زبانِ کاربر (company-24): «ویرایشگرِ اقلامِ پرتالِ جراح…» برای مدیر معنایی نداشت. وقتی فرم
      تک‌نوع است و پرسشِ نوع پنهان، همین «خدمت» گامِ ۲ است و شمارهٔ گام را می‌گیرد. */
   const serviceEl = pickService ? (<div data-core="service" className={coreErr.service ? 'vf-bad' : undefined}>
     <div className="db-sect">
@@ -2264,7 +2264,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
             </div>
           ) : (
             <>
-              {/* ⚠️ یک کادر برای هر سه: جست‌وجوی سرور نام، کدِ پرونده، موبایل و کدِ ملی را با هم می‌گردد. */}
+              {/* یک کادر برای هر سه: جست‌وجوی سرور نام، کدِ پرونده، موبایل و کدِ ملی را با هم می‌گردد. */}
               <input
                 type="text"
                 value={pQuery}
@@ -2275,7 +2275,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
                 autoFocus
               />
               <div className="db-plist" aria-live="polite">
-                {/* ⚠️ کدِ ملی و موبایل **متن‌اند نه عدد** (بازبینیِ UX، clinic-daily-11): `faNum` آن‌ها را
+                {/* کدِ ملی و موبایل **متن‌اند نه عدد** (بازبینیِ UX، clinic-daily-11): `faNum` آن‌ها را
                     `Number` می‌کرد — «۰۰۲۷۰۲۵۸۵۳» می‌شد «۲۷٬۰۲۵٬۸۵۳»، صفرِ اول می‌افتاد و «· ۱ ویزیت» به
                     عدد می‌چسبید؛ منشی‌ای که برای جداکردنِ دو هم‌نام کدِ ملی را با کارت مقایسه می‌کند عددِ
                     غلط می‌دید. حالا فقط رقم‌ها فارسی می‌شوند، با برچسب، و شمارِ مراجعه جداست. */}
@@ -2388,7 +2388,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
 
           تا وقتی پاسخِ سرور نرسیده فهرستِ پشتیبان می‌ماند، وگرنه یک قطعیِ
           لحظه‌ای ردیف را **خالی** می‌کرد. */}
-      {/* ⚠️ پرسش به زبانِ پذیرش است نه سامانه (بازبینیِ UX ۱۴۰۵/۰۷، clinic-daily-04): «برای چه
+      {/* پرسش به زبانِ پذیرش است نه سامانه (بازبینیِ UX ۱۴۰۵/۰۷، clinic-daily-04): «برای چه
           آمده؟ ویزیت یا عمل». عنوانِ فرم («فرمِ ویزیت / فرمِ جراحی») فقط مالِ فرم‌ساز است؛ منشی‌ای که
           «فرمِ جراحی» می‌خواند نمی‌داند نوعِ مراجعه را انتخاب می‌کند یا یک سند را. */}
       {/* فرمِ تک‌نوع (company-24): پرسشی با یک گزینه پرسش نیست — پنهان، و گامِ ۲ فقط «خدمت» است. */}
@@ -2448,7 +2448,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         disabled={busy || !subLoaded}
         showAttach={canAttach}
       />
-      {/* ── فرمِ عمل: زبانه‌ها ساختارِ اصلی‌اند (surgery-10) — درست زیرِ سربرگ. ⚠️ کلاسِ `db-phasetabs`
+      {/* ── فرمِ عمل: زبانه‌ها ساختارِ اصلی‌اند (surgery-10) — درست زیرِ سربرگ. کلاسِ `db-phasetabs`
           همان نشانیِ آزمون‌ها و پاپ‌آپ‌هاست؛ «مشخصات» واژهٔ حوزه را می‌گیرد («مشخصاتِ مراجعه» در
           نورومانیتورینگ). مقدارها همه در `f` می‌مانند، پس جابه‌جایی چیزی را پاک نمی‌کند. */}
       {isSurgery && (
@@ -2463,7 +2463,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       )}
       {editing && (!isSurgery || tab === 'info') && serviceEl}
       {/* کارتِ خودِ فرم: زمینهٔ جدا + لبهٔ رنگیِ فرمِ انتخاب‌شده. فرمِ عمل: همین کارت زبانهٔ «مشخصات» است —
-          ⚠️ پنهان می‌شود نه unmount، تا انتخابگرها و کادرهای نیمه‌تایپ‌شدهٔ هسته با رفت‌وآمدِ زبانه از
+          پنهان می‌شود نه unmount، تا انتخابگرها و کادرهای نیمه‌تایپ‌شدهٔ هسته با رفت‌وآمدِ زبانه از
           نو ساخته نشوند (و فهرست‌هایشان دوباره از سرور خوانده نشود). */}
       <div
         className="db-formcard"
