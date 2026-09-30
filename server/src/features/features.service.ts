@@ -25,6 +25,53 @@ export async function seedFeatureRows(db: { setting: any; feature: any }, profil
   await db.feature.createMany({ data: featureSeedRows(p, FEATURES), skipDuplicates: true });
 }
 
+/**
+ * **صلاحیتِ نقش‌محور** — ماژول‌هایی که «کیستی» می‌خواهند، نه «سطح» — از روی چهار واقعیتِ حساب.
+ *
+ * ⚠️ **سطح به‌تنهایی راننده را از کارشناس جدا نمی‌کند** — هر دو سطح ۲اند. رانندهٔ ثبت‌شده
+ * کارشناس **نیست**، مگر واقعاً عملی به نامش خورده باشد (کسی که هر دو نقش را دارد پنلش را از دست
+ * نمی‌دهد)؛ پزشکِ متصل به تعریفِ جراح هم همین‌طور. بازهٔ سطحِ کارشناس همان است که `listTechs`
+ * «کارشناس» می‌داند — تعریفِ دومِ «چه کسی کارشناس است» یعنی روزی لانچر و فهرستِ چینش دو جوابِ
+ * متفاوت بدهند.
+ *
+ * یک قاعده برای دو جا: `forUser` (یک نفر، لانچر) و پیش‌نمایشِ اثرِ تغییر در «سطوحِ دسترسی»
+ * (همهٔ کارکنان — `eligibilityOf`). تا بازبینیِ خصمانه (R9) آن صفحه فرمولِ گارد را در کلاینت
+ * تکرار می‌کرد و این صلاحیت را نمی‌دید: فهرستِ «از دست می‌دهند»ِ پنلِ کارشناسی راننده‌ها را هم
+ * می‌شمرد.
+ */
+export function eligibleFrom(f: { level: number; staff: boolean; surgeon: boolean; techVisits: boolean }) {
+  const inTechBand = f.level >= LEVEL.TECH && f.level <= LEVEL.SUPERVISOR;
+  return {
+    // پرتالِ راننده بدونِ رکوردِ نیرو صفحهٔ خطاست — حتی برای سوپرادمین.
+    transport: f.staff,
+    surgeon: f.surgeon,
+    tech: inTechBand && (!f.staff || f.techVisits) && (!f.surgeon || f.techVisits),
+  };
+}
+
+/** ماژول‌هایی که علاوه بر سطح صلاحیتِ نقش هم می‌خواهند (`eligibleFrom`). */
+export const ROLE_GATED = new Set(['transport', 'surgeon', 'tech']);
+
+/** صلاحیتِ نقش‌محورِ چند حساب با سه کوئری — نه چهار کوئری به‌ازای هر نفر. */
+export async function eligibilityOf(db: any, accounts: { id: number; personId: number | null; level: number }[]) {
+  const persons = [...new Set(accounts.map((a) => a.personId).filter((x): x is number => !!x))];
+  const ids = accounts.map((a) => a.id);
+  const [staff, surgeons, visits] = await Promise.all([
+    persons.length ? db.transportStaff.findMany({ where: { personId: { in: persons }, active: true }, select: { personId: true } }) : [],
+    persons.length ? db.surgeon.findMany({ where: { personId: { in: persons }, active: true }, select: { personId: true } }) : [],
+    ids.length ? db.visit.groupBy({ by: ['techId'], where: { techId: { in: ids } }, _count: { _all: true } }) : [],
+  ]);
+  const staffP = new Set(staff.map((r: any) => r.personId));
+  const surgeonP = new Set(surgeons.map((r: any) => r.personId));
+  const techIds = new Set(visits.map((r: any) => r.techId));
+  return new Map(accounts.map((a) => [a.id, eligibleFrom({
+    level: a.level,
+    staff: !!a.personId && staffP.has(a.personId),
+    surgeon: !!a.personId && surgeonP.has(a.personId),
+    techVisits: techIds.has(a.id),
+  })]));
+}
+
 /** نوعِ نصب + خدمات از همان دو ردیفِ تنظیمات — همان قاعدهٔ `ConfigService.profile()` (`profileOf`). */
 async function readProfile(db: { setting: any }): Promise<TenantProfile> {
   const rows: { key: string; value: string }[] = await db.setting.findMany({ where: { key: { in: ['vertical', KEY_SERVICES] } } });
@@ -137,26 +184,12 @@ export class FeaturesService {
       : null;
     const level = account?.level ?? user?.level ?? 0;
     const surgeon = account?.personId ? await this.prisma.surgeon.findFirst({ where: { personId: account.personId, active: true }, select: { id: true } }) : null;
-    // بازهٔ سطحی که `listTechs` «کارشناس» می‌داند — تعریفِ دومِ «چه کسی
-    // کارشناس است» یعنی روزی لانچر و فهرستِ چینش دو جوابِ متفاوت بدهند.
+    /* شمارِ عمل‌ها فقط وقتی به کار می‌آید که سطح در بازهٔ کارشناس باشد (`eligibleFrom`). */
     const inTechBand = level >= LEVEL.TECH && level <= LEVEL.SUPERVISOR;
-
-    /**
-     * ⚠️ **سطح به‌تنهایی راننده را از کارشناس جدا نمی‌کند** — هر دو سطح ۲اند.
-     * نسخهٔ اول همین را جا انداخت و راننده همچنان کاشیِ پنلِ کارشناسی را
-     * می‌دید. پس رانندهٔ ثبت‌شده کارشناس **نیست**، مگر واقعاً عملی به نامش
-     * خورده باشد (کسی که هر دو نقش را دارد پنلش را از دست نمی‌دهد).
-     */
-    const hasTechVisits = inTechBand
+    const techVisits = inTechBand && (staff || surgeon)
       ? (await this.prisma.visit.count({ where: { techId: id } })) > 0
       : false;
-
-    return {
-      // پرتالِ راننده بدونِ رکوردِ نیرو صفحهٔ خطاست — حتی برای سوپرادمین.
-      transport: !!staff,
-      surgeon: !!surgeon,
-      tech: inTechBand && (!staff || hasTechVisits) && (!surgeon || hasTechVisits),
-    };
+    return eligibleFrom({ level, staff: !!staff, surgeon: !!surgeon, techVisits });
   }
 
   /**

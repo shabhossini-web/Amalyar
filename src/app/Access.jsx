@@ -48,19 +48,7 @@ export default function Access() {
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  /* کارکنان — برای گفتنِ **اثرِ** هر تغییر پیش از اعمال: «۴ نفر دیگر به حسابداری دسترسی ندارند».
-     `false` یعنی نیامد؛ آن‌وقت پرسش بی‌نام می‌آید ولی باز هم می‌آید. */
-  const [people, setPeople] = useState(null);
-  useEffect(() => {
-    let live = true;
-    api('/accounts').then((r) => { if (live) setPeople(Array.isArray(r) ? r : []); }).catch(() => { if (live) setPeople(false); });
-    return () => { live = false; };
-  }, []);
-  /* چه کسی از این در رد می‌شود — همان قاعدهٔ گارد: روشن، سطح ≥ حداقل، و اگر نقشی قید شده
-     همان نقش. سوپرادمین همیشه عبور می‌کند، پس شمرده نمی‌شود. */
-  const reach = (st) => (people ? people.filter((a) => a.status === 'active' && (a.level ?? 0) < 6 && st.enabled
-    && (a.level ?? 0) >= st.minLevel && (!st.roles.length || st.roles.includes(a.jobRole))) : null);
-  const names = (list) => `${list.slice(0, 5).map((a) => a.displayName).join('، ')}${list.length > 5 ? ` و ${faNum(list.length - 5)} نفرِ دیگر` : ''}`;
+  const names = (list) => `${list.slice(0, 5).map((a) => a.name).join('، ')}${list.length > 5 ? ` و ${faNum(list.length - 5)} نفرِ دیگر` : ''}`;
 
   const url = (r) => `/access/${r.kind === 'feature' ? 'features' : 'permissions'}/${r.key}`;
   const write = async (r, body, msg, undo) => {
@@ -82,13 +70,16 @@ export default function Access() {
    */
   const change = async (r, patch, msg) => {
     const before = { minLevel: r.minLevel, enabled: r.enabled, roles: r.roles };
-    const after = { ...before, ...patch };
-    const was = reach(before);
-    const will = reach(after);
+    /* «چه کسی از این در رد می‌شود» را **سرور** می‌گوید (`/preview`، بازبینیِ خصمانه R9؛ قانونِ ۳):
+       همان قاعدهٔ گاردها به‌علاوهٔ صلاحیتِ نقش‌محورِ لانچر — پنلِ کارشناسی برای راننده نیست،
+       پرتالِ جراح فقط برای حسابِ وصل به تعریفِ جراح. نسخهٔ قبلی فرمولِ گارد را این‌جا تکرار
+       می‌کرد و این را نمی‌دید. نیامدنِ پاسخ = پرسشِ بی‌نام، نه بی‌پرسش. */
+    setBusy(`${r.kind}:${r.key}`);
+    const eff = await api(`${url(r)}/preview`, { method: 'POST', body: patch }).catch(() => null);
+    setBusy('');
     let ask = null;
-    if (was && will) {
-      const lost = was.filter((a) => !will.includes(a));
-      const gained = will.filter((a) => !was.includes(a));
+    if (eff && Array.isArray(eff.lost) && Array.isArray(eff.gained)) {
+      const { lost, gained } = eff;
       if (lost.length) {
         ask = {
           title: patch.enabled === false ? `«${r.label}» خاموش شود؟` : `«${r.label}» برای ${faNum(lost.length)} نفر بسته شود؟`,

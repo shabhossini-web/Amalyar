@@ -62,6 +62,20 @@ export class AccessController {
     return this.access.update('permission', key, dto, user);
   }
 
+  /**
+   * اثرِ تغییر پیش از اعمال — چه کسانی در را از دست می‌دهند/به آن می‌رسند (`AccessService.preview`).
+   * `POST` چون بدنه دارد؛ هیچ چیزی نمی‌نویسد.
+   */
+  @Post('features/:key/preview')
+  previewFeature(@Param('key') key: string, @Body() dto: AccessPatchDto) {
+    return this.access.preview('feature', key, dto);
+  }
+
+  @Post('permissions/:key/preview')
+  previewPermission(@Param('key') key: string, @Body() dto: AccessPatchDto) {
+    return this.access.preview('permission', key, dto);
+  }
+
   @Post('features/:key/reset')
   resetFeature(@Param('key') key: string, @CurrentUser() user: any) {
     return this.access.resetOne('feature', key, user);
