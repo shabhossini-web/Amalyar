@@ -554,19 +554,24 @@ const VIEW_KEY = 'amalyar_dashboard_view';
 const readView = () => { try { return localStorage.getItem(VIEW_KEY) === 'cards' ? 'cards' : 'table'; } catch { return 'table'; } };
 const saveView = (v) => { try { localStorage.setItem(VIEW_KEY, v); } catch { /* حالتِ خصوصی — بی‌اثر */ } };
 
+/* `stages` را سرور با وضعیتِ عمل می‌سازد (DF8): لغوشده `null` (بی‌نشان)، و گزارش/فاکتورِ عملِ هنوز انجام‌نشده
+   `null` = خنثی («پس از انجام»)، نه «ندارد». */
+const stageClass = (on) => (on == null ? 'na' : on ? 'ok' : 'miss');
+
 function StageBadges({ v, t }) {
   const s = v.stages;
   if (!s) return null;
+  const later = 'پس از انجامِ عمل';
   const list = [
     ['tech', t.tech, User, s.tech ? (v.techName || 'تعیین شده') : 'تعیین نشده'],
     ['time', 'ساعت', Clock, s.time ? faTime(v.opStartTime) : 'ثبت نشده'],
-    ['report', t.workReport, Book, s.report ? 'رسیده' : 'نرسیده'],
-    ['invoice', 'فاکتور', Money, s.invoice ? 'صادر شده' : 'صادر نشده'],
+    ['report', t.workReport, Book, s.report == null ? later : s.report ? 'رسیده' : 'نرسیده'],
+    ['invoice', 'فاکتور', Money, s.invoice == null ? later : s.invoice ? 'صادر شده' : 'صادر نشده'],
   ];
   return (
     <ul className="db-stages" aria-label="مرحله‌ها">
       {list.map(([k, label, Icon, state]) => (
-        <li key={k} className={s[k] ? 'ok' : 'miss'} title={`${label}: ${state}`} aria-label={`${label}: ${state}`}>
+        <li key={k} className={stageClass(s[k])} title={`${label}: ${state}`} aria-label={`${label}: ${state}`}>
           <Icon width="12" height="12" aria-hidden="true" />
           <span>{label}</span>
         </li>

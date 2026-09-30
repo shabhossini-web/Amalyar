@@ -674,7 +674,7 @@ export class PatientsService {
    * ⚠️ سه کوئری برای کلِ صفحه، نه N تا؛ تعریفِ «گزارش» همان `work-detectors` (سند، و فقط در مطب شرحِ عمل —
    * DF7).
    */
-  private async withStages<T extends { id: number; techId?: number | null; opStartTime?: string | null }>(rows: T[], clinic: boolean) {
+  private async withStages<T extends { id: number; techId?: number | null; opStartTime?: string | null; opStatus?: string | null }>(rows: T[], clinic: boolean) {
     const ids = rows.map((r) => r.id);
     if (!ids.length) return rows;
     const [docs, notes, invoices] = await Promise.all([
@@ -686,9 +686,16 @@ export class PatientsService {
     ]);
     const reported = new Set([...docs, ...notes].map((d) => d.visitId));
     const invoiced = new Set(invoices.map((d) => d.visitId));
+    /* مرحله‌ها با وضعیتِ عمل ساخته می‌شوند، نه در کلاینت (DF8، قانون ۱۵): لغوشده هیچ نشانی ندارد (کاری از آن
+       نمانده)، و گزارش و فاکتور فقط پس از «انجام شد» معنا دارند — برای عملِ آینده `null` (خنثی، «پس از انجام»)
+       نه `false` («ندارد») که هر عملِ هفتهٔ بعد را کهربایی و «جامانده» نشان می‌داد. همان قاعدهٔ فیلترِ «جامانده». */
     return rows.map((r) => ({
       ...r,
-      stages: { tech: !!r.techId, time: !!r.opStartTime, report: reported.has(r.id), invoice: invoiced.has(r.id) },
+      stages: r.opStatus === 'cancelled' ? null : {
+        tech: !!r.techId, time: !!r.opStartTime,
+        report: r.opStatus === 'done' ? reported.has(r.id) : null,
+        invoice: r.opStatus === 'done' ? invoiced.has(r.id) : null,
+      },
     }));
   }
 

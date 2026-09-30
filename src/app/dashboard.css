@@ -344,6 +344,8 @@ a.db-ico { text-decoration: none; }
 }
 .db-stages li.ok { color: var(--green-text); background: rgba(52, 211, 153, .1); border-color: rgba(52, 211, 153, .35); }
 .db-stages li.miss { color: var(--amber-text); background: rgba(251, 191, 36, .08); border-color: rgba(251, 191, 36, .4); border-style: dashed; }
+/* هنوز وقتش نرسیده (گزارش/فاکتورِ عملِ انجام‌نشده، DF8) — خنثی، نه کهربایی «ندارد». */
+.db-stages li.na { color: var(--text3); background: transparent; border-color: rgba(var(--veil-rgb), .16); }
 /* کلیدِ «جدول / کارت» در نوارِ مرتب‌سازی. */
 .db-view { display: inline-flex; gap: 2px; padding: 2px; border-radius: 10px; background: var(--well-bg); border: 1px solid rgba(var(--veil-rgb), .1); }
 .db-view button {
