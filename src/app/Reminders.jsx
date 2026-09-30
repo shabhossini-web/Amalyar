@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { api } from '../lib/api.js';
 import { useAuth } from './auth.jsx';
 import { faDate } from '../lib/jalali.js';
 import './reminders.css';
-import { Alert, Back, Clock, Send } from '../ui/icons.jsx';
+import { Alert, Send } from '../ui/icons.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import { useStagger } from '../ui/stagger.js';
 import { useStatusMap } from './config.jsx';
 
@@ -61,7 +61,6 @@ export default function Reminders() {
   const { user } = useAuth();
   const row = useStagger();
 
-  useEffect(() => { document.title = 'عمل‌یار — یادآوری‌ها'; }, []);
   useEffect(() => {
     if (!toast) return undefined;
     const t = setTimeout(() => setToast(''), 2600);
@@ -120,13 +119,8 @@ export default function Reminders() {
   return (
     <div className="rm">
       <div className="rm-bg" aria-hidden="true" />
-      <header className="rm-head">
-        <Link to="/app" className="rm-back"><Back width="15" height="15" /> سامانه</Link>
-        <div>
-          <h1><Clock width="20" height="20" /> یادآوری‌ها</h1>
-          <p>پیام‌های بیماران و ابلاغ کارشناسان؛ پیامک و ربات اطلاع‌رسانی. پذیرش پیامک توسط سرویس به معنی رسیدن آن به گوشی نیست.</p>
-        </div>
-      </header>
+      {/* `rm-head` فقط قلابِ آزمون است؛ ظاهر از `PageHeader`. */}
+      <PageHeader className="rm-head" tool="reminders" sub="پیام‌های بیماران و ابلاغ کارشناسان؛ پیامک و ربات اطلاع‌رسانی. پذیرش پیامک توسط سرویس به معنی رسیدن آن به گوشی نیست." />
 
       {err && <div className="rm-err"><Alert width="15" height="15" /> {err}</div>}
 

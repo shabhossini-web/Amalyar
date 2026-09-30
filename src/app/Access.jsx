@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { api } from '../lib/api.js';
 import './access.css';
-import { Alert, Back, Caret, CheckCircle, Lock, Search } from '../ui/icons.jsx';
+import { Alert, Caret, CheckCircle, Lock, Search } from '../ui/icons.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import { useConfirm } from '../ui/Confirm.jsx';
 import { useStagger } from '../ui/stagger.js';
 import Toast, { useToast } from '../ui/Toast.jsx';
 import { useConfig, useTerms } from './config.jsx';
 import { roleShown } from '../lib/terms.js';
-import { allTools, toolsOfFeature, useToolTitle } from './tools.jsx';
+import { allTools, toolsOfFeature } from './tools.jsx';
 
 const faNum = (n) => Number(n || 0).toLocaleString('fa-IR');
 
@@ -37,7 +37,6 @@ export default function Access() {
   const [confirmNode, confirm] = useConfirm();
   const row = useStagger();
 
-  const { label: title } = useToolTitle('access');
   const t = useTerms();
   const { vertical } = useConfig();
 
@@ -152,16 +151,10 @@ export default function Access() {
   return (
     <div className="ax">
       <div className="ax-bg" aria-hidden="true" />
-      <header className="ax-head">
-        <Link to="/app" className="ax-back"><Back width="15" height="15" /> سامانه</Link>
-        <div>
-          <h1>{title}</h1>
-          <p>
-            هر ردیف یک در است و شش ستون شش سطح. ستونِ روشن یعنی آن سطح و
-            بالاترش این در را باز می‌کنند. هر تغییر پیش از اعمال می‌گوید روی چه کسانی اثر دارد.
-          </p>
-        </div>
-      </header>
+      <PageHeader
+        tool="access"
+        sub="هر ردیف یک در است و شش ستون شش سطح. ستونِ روشن یعنی آن سطح و بالاترش این در را باز می‌کنند. هر تغییر پیش از اعمال می‌گوید روی چه کسانی اثر دارد."
+      />
 
       {err && <div className="ax-err"><Alert width="15" height="15" /> {err}</div>}
 

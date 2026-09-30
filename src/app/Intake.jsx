@@ -10,7 +10,7 @@ import { api, apiBlobUrl } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso } from '../lib/jalali.js';
 import './intake-admin.css';
 import './dashboard.css'; // bl-mini / db-hint
-import { Alert, Back, Bank, CheckCircle, Close, Copy, Doctor, External, Eye, Form, Hospital, Pencil, Plus, Scalpel, Search, Send, Trash, User } from '../ui/icons.jsx';
+import { Alert, Bank, CheckCircle, Close, Copy, Doctor, External, Eye, Form, Hospital, Pencil, Plus, Scalpel, Search, Send, Trash, User } from '../ui/icons.jsx';
 import { ThingPopups, useThings } from './thing-popups.jsx';
 import { prefersReducedMotion } from '../lib/utils.js';
 import { group3, numToWordsFa, parseMoney } from '../lib/money.js';
@@ -19,7 +19,7 @@ import Overlay from '../ui/Overlay.jsx';
 import JDate from './JDate.jsx';
 import TimePick from '../ui/TimePick.jsx';
 import { useStagger } from '../ui/stagger.js';
-import { useToolTitle } from './tools.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 /* ⚠️ برای شماره‌ی موبایل `faNum` **غلط** است: `Number` صفرِ اول را می‌خورد و
@@ -74,8 +74,6 @@ export default function IntakeAdmin() {
   const things = useThings({ toast: setToast });
   const row = useStagger();
 
-  /* نامِ صفحه = نامِ کاشی از کاتالوگ («ثبت‌نام‌های آنلاین») — بازبینیِ UX، shell-17. */
-  const { label: title } = useToolTitle('formgen');
   useEffect(() => {
     if (!toast) return undefined;
     const t = setTimeout(() => setToast(''), 2400);
@@ -148,13 +146,8 @@ export default function IntakeAdmin() {
   return (
     <div className="ia">
       <div className="ia-bg" aria-hidden="true" />
-      <header className="ia-head">
-        <Link to="/app" className="ia-back"><Back width="15" height="15" /> سامانه</Link>
-        <div>
-          <h1>{title}</h1>
-          <p>فرم‌هایی که بیماران از لینکِ عمومی پر کرده‌اند. تا تأیید نشوند، مراجعه‌ای ساخته نمی‌شود.</p>
-        </div>
-      </header>
+      {/* نامِ صفحه = نامِ کاشی از کاتالوگ («ثبت‌نام‌های آنلاین») — بازبینیِ UX، shell-17. */}
+      <PageHeader tool="formgen" sub="فرم‌هایی که بیماران از لینکِ عمومی پر کرده‌اند. تا تأیید نشوند، مراجعه‌ای ساخته نمی‌شود." />
 
       {/* لینک‌های عمومی — همان چیزی که در بیو و کانال گذاشته می‌شود. */}
       <section className="ia-links">

@@ -2,6 +2,8 @@
 .ac {
   min-height: 100vh; background: var(--bg); color: var(--text1);
   padding: 20px 16px 64px; position: relative; overflow-x: hidden;
+  /* عرضِ محتوا = «فهرست/جدول»ِ استاندارد (shell-15)؛ سربرگ، نوارِ تب و بلوک‌ها از همین می‌خوانند. */
+  --page-w: var(--maxw);
 }
 .ac * { box-sizing: border-box; }
 .ac-bg {
@@ -12,19 +14,9 @@
 }
 .ac > *:not(.ac-bg) { position: relative; }
 
-.ac-head { display: flex; align-items: flex-start; gap: 14px; max-width: 940px; margin: 0 auto 18px; }
-.ac-back {
-  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
-  color: var(--text1); text-decoration: none; font-size: 12px;
-  padding: 9px 13px; border-radius: 11px;
-  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .24);
-}
-.ac-head h1 { font-size: clamp(21px, 4vw, 28px); margin: 0 0 5px; }
-.ac-head p { margin: 0; font-size: 12px; color: var(--text3); line-height: 1.9; }
-
 .ac-toolbar {
   display: flex; flex-wrap: wrap; align-items: center; gap: 9px;
-  max-width: 940px; margin: 0 auto 12px;
+  max-width: var(--page-w); margin: 0 auto 12px;
 }
 .ac-search {
   flex: 1 1 240px; min-width: 0; padding: 12px 14px; border-radius: 12px; font: inherit; font-size: 13px;
@@ -43,7 +35,7 @@
    پیکسلی می‌چید؛ روی موبایل از هر دو لبهٔ صفحه بیرون می‌زد (گزارشِ کاربر،
    تبِ سهامداران). حذف شد؛ تعریفِ واقعیِ کارت پایین است. */
 
-.ac-list { display: grid; gap: 9px; max-width: 940px; margin: 0 auto; }
+.ac-list { display: grid; gap: 9px; max-width: var(--page-w); margin: 0 auto; }
 .ac-empty {
   padding: 26px 16px; text-align: center; font-size: 12.5px; color: var(--text3);
   border-radius: 15px; background: rgba(var(--surface-rgb), .55); border: 1px dashed rgba(var(--brand-soft-rgb), .2);
@@ -103,7 +95,7 @@
 
 /* ── مخصوصِ حسابداری ── */
 
-.ac-add, .ac-list { max-width: 940px; margin: 0 auto 16px; }
+.ac-add, .ac-list { max-width: var(--page-w); margin: 0 auto 16px; }
 .ac-add {
   padding: 16px; border-radius: 18px;
   background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .1);

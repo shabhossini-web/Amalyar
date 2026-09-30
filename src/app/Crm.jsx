@@ -4,7 +4,8 @@ import { motion } from 'framer-motion';
 import { api, apiBlobUrl } from '../lib/api.js';
 import { faDate, J_MONTHS } from '../lib/jalali.js';
 import './crm.css';
-import { Alert, Back, Chart, Star } from '../ui/icons.jsx';
+import { Alert, Star } from '../ui/icons.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import { useStagger } from '../ui/stagger.js';
 import { useConfig, useStatusMap, useTerms } from './config.jsx';
 import Tabs from '../ui/Tabs.jsx';
@@ -256,8 +257,6 @@ export default function Crm() {
   const [err, setErr] = useState('');
   const row = useStagger();
 
-  /* نام از واژه‌نامهٔ حوزه — کاشیِ لانچر همان `t.crm` را می‌خواند (قانونِ ۲۴؛ clinic-daily-23). */
-  useEffect(() => { document.title = `عمل‌یار — ${t.crm}`; }, [t.crm]);
   useEffect(() => {
     api('/intake/analytics').then(setData).catch((e) => setErr(e.message));
     api('/intake/unfollowed').then(setUnf).catch((e) => setErr(e.message));
@@ -270,15 +269,14 @@ export default function Crm() {
   return (
     <div className="crm">
       <div className="crm-bg" aria-hidden="true" />
-      <header className="crm-head">
-        <Link to="/app" className="crm-back"><Back width="15" height="15" /> سامانه</Link>
-        <div>
-          <h1><Chart width="20" height="20" /> {t.crm}</h1>
-          <p>{company
-            ? 'کدام جراح و بیمارستان کار می‌فرستد و روندش، و نظرِ بیماران در نظرسنجی‌ها.'
-            : 'نتیجهٔ نظرسنجی‌ها و پرسش‌نامه‌های زیرپرونده، و این‌که بیماران از کجا می‌آیند.'}</p>
-        </div>
-      </header>
+      {/* نام از واژه‌نامهٔ حوزه — کاشیِ لانچر همان `t.crm` را می‌خواند (قانونِ ۲۴؛ clinic-daily-23).
+          `crm-head` فقط قلابِ آزمون است؛ ظاهر از `PageHeader`. */}
+      <PageHeader
+        className="crm-head" tool="crm"
+        sub={company
+          ? 'کدام جراح و بیمارستان کار می‌فرستد و روندش، و نظرِ بیماران در نظرسنجی‌ها.'
+          : 'نتیجهٔ نظرسنجی‌ها و پرسش‌نامه‌های زیرپرونده، و این‌که بیماران از کجا می‌آیند.'}
+      />
 
       {err && <div className="crm-err"><Alert width="15" height="15" /> {err}</div>}
       {!data && !err && <div className="crm-empty">در حال بارگذاری…</div>}

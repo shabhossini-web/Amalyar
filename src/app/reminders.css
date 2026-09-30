@@ -1,34 +1,26 @@
 /* دفترِ یادآوری‌ها. */
-.rm { position: relative; min-height: 100dvh; padding: 16px 14px 40px; color: var(--text1); }
+/* عرضِ محتوا = «فهرست/جدول»ِ استاندارد (shell-15)؛ سربرگ و بلوک‌ها از `--page-w` می‌خوانند. */
+.rm { position: relative; min-height: 100dvh; padding: 16px 14px 40px; color: var(--text1); --page-w: var(--maxw); }
 .rm-bg {
   position: fixed; inset: 0; z-index: -1;
   background:
     radial-gradient(900px 520px at 50% -10%, rgba(var(--brand-rgb), .15), transparent 60%),
     var(--bg);
 }
-.rm-head { max-width: 880px; margin: 0 auto 14px; }
-.rm-back {
-  display: inline-flex; align-items: center; gap: 6px; margin-bottom: 10px;
-  font-size: 12.5px; text-decoration: none; color: var(--text2);
-}
-.rm-back:hover { color: var(--brand-2); }
-.rm-head h1 { display: flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 900; }
-.rm-head p { margin-top: 4px; font-size: 12.5px; color: var(--text2); }
-
 .rm-err {
-  display: flex; align-items: center; gap: 7px; max-width: 880px; margin: 0 auto 12px;
+  display: flex; align-items: center; gap: 7px; max-width: var(--page-w); margin: 0 auto 12px;
   padding: 10px 13px; border-radius: 12px; font-size: 12.5px;
   color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
 }
 .rm-empty {
-  max-width: 880px; margin: 0 auto; padding: 26px 16px; text-align: center;
+  max-width: var(--page-w); margin: 0 auto; padding: 26px 16px; text-align: center;
   font-size: 13px; color: var(--text3);
   border: 1px dashed rgba(var(--veil-rgb), .12); border-radius: 16px;
 }
 
 .rm-bar {
   display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap;
-  max-width: 880px; margin: 0 auto 12px;
+  max-width: var(--page-w); margin: 0 auto 12px;
 }
 .rm-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
 .rm-tabs button {
@@ -51,7 +43,7 @@
 }
 .rm-sweep:disabled { opacity: .6; cursor: default; }
 
-.rm-list { display: grid; gap: 9px; max-width: 880px; margin: 0 auto; }
+.rm-list { display: grid; gap: 9px; max-width: var(--page-w); margin: 0 auto; }
 .rm-row {
   padding: 11px 14px; border-radius: 15px;
   background: rgba(var(--veil-rgb), .045);
@@ -124,7 +116,7 @@
 }
 .rm-more:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 6px; }
 .rm-warn {
-  display: flex; align-items: center; flex-wrap: wrap; gap: 6px; max-width: 880px; margin: 0 auto 10px;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 6px; max-width: var(--page-w); margin: 0 auto 10px;
   padding: 9px 12px; border-radius: 12px; font-size: 12.5px; color: var(--amber-text);
   background: rgba(251, 191, 36, .08); border: 1px solid rgba(251, 191, 36, .35);
 }
