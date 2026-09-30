@@ -1,4 +1,5 @@
 import { HospitalDirectoryModule } from '../catalog/hospital-directory.module';
+import { clientIp } from '../common/client-ip';
 import { HospitalDirectoryService } from '../catalog/hospital-directory.service';
 import { TenantMigratorService } from '../tenant/tenant-migrator.service';
 import {
@@ -58,10 +59,12 @@ function readCookie(req: Request, name: string): string | null {
   return null;
 }
 
+/**
+ * نشانیِ بازدیدکننده برای سطل‌های سقفِ نرخ و ممیزیِ پنل — **همان `clientIp`** (بستهٔ PS، PS10): تهِ
+ * `X-Forwarded-For` که Traefik می‌افزاید، نه خانهٔ اول که خودِ فرستنده می‌نویسد و با هر درخواست سطلِ تازه می‌گرفت.
+ */
 function requestIp(req: Request): string {
-  const forwarded = req.headers['x-forwarded-for'];
-  const first = Array.isArray(forwarded) ? forwarded[0] : forwarded?.split(',')[0];
-  return (first || req.ip || 'unknown').trim().slice(0, 128);
+  return clientIp(req);
 }
 
 /** Hostِ همین درخواستِ پنل — تا نشانیِ خودِ پنل هرگز به شرکتی داده نشود. */
@@ -283,6 +286,15 @@ export class PlatformAuthService {
     return phone && config.phones.has(phone) ? phone : null;
   }
 
+  /** یک خانه از پنج خانهٔ تلاشِ یک کد — اتمی؛ خانه نماند ← همان خطای عام (PS10). */
+  private async takeAttempt(id: string) {
+    const slot = await this.control.platformOtp.updateMany({
+      where: { id, consumedAt: null, attempts: { lt: OTP_MAX_ATTEMPTS } },
+      data: { attempts: { increment: 1 } },
+    });
+    if (!slot.count) throw new UnauthorizedException('کد تأیید نامعتبر یا منقضی است');
+  }
+
   /** دامنهٔ کدِ یکبارمصرف — پیاده‌سازیِ خالص در platform.config است. */
   private scopeHash(phone: string, scope: string): string {
     return platformOtpScopeHash(this.config().secret, phone, scope);
@@ -354,8 +366,10 @@ export class PlatformAuthService {
     if (!otp || otp.expiresAt <= new Date() || otp.attempts >= OTP_MAX_ATTEMPTS) {
       throw new UnauthorizedException('کد تأیید نامعتبر یا منقضی است');
     }
+    /* هشدار — شمارشِ تلاش **پیش از** مقایسه و اتمی (بستهٔ PS، PS10؛ الگوی PF4): سنجش و افزایش جدا بودند، پس
+       حدس‌های هم‌زمان همه «۴ تلاش» را می‌خواندند و هر کدام مقایسه می‌شد. */
+    await this.takeAttempt(otp.id);
     if (!equalText(this.hash('otp', `${scopedHash}:${code}`), otp.codeHash)) {
-      await this.control.platformOtp.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } });
       throw new UnauthorizedException('کد تأیید نامعتبر یا منقضی است');
     }
     const consumed = await this.control.platformOtp.updateMany({
@@ -435,12 +449,10 @@ export class PlatformAuthService {
       throw new UnauthorizedException('کد تأیید نامعتبر یا منقضی است');
     }
 
+    /* شمارشِ تلاش پیش از مقایسه و اتمی (PS10) — همان `consumeActionOtp`. */
+    await this.takeAttempt(otp.id);
     const actual = this.hash('otp', `${phoneHash}:${code}`);
     if (!equalText(actual, otp.codeHash)) {
-      await this.control.platformOtp.update({
-        where: { id: otp.id },
-        data: { attempts: { increment: 1 } },
-      });
       throw new UnauthorizedException('کد تأیید نامعتبر یا منقضی است');
     }
 

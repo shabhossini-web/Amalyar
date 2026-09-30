@@ -548,6 +548,55 @@ function fakeAuth({ findDelay = 0, smsDelay = 0, rateLimit = new RateLimitServic
 }
 
 {
+  /* PS10 — پنلِ پلتفرم: سطلِ IP از تهِ X-Forwarded-For (همان `clientIp`؛ خانهٔ اول را خودِ فرستنده می‌نویسد)، و شمارشِ
+     تلاشِ کدِ ورود و کدِ عملیاتِ حساس اتمی و پیش از مقایسه (الگوی PF4) — دو حدسِ هم‌زمان روی کدی که یک تلاش بیشتر
+     ندارد هر دو «۴ تلاش» را می‌خواندند و ششمی هم مقایسه می‌شد. */
+  const bak = { e: process.env.PLATFORM_ADMIN_ENABLED, s: process.env.PLATFORM_ADMIN_SECRET, p: process.env.PLATFORM_ADMIN_PHONES };
+  Object.assign(process.env, { PLATFORM_ADMIN_ENABLED: 'true', PLATFORM_ADMIN_SECRET: 'in-process-platform-secret-with-32-plus-characters', PLATFORM_ADMIN_PHONES: '09120000077' });
+  try {
+    const { PlatformAuthService, PlatformController } = requireServer('./dist/platform/platform.module.js');
+    const ips = [];
+    const ctl = new PlatformController({ requestOtp: async (_p, _r, ip) => { ips.push(ip); return {}; } });
+    await ctl.requestOtp({ phone: '09120000077' }, { headers: { 'x-forwarded-for': '1.2.3.4, 10.90.0.9' }, ip: '127.0.0.1' });
+    ok(ips[0] === '10.90.0.9', `PS10: نشانیِ سطلِ پنلِ پلتفرم تهِ X-Forwarded-For است نه خانهٔ جعل‌شدنیِ اول («${ips[0]}»)`);
+
+    const otps = [];
+    let barrier = null;
+    const pick = (where) => otps.filter((o) => o.id === where.id && (!('consumedAt' in where) || !o.consumedAt) && (where.attempts?.lt === undefined || o.attempts < where.attempts.lt));
+    const control = {
+      platformOtp: {
+        findFirst: async ({ where }) => { const hit = otps.filter((o) => o.phoneHash === where.phoneHash && !o.consumedAt).at(-1); const snap = hit ? { ...hit } : null; if (barrier) await barrier(); return snap; },
+        update: async ({ where, data }) => { const o = otps.find((x) => x.id === where.id); if (data.attempts?.increment) o.attempts += data.attempts.increment; return { ...o }; },
+        updateMany: async ({ where, data }) => { const rows = pick(where); for (const o of rows) { if (data.attempts?.increment) o.attempts += data.attempts.increment; if (data.consumedAt) o.consumedAt = data.consumedAt; } return { count: rows.length }; },
+      },
+      platformSession: { updateMany: async () => ({ count: 0 }), create: async ({ data }) => ({ id: 'ps-in', ...data }) },
+      platformAuditEvent: { create: async () => ({}) },
+    };
+    control.$transaction = async (fn) => fn(control);
+    const svc = new PlatformAuthService(control, {}, new RateLimitService());
+    const race = async (hash, run) => {
+      otps.length = 0;
+      otps.push({ id: 1, phoneHash: hash, codeHash: svc.hash('otp', `${hash}:246802`), expiresAt: new Date(Date.now() + 60_000), attempts: 4, consumedAt: null });
+      let waiting = [];
+      barrier = () => new Promise((r) => { waiting.push(r); if (waiting.length === 2) { waiting.forEach((f) => f()); waiting = []; } });
+      const out = await Promise.allSettled([run('135791', '10.91.0.1'), run('246802', '10.91.0.2')]);
+      barrier = null;
+      return out;
+    };
+    const loginHash = svc.hash('phone', '09120000077');
+    const [la, lb] = await race(loginHash, (code, ip) => svc.verifyOtp('09120000077', undefined, code, ip));
+    ok(la.status === 'rejected' && lb.status === 'rejected' && otps[0].attempts <= 5,
+      `PS10: حدسِ ششمِ هم‌زمانِ کدِ ورودِ پلتفرم حتی با کدِ درست رد شد (${la.status}/${lb.status}، تلاش: ${otps[0].attempts})`);
+    const session = { phoneHash: svc.scopeHash('09120000077', 'login') };
+    const [aa, ab] = await race(svc.scopeHash('09120000077', 'delete:7'), (code, ip) => svc.consumeActionOtp(session, 'delete:7', code, ip));
+    ok(aa.status === 'rejected' && ab.status === 'rejected' && otps[0].attempts <= 5,
+      `PS10: کدِ عملیاتِ حساس هم (${aa.status}/${ab.status}، تلاش: ${otps[0].attempts})`);
+  } finally {
+    for (const [k, v] of [['PLATFORM_ADMIN_ENABLED', bak.e], ['PLATFORM_ADMIN_SECRET', bak.s], ['PLATFORM_ADMIN_PHONES', bak.p]]) if (v === undefined) delete process.env[k]; else process.env[k] = v;
+  }
+}
+
+{
   /* PF5 — درخواستِ کد: پاسخ منتظرِ یافتنِ حساب و ساختنِ کد نمی‌ماند؛ زمانش نمی‌گوید حساب هست یا نه. */
   const { svc, db, account } = fakeAuth({ findDelay: 300 });
   const hit = await inProd(() => timed(() => svc.requestPasswordReset(account.username, '10.81.0.1')));
