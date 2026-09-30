@@ -88,14 +88,23 @@
 .cal-row.s-cancelled { border-inline-start-color: rgba(248, 113, 113, .7); opacity: .6; }
 .cal-time { min-width: 62px; text-align: center; }
 .cal-time b { display: block; font-size: 14px; }
-.cal-time b.none { color: rgba(var(--veil-rgb), .3); }
+/* «ساعت؟» — کم‌رنگ ولی خوانا (`--text3`)، نه خطِ درشتِ کم‌آلفا (company-22). */
+.cal-time b.none { font-size: 12px; font-weight: 600; color: var(--text3); }
+.cal-notime {
+  min-height: 32px; padding: 3px 8px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; color: var(--text3);
+  background: none; border: 1px dashed rgba(var(--veil-rgb), .22); border-radius: 8px;
+}
+.cal-notime:hover { color: var(--text2); border-color: rgba(var(--brand-2-rgb), .5); }
+.cal-notime:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+@media (max-width: 640px) { .cal-notime { min-height: 44px; } }
 .cal-time small { font-size: 10px; color: rgba(var(--veil-rgb), .45); }
 .cal-main { flex: 1; min-width: 0; }
 .cal-main b { display: block; font-size: 13.5px; }
 .cal-main small { display: block; font-size: 11px; color: rgba(var(--veil-rgb), .55); line-height: 1.9; }
 /* رنگِ خامِ #a5b4fc در تمِ روشن محو می‌شد — توکنِ متنِ برند در هر دو تم خوانا است (clinic-daily-14). */
 .cal-tech { color: var(--brand-text) !important; }
-.cal-kind { margin-inline-start: 7px; padding: 1px 7px; border-radius: 7px; font-style: normal; font-size: 9.5px; color: var(--cyan); background: rgba(34, 211, 238, .12); }
+/* `inline-block` + `nowrap`: نامِ دوکلمه‌ایِ خدمت («ایمپلنت و تجهیزات») وسطِ چیپ نشکند و نیمه‌اش زیرِ خطِ بعد نرود. */
+.cal-kind { display: inline-block; white-space: nowrap; margin-inline-start: 7px; padding: 1px 7px; border-radius: 7px; font-style: normal; font-size: 9.5px; color: var(--cyan); background: rgba(34, 211, 238, .12); }
 /* دکمهٔ بازکردنِ مراجعه — «بازکردن» + کد. ⚠️ تا بازبینیِ UX (clinic-daily-14) متنش #c4b5fdِ خام بود:
    در تمِ روشن بنفشِ کم‌رنگ روی بنفش، کنتراستِ ۱٫۳ به ۱، روی تنها راهِ بازکردنِ آن مراجعه. */
 .cal-open {

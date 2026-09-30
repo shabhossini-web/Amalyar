@@ -180,7 +180,8 @@ export default function Calendar() {
               <article key={`ap${a.id}`} className={`cal-appt st-${a.status}`}>
                 <div className="cal-time">
                   {/* ساعت با ارقامِ فارسی — مثلِ میزِ پذیرش و میزِ پزشک (clinic-daily-25). */}
-                  {a.time ? <b dir="ltr">{faTime(a.time)}</b> : a.seq ? <b>#{faNum(a.seq)}</b> : <b className="none">—</b>}
+                  {/* نبودِ ساعت «ساعت؟»ِ کم‌رنگ است نه «—»ِ درشت که شبیهِ دکمهٔ جمع‌کردن بود (company-22). */}
+                  {a.time ? <b dir="ltr">{faTime(a.time)}</b> : a.seq ? <b>#{faNum(a.seq)}</b> : <b className="none" title="ساعت ثبت نشده">ساعت؟</b>}
                 </div>
                 <div className="cal-main">
                   <b>
@@ -253,7 +254,12 @@ export default function Calendar() {
         ) : picked.visits.map((v) => (
           <article key={v.id} className={`cal-row s-${v.opStatus}`}>
             <div className="cal-time">
-              {v.opStartTime ? <b dir="ltr">{faTime(v.opStartTime)}</b> : <b className="none">—</b>}
+              {/* ساعتِ خالی «ساعت؟»ِ کم‌رنگ و لمس‌پذیر — فرمِ همین مراجعه را برای ثبتِ ساعت باز می‌کند (بازبینیِ UX،
+                  company-22). «—»ِ درشتِ قبلی در عمل‌های شرکت، که ساعت اغلب معلوم نیست، شبیهِ دکمهٔ جمع‌کردن بود. */}
+              {v.opStartTime ? <b dir="ltr">{faTime(v.opStartTime)}</b> : canOpen ? (
+                <button type="button" className="cal-notime" onClick={() => things.open({ type: 'visit', id: v.id })}
+                        aria-label={`ثبتِ ساعتِ ${v.fullName}`} title="ساعت ثبت نشده — برای ثبت بزنید">ساعت؟</button>
+              ) : <b className="none" title="ساعت ثبت نشده">ساعت؟</b>}
               {v.opEndTime && <small>تا <bdi dir="ltr">{faTime(v.opEndTime)}</bdi></small>}
             </div>
             <div className="cal-main">
