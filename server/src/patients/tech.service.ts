@@ -142,6 +142,8 @@ export class TechService {
     }) : [];
     return {
       scope, from, to,
+      /* «امروز»ِ مطب — رابط «شروع شد» و «عملِ آینده» را با همین می‌سنجد، نه با ساعتِ گوشی. */
+      today: clinicDateIso(),
       team,
       visits: rows.map((v) => this.shape(v, team)),
       hospitals: duties.map(d => ({

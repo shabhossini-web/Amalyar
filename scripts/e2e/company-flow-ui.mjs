@@ -315,16 +315,24 @@ try {
       ok(true, `توست «موکول شد به ${faDate(later)}»`);
       ok((await visit(ids.b)).opDate?.toISOString().startsWith(later), 'تاریخِ تازه روی سرور نشست');
 
-      /* ج) انجام شد. */
+      /* ج) انجام شد — شروع ثبت شده و پایان خالی: همان‌جا ساعت را می‌پرسد و پایان با «الان» پیش‌پر
+         است (بازبینیِ UX company-15)؛ «انجام شد» پیش از این گام روی سرور نشسته است. */
       sheet = await openStatus(pc);
       await sheet.getByRole('radio', { name: /انجام شد/ }).tap();
       ok((await sheet.locator('.tk-field').count()) === 0 && (await sheet.locator('.tk-save').innerText()).includes('ثبت: انجام شد'), '«انجام شد» کادرِ تاریخ ندارد');
       await sheet.locator('.tk-save').tap();
+      await sheet.locator('.tk-done-note').waitFor();
+      const tp = sheet.locator('.tp-input');
+      const [st, en] = [await tp.nth(0).inputValue(), await tp.nth(1).inputValue()];
+      ok(st === '۱۱:۰۰' && /^[۰-۹]{2}:[۰-۹]{2}$/.test(en), '**پس از «انجام شد» ساعتِ خالی همان‌جا پرسیده شد** — شروع ۱۱:۰۰، پایان با «الان» پیش‌پر', `${st} | ${en}`);
+      ok((await visit(ids.c)).opStatus === 'done', '… و «انجام شد» پیش از پرسشِ ساعت روی سرور نشسته');
+      await sheet.getByRole('button', { name: 'ذخیرهٔ ساعت' }).tap();
       await sheet.waitFor({ state: 'detached' });
       await p.waitForFunction(() => document.querySelector('.tk-toast.on')?.textContent.includes('انجام شد'));
       await card(pc).locator('.tk-tag.ok').waitFor();
       ok(await card(pc).getByRole('button', { name: 'وضعیتِ عمل' }).count() === 0, '**کارت «انجام‌شده» شد و دکمهٔ وضعیت از رویش رفت**');
-      ok((await visit(ids.c)).opStatus === 'done', 'روی سرور «انجام شد»');
+      const cRow = await visit(ids.c);
+      ok(cRow.opStatus === 'done' && /^\d{2}:\d{2}$/.test(cRow.opEndTime ?? ''), 'روی سرور «انجام شد» و ساعتِ پایان هم نشست', cRow.opEndTime);
 
       /* د) لغو — پنجرهٔ مشترکِ دلیل؛ «انصراف» به همان شیت برمی‌گردد. */
       sheet = await openStatus(pd);
