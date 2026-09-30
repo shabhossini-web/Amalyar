@@ -1,25 +1,12 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: active
+status: idle
 branch: claude/ux-sec2-rest
 since: 2026-09-30
-paths:
-  - server/src/auth/
-  - server/src/accounts/
-  - server/src/platform/
-  - server/src/sms/
-  - server/src/common/otp-hash.ts
-  - src/app/Login.jsx
-  - src/app/Users.jsx
-  - scripts/e2e/password-reset.mjs
-  - scripts/e2e/test-accounts.mjs
-  - scripts/e2e/clinical-orders.mjs
-  - scripts/e2e/postop-visit.mjs
-  - scripts/e2e/central-tariffs-ui.mjs
+paths: []
 note: >-
-  بازبینیِ کاملِ UX (۱۱۶ یافته) + بازبینی‌های خصمانه + PS1–PS7/PS12 با #119 رفت. باقی: PS8–PS11ِ دورِ دومِ
-  امنیت (متنِ پیامکِ کدِ ثبت‌نام، ابهامِ نامِ کاربری/موبایل، XFF و شمارشِ اتمیِ پنلِ پلتفرم، کلیدِ HMACِ مشتق) +
-  مقاوم‌کردنِ سه سوییتِ زندهٔ خوابِ ثابت — PRِ کوتاهِ بعدی؛ مسیرهای بالا تا مرجِ آن در دستِ این لِین است.
+  بازبینیِ کاملِ UX (۱۱۶ یافته) + بازبینی‌های خصمانه + دورِ دومِ امنیت (PS1–PS12) در #119 و PRِ تکمیلی رفت.
+  بازِ بعدی منتظرِ تصمیمِ مالک است (لینکِ پیامکِ اولِ ادامهٔ ثبت‌نام) — STATUS.md.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
