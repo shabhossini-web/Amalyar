@@ -51,7 +51,7 @@ try {
   console.log('۱) پاپ‌آپِ تأیید — موجودی کنارِ تعداد');
   {
     const { context, writes, errors } = await mockContext(browser, handler([{ itemId: 9, available: 3 }]));
-    const page = await context.newPage(); page.setDefaultTimeout(8000);
+    const page = await context.newPage(); page.setDefaultTimeout(8000); page.setDefaultNavigationTimeout(30000);
     await page.goto(`${vite.base}/app/intake`, { waitUntil: 'networkidle' });
     await page.locator('.ia-card').first().locator('.ia-ok').click();
     const sheet = page.locator('.ia-sheet'); await sheet.waitFor();
@@ -76,7 +76,7 @@ try {
   console.log('\n۲) بی‌مجوزِ انبار');
   {
     const { context, errors } = await mockContext(browser, handler({ status: 403, body: { message: 'اجازه ندارید' } }));
-    const page = await context.newPage(); page.setDefaultTimeout(8000);
+    const page = await context.newPage(); page.setDefaultTimeout(8000); page.setDefaultNavigationTimeout(30000);
     await page.goto(`${vite.base}/app/intake`, { waitUntil: 'networkidle' });
     await page.locator('.ia-card').first().locator('.ia-ok').click();
     const sheet = page.locator('.ia-sheet'); await sheet.waitFor();
@@ -91,7 +91,7 @@ try {
   console.log('\n۳) پرتالِ جراح — «طبقِ نسخه»');
   {
     const { context, errors } = await mockContext(browser, handler([]));
-    const page = await context.newPage(); page.setDefaultTimeout(8000);
+    const page = await context.newPage(); page.setDefaultTimeout(8000); page.setDefaultNavigationTimeout(30000);
     await page.goto(`${vite.base}/app/surgeon`, { waitUntil: 'networkidle' });
     await page.locator('.sp-list .sp-card').waitFor();
     await page.getByText('دستور جراح و آماده‌سازی بیمار', { exact: true }).click();

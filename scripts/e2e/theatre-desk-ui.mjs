@@ -127,7 +127,7 @@ const open = async (S, { seed = {}, viewport = { width: 390, height: 844 }, from
     } catch { /* سندِ بی‌ذخیره‌سازی */ }
   }, seed);
   const page = await c.context.newPage();
-  page.setDefaultTimeout(8000);
+  page.setDefaultTimeout(8000); page.setDefaultNavigationTimeout(30000);
   if (fromList) {
     await page.goto(`${vite.base}/app/theatre`, { waitUntil: 'networkidle' });
     await page.locator(`[data-visit-id="${VID}"]`).click();

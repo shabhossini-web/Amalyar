@@ -56,7 +56,7 @@ try {
   /* فایلِ مدرک blob است نه JSON — عکسِ یک‌پیکسلی، تا `<img>` واقعاً بار شود. */
   await context.route('**/api/patients/documents/*/file', (route) => route.fulfill({ status: 200, contentType: 'image/png', body: Buffer.from(PNG, 'base64') }));
   const page = await context.newPage();
-  page.setDefaultTimeout(8000);
+  page.setDefaultTimeout(8000); page.setDefaultNavigationTimeout(30000);
   await page.goto(`${vite.base}/app/intake`, { waitUntil: 'networkidle' });
   await page.locator('.ia-card').first().waitFor();
   const card = page.locator('.ia-card').nth(0);
