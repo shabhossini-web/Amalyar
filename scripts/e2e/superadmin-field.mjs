@@ -215,7 +215,8 @@ try {
     await p.waitForSelector(`.tk-card:has-text("عمل${tag}")`, { timeout: 15000 });
   };
   await openTech(page);
-  ok(/دفترِ کارِ/.test(await page.locator('.tk-head h1').innerText()), 'عنوان «دفترِ کارِ کارشناسان» است، نه «دفترِ کارِ» شخصی');
+  ok((await page.locator('.tk-head h1').innerText()).trim() === 'پنل کارشناسی', 'عنوانِ صفحه همان نامِ کاشی است (قانونِ ۲۴)');
+  ok(/^دفترِ کارِ همهٔ/.test((await page.locator('.tk-head p').innerText()).trim()), 'زیرعنوان با «دفترِ کارِ همهٔ …» شروع می‌شود، نه دفترِ کارِ شخصی');
   ok(!/شما/.test(await page.locator('.tk-head p').innerText()), 'زیرعنوان به سوپرادمین «شما» نمی‌گوید');
   const v1Card = page.locator('article.tk-card', { hasText: `عمل${tag}` });
   ok((await v1Card.locator('.tk-owner').innerText()).includes(`یکم${tag}`), 'کارتِ عمل نامِ کارشناسِ صاحبش را دارد');
@@ -256,7 +257,8 @@ try {
   await page.goto(UI + '/app/transport', { waitUntil: 'networkidle' });
   const stopCard = (who) => page.locator('article.tr-card').filter({ has: page.locator('.tr-owner', { hasText: who }) });
   await page.waitForSelector(`.tr-owner:has-text("چهارم${tag}")`, { timeout: 15000 });
-  ok((await page.locator('.tr-head h1').innerText()).includes('همهٔ مسیرها'), 'عنوان «همهٔ مسیرها» است، نه «مسیرِ من»');
+  ok((await page.locator('.tr-head h1').innerText()).trim() === 'حمل‌ونقل', 'عنوانِ صفحه همان نامِ کاشی است (قانونِ ۲۴)');
+  ok(/^همهٔ مسیرها/.test((await page.locator('.tr-head p').innerText()).trim()), 'زیرعنوان با «همهٔ مسیرها» شروع می‌شود، نه «مسیرِ من»');
   ok(await stopCard(`سوم${tag}`).count() === 1 && await stopCard(`چهارم${tag}`).count() === 1, 'توقفِ هر دو راننده، هر کدام با نامِ نیرویش');
   const trChip = (label) => page.locator('.tr-people button', { hasText: label });
   await trChip(`چهارم${tag}`).click();
@@ -327,7 +329,8 @@ try {
   watch(pageA, 'tech');
   await browserLogin(pageA, sessA.accessToken, { ui: UI });
   await openTech(pageA);
-  ok((await pageA.locator('.tk-head h1').innerText()).trim() === 'دفترِ کار', 'کارشناس همان عنوانِ شخصی را می‌بیند');
+  ok((await pageA.locator('.tk-head h1').innerText()).trim() === 'پنل کارشناسی', 'کارشناس هم همان نامِ کاشی را می‌بیند');
+  ok(/^دفترِ کارِ شما/.test((await pageA.locator('.tk-head p').innerText()).trim()), 'و زیرعنوانش «دفترِ کارِ شما» است');
   ok(await pageA.locator('.tk-owner').count() === 0 && await pageA.locator('.tk-people').count() === 0,
     'برای کارشناس نه برچسبِ «مالِ کیست» هست نه فیلترِ نفر');
   ok(await pageA.locator('article.tk-card', { hasText: `پذیرشی${tag}` }).count() === 0, 'عملِ کارشناسِ دیگر در دفترش نیست');
@@ -337,7 +340,8 @@ try {
   await browserLogin(pageD, sessD1.accessToken, { ui: UI });
   await pageD.goto(UI + '/app/transport', { waitUntil: 'networkidle' });
   await pageD.waitForSelector('article.tr-card', { timeout: 15000 });
-  ok((await pageD.locator('.tr-head h1').innerText()).trim() === 'مسیرِ من', 'راننده همان «مسیرِ من» را می‌بیند');
+  ok((await pageD.locator('.tr-head h1').innerText()).trim() === 'حمل‌ونقل', 'راننده هم همان نامِ کاشی را می‌بیند');
+  ok(/^مسیرِ من/.test((await pageD.locator('.tr-head p').innerText()).trim()), 'و زیرعنوانش «مسیرِ من» است');
   ok(await pageD.locator('.tr-owner').count() === 0 && await pageD.locator('.tr-people').count() === 0, 'بی‌برچسبِ نیرو و بی‌فیلتر');
   ok(await pageD.locator('article.tr-card', { hasText: `بیمارستانِ ${tag}` }).count() === 1, 'فقط توقفِ خودش (نه توقفِ رانندهٔ دیگر در همان بیمارستان)');
 
