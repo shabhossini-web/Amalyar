@@ -5,7 +5,7 @@ import { faTime } from '../lib/time.js';
 import { usePlaces } from '../lib/places.js';
 import { useTerms } from './config.jsx';
 import TimePick from '../ui/TimePick.jsx';
-import { Alert, Box, CheckCircle, Close, Hospital, Phone, Send, Truck, User } from '../ui/icons.jsx';
+import { Alert, ArrowDown, ArrowUp, Box, CheckCircle, Close, Hospital, Phone, Send, Truck, User } from '../ui/icons.jsx';
 import './transport-board.css';
 
 const num = (n) => Number(n ?? 0).toLocaleString('fa-IR');
@@ -87,6 +87,7 @@ export default function TransportBoard({ on, onChanged, onToast }) {
         <Card
           key={h.key}
           h={h}
+          on={on}
           terms={terms}
           drivers={drivers}
           runs={runs}
@@ -109,7 +110,7 @@ export default function TransportBoard({ on, onChanged, onToast }) {
   );
 }
 
-function Card({ h, terms, drivers, runs, busy, isOpen, onOpen, onSave, onPatch, onRemoveDelivery, onRemoveTransfer, onPickup }) {
+function Card({ h, on, terms, drivers, runs, busy, isOpen, onOpen, onSave, onPatch, onRemoveDelivery, onRemoveTransfer, onPickup }) {
   const missing = h.visits.length > 0 && !h.hasCargo;
   return (
     <article className={`tb-card${missing ? ' missing' : ''}`}>
@@ -179,7 +180,7 @@ function Card({ h, terms, drivers, runs, busy, isOpen, onOpen, onSave, onPatch, 
       )}
 
       {isOpen
-        ? <Editor h={h} drivers={drivers} busy={busy} onSave={onSave} onCancel={onOpen} />
+        ? <Editor h={h} on={on} drivers={drivers} busy={busy} onSave={onSave} onCancel={onOpen} />
         : <button type="button" className="tb-btn" disabled={busy} onClick={onOpen}>+ تحویلِ تازه</button>}
     </article>
   );
@@ -230,34 +231,55 @@ function Pickup({ h, drivers, busy, onPickup }) {
 }
 
 /** فرمِ یک تحویل: قلم‌ها از انبار، ساعت، تحویل‌گیرنده و راننده. */
-function Editor({ h, drivers, busy, onSave, onCancel }) {
+function Editor({ h, on, drivers, busy, onSave, onCancel }) {
   const places = usePlaces();
   const [q, setQ] = useState('');
   const [lots, setLots] = useState([]);
-  const [picked, setPicked] = useState({});
+  const [picked, setPicked] = useState({}); // lotId → { name, quantity, max, move }
   const [at, setAt] = useState('');
   const [who, setWho] = useState(h.techs[0] ? 'کارشناسِ حاضر' : '');
   const [staffId, setStaffId] = useState(drivers.length === 1 ? String(drivers[0].id) : '');
   const [force, setForce] = useState(false);
   const [msg, setMsg] = useState('');
 
+  /* موجودیِ **آزادِ همان روز** از سرور — همان عددی که «ثبت» با آن سنجیده می‌شود. */
   useEffect(() => {
     let alive = true;
     const t = setTimeout(() => {
-      api(`/stock/lots?q=${encodeURIComponent(q)}&inStock=1`)
+      api(`/routes/board/lots?on=${on}&q=${encodeURIComponent(q)}${h.hospitalId ? `&hospitalId=${h.hospitalId}` : ''}`)
         .then((rows) => { if (alive) setLots(rows); })
         .catch((e) => { if (alive) setMsg(e.message); });
     }, 250);
     return () => { alive = false; clearTimeout(t); };
-  }, [q]);
+  }, [q, on, h.hospitalId]);
 
   const chips = useMemo(() => {
     const seen = new Set();
     return ['کارشناسِ حاضر', ...h.techs.map((t) => t.name), ...places].filter((x) => x && !seen.has(x) && seen.add(x));
   }, [places, h.techs]);
 
-  const lines = Object.entries(picked).map(([id, r]) => ({ lotId: Number(id), quantity: Number(toEnDigits(String(r.quantity))) }));
-  const badQty = lines.some((l) => !Number.isInteger(l.quantity) || l.quantity < 1);
+  /* سقفِ هر قلم: موجودیِ آزاد؛ با «جابجایی» تعدادی که در بیمارستانِ مبدأ هست. */
+  const capOf = (l, move) => (move ? Math.max(0, ...l.inUse.map((u) => u.quantity)) : l.free);
+  const pick = (l, on2, move = false) => setPicked((p) => {
+    const n = { ...p };
+    if (on2) n[l.id] = { name: [l.itemName, l.itemSize].filter(Boolean).join(' '), quantity: 1, max: capOf(l, move), move };
+    else delete n[l.id];
+    return n;
+  });
+  const setQty = (id, v) => setPicked((p) => {
+    const r = p[id];
+    const raw = toEnDigits(String(v)).replace(/[^\d]/g, '');
+    return { ...p, [id]: { ...r, quantity: raw === '' ? '' : Math.min(Number(raw), r.max) } };
+  });
+  const step = (id, d) => setPicked((p) => {
+    const r = p[id];
+    const n = Math.max(1, Math.min(r.max, (Number(r.quantity) || 0) + d));
+    return { ...p, [id]: { ...r, quantity: n } };
+  });
+
+  const lines = Object.entries(picked).map(([id, r]) => ({ lotId: Number(id), quantity: Number(r.quantity), ...(r.move ? { move: true } : {}) }));
+  const badQty = Object.values(picked).some((r) => !Number.isInteger(Number(r.quantity)) || Number(r.quantity) < 1 || Number(r.quantity) > r.max);
+  const needsDriver = Object.values(picked).some((r) => r.move) && !staffId;
 
   const submit = async () => {
     setMsg('');
@@ -272,19 +294,35 @@ function Editor({ h, drivers, busy, onSave, onCancel }) {
         <input value={q} disabled={busy} onChange={(e) => setQ(e.target.value)} placeholder="مثلاً ۱۲۳۴۵ یا ست کامل" />
       </label>
       <div className="tb-lots">
-        {lots.slice(0, 30).map((l) => (
-          <label key={l.id} className={`tb-lot${picked[l.id] ? ' on' : ''}${l.expired ? ' off' : ''}`}>
-            <input
-              type="checkbox"
-              checked={!!picked[l.id]}
-              disabled={busy || l.expired}
-              onChange={(e) => setPicked((p) => { const n = { ...p }; if (e.target.checked) n[l.id] = { name: l.itemName, quantity: 1 }; else delete n[l.id]; return n; })}
-            />
-            <span>{l.itemName}</span>
-            <em dir="ltr">{l.serialNo || l.lotNo}</em>
-            <small>موجودی {num(l.quantity)}</small>
-          </label>
-        ))}
+        {lots.slice(0, 30).map((l) => {
+          const away = l.free < 1 && l.returnable && l.inUse.length > 0;
+          const none = l.free < 1 && !away;
+          const sel = picked[l.id];
+          return (
+            <div key={l.id} className={`tb-lot-wrap${sel ? ' on' : ''}`}>
+              <label className={`tb-lot${sel ? ' on' : ''}${none || (away && !sel) ? ' off' : ''}`}>
+                <input
+                  type="checkbox"
+                  checked={!!sel}
+                  disabled={busy || none || (away && !sel)}
+                  onChange={(e) => pick(l, e.target.checked)}
+                />
+                <span>{[l.itemName, l.itemSize].filter(Boolean).join(' ')}</span>
+                <em dir="ltr">{l.serialNo || l.lotNo}</em>
+                <small className={l.free < 1 ? 'tb-out' : ''}>{l.free < 1 ? 'آزاد نیست' : `آزاد ${num(l.free)}`}</small>
+              </label>
+              {away && (
+                <div className="tb-away">
+                  <p><Alert width="12" height="12" /> این روز در {l.inUse.map((u) => `${u.hospitalName}${u.plannedAt ? ` (${faTime(u.plannedAt)})` : ''}`).join('، ')} است</p>
+                  <label className="tb-move">
+                    <input type="checkbox" checked={!!sel?.move} disabled={busy} onChange={(e) => pick(l, e.target.checked, true)} />
+                    <span>جابجایی بین بیمارستان‌ها — جمع‌آوری از {l.inUse[0].hospitalName} و تحویل به {h.name}</span>
+                  </label>
+                </div>
+              )}
+            </div>
+          );
+        })}
         {lots.length === 0 && <span className="tb-none">موردی در انبار پیدا نشد</span>}
       </div>
 
@@ -292,16 +330,23 @@ function Editor({ h, drivers, busy, onSave, onCancel }) {
         <div className="tb-picked">
           {Object.entries(picked).map(([id, r]) => (
             <span key={id} className="tb-chip">
-              {r.name}
-              <input
-                aria-label={`تعدادِ ${r.name}`} inputMode="numeric" value={r.quantity} disabled={busy}
-                onChange={(e) => setPicked((p) => ({ ...p, [id]: { ...p[id], quantity: toEnDigits(e.target.value) } }))}
-              />
+              {r.name}{r.move ? ' (جابجایی)' : ''}
+              <span className="tb-qty">
+                <button type="button" disabled={busy || Number(r.quantity) >= r.max} onClick={() => step(id, 1)} aria-label={`یکی بیشتر از ${r.name}`}><ArrowUp width="13" height="13" /></button>
+                <input
+                  aria-label={`تعدادِ ${r.name}`} inputMode="numeric" value={r.quantity} disabled={busy}
+                  onChange={(e) => setQty(id, e.target.value)}
+                  onBlur={() => { if (!Number(r.quantity)) setQty(id, 1); }}
+                />
+                <button type="button" disabled={busy || Number(r.quantity) <= 1} onClick={() => step(id, -1)} aria-label={`یکی کمتر از ${r.name}`}><ArrowDown width="13" height="13" /></button>
+              </span>
+              <small>از {num(r.max)}</small>
               <button type="button" disabled={busy} onClick={() => setPicked((p) => { const n = { ...p }; delete n[id]; return n; })} aria-label="حذف"><Close width="12" height="12" /></button>
             </span>
           ))}
         </div>
       )}
+      {needsDriver && <p className="tb-msg">برای جابجایی بین بیمارستان‌ها راننده را انتخاب کنید.</p>}
 
       <div className="tb-form inline">
         <TimePick label="ساعتِ تحویل" value={at} onChange={setAt} disabled={busy} />
@@ -328,7 +373,7 @@ function Editor({ h, drivers, busy, onSave, onCancel }) {
       {force && <p className="tb-msg">اگر خطای بالا تعارضِ دستگاه است و عمدی است، دوباره «ثبتِ تحویل» را بزنید تا با تأییدِ صریح ثبت شود.</p>}
 
       <div className="tb-actions">
-        <button type="button" className="tb-btn primary" disabled={busy || badQty || (lines.length === 0 && !staffId)} onClick={submit}>ثبتِ تحویل</button>
+        <button type="button" className="tb-btn primary" disabled={busy || badQty || needsDriver || (lines.length === 0 && !staffId)} onClick={submit}>ثبتِ تحویل</button>
         <button type="button" className="tb-btn ghost" disabled={busy} onClick={onCancel}>انصراف</button>
       </div>
     </div>

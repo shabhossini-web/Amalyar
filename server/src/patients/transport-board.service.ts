@@ -4,6 +4,8 @@ import { AuditService } from '../audit/audit.service';
 import { InventoryService } from './inventory.service';
 import { normalizeTime, RoutesService } from './routes.service';
 import { OTHER_PX, procedureLabel } from './visit-coding';
+import { RETURNABLE } from './assets.service';
+import { balanceByLocation } from './stock-math';
 
 const DAY = 24 * 60 * 60 * 1000;
 const dayOf = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
@@ -12,8 +14,9 @@ const fullName = (p?: { firstName: string; lastName: string } | null) => (p ? `$
 export type PlanDeliveryDto = {
   on: string;
   hospitalId: number;
-  /** خالی = فقط ساعت/تحویل‌گیرنده/راننده عوض می‌شود. */
-  lines?: { lotId: number; quantity: number }[];
+  /** خالی = فقط ساعت/تحویل‌گیرنده/راننده عوض می‌شود.
+   *  `move`: دستگاه/ستی که همان روز در بیمارستانِ دیگری است از آن‌جا جمع و به این‌جا آورده شود. */
+  lines?: { lotId: number; quantity: number; move?: boolean }[];
   plannedAt?: string;
   handedTo?: string;
   /** راننده؛ خالی = هنوز راننده ندارد. */
@@ -164,6 +167,78 @@ export class TransportBoardService {
   }
 
   /**
+   * موجودیِ **آزادِ** هر لات برای یک روز — همان عددی که «ثبتِ تحویل» با آن سنجیده می‌شود.
+   *
+   * - `available`: آنچه همین حالا در انبارِ خودِ لات است (از دفترِ حرکت‌ها).
+   * - رزرو: حواله‌های **برنامه‌ریزی‌شده**ای که از همان انبار بیرون می‌روند و هنوز ارسال نشده‌اند.
+   *   هر تحویلِ ثبت‌شده همین‌جا از موجودیِ آزاد کم می‌شود؛ حرکتِ واقعیِ انبار هنگامِ ارسال است.
+   *   ⚠️ ست و دستگاه برمی‌گردند، پس فقط رزروِ **همان روز** حساب می‌شود (دستگاهی که سه‌شنبه
+   *   جای دیگری است دوشنبه آزاد است)؛ مصرفی برنمی‌گردد و هر رزروِ ارسال‌نشده‌اش کم می‌شود.
+   * - `inUse`: ست/دستگاهی که همان روز به بیمارستانِ دیگری می‌رود یا رفته — پایهٔ «جابجایی».
+   */
+  async availability(lotIds: number[], on: Date | string, forHospitalId?: number | null) {
+    const [from, to] = this.bounds(on);
+    const ids = [...new Set(lotIds.map(Number).filter((x) => Number.isInteger(x) && x > 0))];
+    const out = new Map<number, { lotId: number; name: string; returnable: boolean; available: number; reserved: number; free: number; inUse: any[] }>();
+    if (!ids.length) return out;
+    const [lots, sums, home, transfers] = await Promise.all([
+      this.prisma.stockLot.findMany({ where: { id: { in: ids } }, include: { item: { select: { name: true, size: true, assetKind: true } } } }),
+      this.prisma.stockMovement.groupBy({ by: ['lotId', 'location'], where: { lotId: { in: ids } }, _sum: { quantity: true } }),
+      this.inventory.home(),
+      this.prisma.stockTransfer.findMany({
+        where: { status: { in: ['planned', 'sent'] } },
+        select: {
+          id: true, code: true, status: true, plannedFor: true, fromLocation: true, toLocation: true, hospitalId: true, plannedLines: true,
+          hospital: { select: { name: true } }, stop: { select: { id: true, plannedAt: true } },
+          movements: { where: { kind: 'transfer', quantity: { gt: 0 } }, select: { lotId: true, quantity: true, location: true } },
+        },
+      }),
+    ]);
+    for (const lot of lots) {
+      const rows = sums.filter((x) => x.lotId === lot.id).map((x) => ({ quantity: x._sum.quantity ?? 0, location: x.location }));
+      const homeOf = lot.location ?? home;
+      out.set(lot.id, {
+        lotId: lot.id,
+        name: [lot.item.name, lot.item.size].filter(Boolean).join(' ') + (lot.serialNo ? ` (${lot.serialNo})` : ''),
+        returnable: RETURNABLE.includes(lot.item.assetKind ?? 'consumable'),
+        available: balanceByLocation(rows, homeOf).get(homeOf) ?? 0,
+        reserved: 0, free: 0, inUse: [],
+      });
+    }
+    for (const t of transfers) {
+      const sameDay = !!t.plannedFor && t.plannedFor >= from && t.plannedFor < to;
+      const lines: { lotId: number; quantity: number }[] = t.status === 'planned'
+        ? ((t.plannedLines as any[] | null) ?? []).map((l) => ({ lotId: Number(l.lotId), quantity: Number(l.quantity) }))
+        : t.movements.filter((m) => m.location === t.toLocation).map((m) => ({ lotId: m.lotId, quantity: m.quantity }));
+      for (const l of lines) {
+        const a = out.get(l.lotId);
+        if (!a) continue;
+        const lot = lots.find((x) => x.id === l.lotId)!;
+        const fromHome = t.fromLocation === (lot.location ?? home);
+        if (t.status === 'planned' && fromHome && (!a.returnable || sameDay)) a.reserved += l.quantity;
+        if (a.returnable && sameDay && t.hospitalId && t.hospitalId !== forHospitalId) {
+          a.inUse.push({ transferId: t.id, code: t.code, hospitalId: t.hospitalId, hospitalName: t.hospital?.name ?? t.toLocation, location: t.toLocation, plannedAt: t.stop?.plannedAt ?? null, quantity: l.quantity, status: t.status });
+        }
+      }
+    }
+    for (const a of out.values()) a.free = Math.max(0, a.available - a.reserved);
+    return out;
+  }
+
+  /** لات‌های قابلِ انتخاب برای تحویلِ یک روز، با موجودیِ آزاد و «کجاست». */
+  async lots(on: Date | string, q?: string, hospitalId?: number | null) {
+    const rows = (await this.inventory.listLots({ q })).filter((r: any) => !r.expired && (r.quantity > 0 || r.available > 0));
+    const av = await this.availability(rows.map((r: any) => r.id), on, hospitalId ?? null);
+    return rows.slice(0, 60).map((r: any) => {
+      const a = av.get(r.id);
+      return {
+        id: r.id, itemName: r.itemName, itemSize: r.itemSize, serialNo: r.serialNo, lotNo: r.lotNo, unit: r.unit,
+        available: a?.available ?? r.available, free: a?.free ?? 0, returnable: !!a?.returnable, inUse: a?.inUse ?? [],
+      };
+    });
+  }
+
+  /**
    * ثبتِ (یا ویرایشِ) تحویلِ یک بیمارستان در یک روز — همهٔ سه ساختار با هم.
    *
    * حواله **اول** ساخته می‌شود: تعارضِ دستگاه (همان دستگاه همان بازه جای دیگر) همین‌جا
@@ -184,18 +259,54 @@ export class TransportBoardService {
     if (stop?.doneAt) throw new BadRequestException('این تحویل انجام شده و ویرایش نمی‌شود');
     if (!stop && !staffId && !lines.length) throw new BadRequestException('برای ثبتِ تحویل دست‌کم یک قلم یا یک راننده لازم است');
 
+    for (const l of lines) {
+      if (!Number.isInteger(Number(l.quantity)) || Number(l.quantity) < 1) throw new BadRequestException('تعدادِ هر قلم باید عددِ صحیحِ مثبت باشد');
+    }
+    // ۰) سقفِ موجودی — پیش از هر نوشتن. هر قلم یا از انبار می‌آید (تا سقفِ آزاد) یا با
+    //    «جابجایی» از بیمارستانِ دیگری که همان روز آن را دارد.
+    const av = await this.availability(lines.map((l) => l.lotId), from, hospital.id);
+    const home: typeof lines = [];
+    const moves: { line: (typeof lines)[number]; src: any }[] = [];
+    for (const l of lines) {
+      const a = av.get(Number(l.lotId));
+      if (!a) throw new NotFoundException('یکی از اقلام در انبار پیدا نشد');
+      const q = Number(l.quantity);
+      if (q <= a.free) { home.push(l); continue; }
+      const where = a.inUse.map((u) => `${u.hospitalName}${u.plannedAt ? ` (${u.plannedAt})` : ''}`).join('، ');
+      if (a.returnable && a.inUse.length && l.move) {
+        const src = a.inUse.find((u) => u.quantity >= q) ?? a.inUse[0];
+        if (q > src.quantity) throw new BadRequestException(`در «${src.hospitalName}» فقط ${src.quantity} عدد از «${a.name}» هست`);
+        moves.push({ line: l, src });
+        continue;
+      }
+      if (a.inUse.length) {
+        throw new BadRequestException(`«${a.name}» در این روز در ${where} است و در انبار آزاد نیست؛ برای آوردنش «جابجایی بین بیمارستان‌ها» را بزنید`);
+      }
+      throw new BadRequestException(`موجودیِ «${a.name}» کافی نیست — آزاد: ${a.free}، درخواست: ${q}`);
+    }
+    if (moves.length && !staffId) throw new BadRequestException('برای جابجایی بین بیمارستان‌ها راننده را مشخص کنید');
+
     // ۱) حواله — با تاریخِ همان روز و وصل به اولین عملِ همان بیمارستان.
-    let transferId: number | null = null;
-    if (lines.length) {
-      const anchor = await this.prisma.visit.findFirst({
-        where: { opDate: { gte: from, lt: new Date(from.getTime() + DAY) }, opStatus: { not: 'cancelled' }, hospitalId: hospital.id, patient: { deletedAt: null } },
-        orderBy: [{ opStartTime: 'asc' }, { id: 'asc' }], select: { id: true },
-      });
+    const anchor = lines.length ? await this.prisma.visit.findFirst({
+      where: { opDate: { gte: from, lt: new Date(from.getTime() + DAY) }, opStatus: { not: 'cancelled' }, hospitalId: hospital.id, patient: { deletedAt: null } },
+      orderBy: [{ opStartTime: 'asc' }, { id: 'asc' }], select: { id: true },
+    }) : null;
+    const transferIds: number[] = [];
+    if (home.length) {
       const t: any = await this.inventory.sendTransfer({
         hospitalId: hospital.id, toLocation: hospital.name, plannedFor: from.toISOString(), planOnly: true,
-        ...(anchor ? { visitId: anchor.id } : {}), lines, force: dto.force === true,
+        ...(anchor ? { visitId: anchor.id } : {}), lines: home.map((l) => ({ lotId: Number(l.lotId), quantity: Number(l.quantity) })), force: dto.force === true,
       }, user);
-      transferId = t.id;
+      transferIds.push(t.id);
+    }
+    // جابجایی: حوالهٔ «بیمارستانِ مبدأ ← این بیمارستان»؛ تعارضِ زمانی عمدی است (همان دستگاه، دو جا).
+    for (const m of moves) {
+      const t: any = await this.inventory.sendTransfer({
+        hospitalId: hospital.id, toLocation: hospital.name, fromLocation: m.src.location, plannedFor: from.toISOString(), planOnly: true,
+        ...(anchor ? { visitId: anchor.id } : {}), lines: [{ lotId: Number(m.line.lotId), quantity: Number(m.line.quantity) }], force: true,
+        notes: `جابجایی از ${m.src.hospitalName} (${m.src.code})`,
+      }, user);
+      transferIds.push(t.id);
     }
 
     // ۲) مسیرِ راننده در همان روز.
@@ -224,11 +335,26 @@ export class TransportBoardService {
       // تغییرِ راننده: توقف به انتهای مسیرِ راننده‌ی تازه می‌رود.
       if (dto.staffId !== undefined && runId && runId !== stop.runId) await this.routes.assignStop(stop.id, runId, user);
     }
-    if (transferId) await this.routes.attach(stop!.id, [transferId], user);
+    if (transferIds.length) await this.routes.attach(stop!.id, transferIds, user);
+
+    // ۴) جمع‌آوری از بیمارستانِ مبدأ در همان مسیر، **پیش از** توقفِ تحویل.
+    for (const m of moves) {
+      const a = av.get(Number(m.line.lotId))!;
+      await this.routes.addStop(runId!, {
+        hospitalId: m.src.hospitalId, kind: 'pickup', plannedAt: dto.plannedAt,
+        notes: `جمع‌آوریِ «${a.name}» × ${m.line.quantity} برای تحویل به ${hospital.name}`,
+      }, user);
+      const run = await this.prisma.transportRun.findUnique({ where: { id: runId! }, include: { stops: { orderBy: { seq: 'asc' }, select: { id: true } } } });
+      const ids = run!.stops.map((x) => x.id);
+      const pick = ids[ids.length - 1];
+      const order = ids.filter((x) => x !== pick);
+      order.splice(Math.max(0, order.indexOf(stop!.id)), 0, pick);
+      await this.routes.reorder(runId!, order, user);
+    }
 
     await this.audit.record({
       actorId: user?.id, action: 'transport.delivery.plan', entityType: 'transport_stop', entityId: stop!.id,
-      after: { hospitalId: hospital.id, on: from, staffId, lines: lines.length },
+      after: { hospitalId: hospital.id, on: from, staffId, lines: lines.length, moves: moves.map((m) => ({ lotId: m.line.lotId, from: m.src.hospitalId })) },
     });
     return this.board(from);
   }

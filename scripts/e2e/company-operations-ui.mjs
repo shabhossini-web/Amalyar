@@ -52,6 +52,11 @@ try {
     else if (path === '/dispatch/roster/preview') body = { programs: [{ techId: 2, name: technician.displayName, text: 'برنامه تست؛ بیمار احتمالی' }] };
     else if (path === '/routes/day') body = { runs: [] };
     else if (path === '/routes/board' && method === 'GET') body = boardState;
+    else if (path === '/routes/board/lots') body = [
+      { id: 3, itemName: 'دستگاه تست', serialNo: 'SERIAL-1', available: 1, free: 1, returnable: true, inUse: [] },
+      { id: 4, itemName: 'دستگاه دوم', serialNo: 'S-2', available: 0, free: 0, returnable: true, inUse: [{ hospitalId: 9, hospitalName: 'بیمارستان آرمان', plannedAt: '08:00', quantity: 1 }] },
+      { id: 5, itemName: 'گاز', lotNo: 'G-1', available: 10, free: 3, returnable: false, inUse: [] },
+    ];
     else if (path === '/routes/board/delivery') { boardState = { ...boardState, hospitals: [{ ...boardState.hospitals[0], hasCargo: true, deliveries: [{ id: 5, kind: 'deliver', plannedAt: null, doneAt: null, handedTo: null, notes: null, runId: 1, staffId: 1, staffName: 'راننده تست', transfers: [{ id: 7, code: 'HV-TEST', status: 'planned', lines: [{ itemName: 'دستگاه تست', serialNo: 'SERIAL-1', quantity: 1 }] }] }] }] }; body = boardState; }
     else if (path === '/stock/lots') body = [{ id: 3, itemId: 4, itemName: 'دستگاه تست', quantity: 1, available: 1, serialNo: 'SERIAL-1' }];
     else if (path === '/stock/transfers') body = { id: 1, code: 'HV-TEST', status: 'planned' };
@@ -119,11 +124,21 @@ try {
   pass('transport board loads the day hospitals with their present technician');
   await page.getByRole('button', { name: '+ تحویلِ تازه' }).click();
   await page.getByRole('checkbox', { name: /دستگاه تست/ }).check();
+  /* سقفِ تعداد = موجودیِ آزاد: دستگاهِ تکی «یکی بیشتر» را بسته دارد. */
+  assert.ok(await page.getByRole('button', { name: 'یکی بیشتر از دستگاه تست' }).isDisabled(), 'quantity stepper stops at the free stock'); pass('quantity stepper stops at the free stock');
+  await page.getByRole('checkbox', { name: /^گاز/ }).check();
+  await page.getByRole('button', { name: 'یکی بیشتر از گاز' }).click();
+  await page.getByRole('button', { name: 'یکی بیشتر از گاز' }).click();
+  assert.ok(await page.getByLabel('تعدادِ گاز').inputValue() === '3' && await page.getByRole('button', { name: 'یکی بیشتر از گاز' }).isDisabled(), 'stepper raises the quantity up to the free stock (3) and no further'); pass('stepper raises the quantity up to the free stock (3) and no further');
+  await page.getByLabel('تعدادِ گاز').fill('9');
+  assert.ok(await page.getByLabel('تعدادِ گاز').inputValue() === '3', 'typing more than the free stock is clamped'); pass('typing more than the free stock is clamped');
+  assert.ok(await page.getByRole('checkbox', { name: /^دستگاه دوم/ }).isDisabled() && await page.getByText(/این روز در بیمارستان آرمان/).count() === 1, 'a device that is at another hospital that day cannot be picked directly'); pass('a device that is at another hospital that day cannot be picked directly');
+  await page.getByRole('checkbox', { name: /جابجایی بین بیمارستان‌ها/ }).check();
   await page.getByLabel('راننده', { exact: true }).last().selectOption('1');
   await page.getByRole('button', { name: 'ثبتِ تحویل', exact: true }).click();
   await page.getByText('تحویل ثبت شد').waitFor();
   const plan = (await waitWrite('/routes/board/delivery')).payload;
-  assert.equal(plan.hospitalId, 1); assert.equal(plan.staffId, 1); assert.deepEqual(plan.lines, [{ lotId: 3, quantity: 1 }]);
+  assert.equal(plan.hospitalId, 1); assert.equal(plan.staffId, 1); assert.deepEqual(plan.lines, [{ lotId: 3, quantity: 1 }, { lotId: 4, quantity: 1, move: true }, { lotId: 5, quantity: 3 }].sort((a, b) => a.lotId - b.lotId));
   assert.equal(writes.some(w => w.path === '/stock/transfers'), false, 'the board never calls the old per-hospital transfer form');
   pass('one save sends transfer lines, driver and hospital together; shipment is not recorded');
   assert.deepEqual(errors, []); pass('mobile journeys have no uncaught browser errors');

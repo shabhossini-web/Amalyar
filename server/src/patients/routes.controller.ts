@@ -35,6 +35,13 @@ export class RoutesController {
     return this.board.board(on ? new Date(on) : new Date());
   }
 
+  /// اقلامِ قابلِ تحویل برای یک روز — موجودیِ آزاد و اینکه ست/دستگاه آن روز کجاست.
+  @RequirePermissions('patients.read')
+  @Get('board/lots')
+  boardLots(@Query('on') on?: string, @Query('q') q?: string, @Query('hospitalId') hospitalId?: string) {
+    return this.board.lots(on ? new Date(on) : new Date(), q, hospitalId ? Number(hospitalId) : null);
+  }
+
   /// ثبتِ تحویلِ یک بیمارستان: حواله + مسیرِ راننده + توقف با یک درخواست.
   @RequirePermissions('patients.update')
   @Post('board/delivery')

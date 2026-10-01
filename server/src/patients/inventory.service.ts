@@ -79,7 +79,7 @@ export class InventoryService {
    * انبارش «انبارِ شرکت» نام دارد نباید در همهٔ صفحه‌ها «انبارِ مرکزی» ببیند.
    * هر جا لات محلِ صریح ندارد، این خوانده می‌شود نه آن ثابت.
    */
-  private home(): Promise<string> {
+  home(): Promise<string> {
     return this.settings.textOr('home_location', HOME_FALLBACK);
   }
 

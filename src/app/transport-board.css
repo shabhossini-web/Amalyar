@@ -73,3 +73,15 @@
 
 .dp-legacy { margin-block-start: 14px; }
 .dp-legacy > summary { cursor: pointer; font-size: 12px; padding: 10px 12px; border-radius: 12px; color: rgba(var(--veil-rgb), .65); background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .1); }
+
+/* موجودیِ آزاد و جابجایی */
+.tb-lot-wrap { display: flex; flex-direction: column; gap: 4px; }
+.tb-lot small.tb-out { color: var(--red-text); }
+.tb-away { margin-inline-start: 28px; display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--amber-text); }
+.tb-away p { display: flex; align-items: center; gap: 4px; margin: 0; }
+.tb-move { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 4px 10px; border-radius: 10px; cursor: pointer; color: var(--text1); border: 1px dashed rgba(245, 158, 11, .45); }
+.tb-qty { display: inline-flex; align-items: center; gap: 2px; }
+.tb-qty button { display: inline-grid; place-items: center; width: 32px; height: 32px; margin: 0; padding: 0; border-radius: 8px; cursor: pointer; color: var(--text1); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .14); }
+.tb-qty button:disabled { opacity: .35; cursor: not-allowed; }
+.tb-qty button:focus-visible { outline: 2px solid rgba(var(--brand-soft-rgb), .8); outline-offset: 1px; }
+.tb-chip small { font-size: 10px; color: rgba(var(--veil-rgb), .5); }

@@ -44,6 +44,9 @@ try {
   const device = await prisma.item.create({ data: { name: 'دستگاه مانیتورینگ', assetKind: 'device' } });
   const lot = await prisma.stockLot.create({ data: { itemId: device.id, serialNo: '12345', location: 'انبار' } });
   await prisma.stockMovement.create({ data: { lotId: lot.id, kind: 'in', quantity: 1, location: 'انبار' } });
+  const gauze = await prisma.item.create({ data: { name: 'گاز استریل', assetKind: 'consumable' } });
+  const glot = await prisma.stockLot.create({ data: { itemId: gauze.id, lotNo: 'G-1', location: 'انبار' } });
+  await prisma.stockMovement.create({ data: { lotId: glot.id, kind: 'in', quantity: 10, location: 'انبار' } });
 
   let b = await board.board(day);
   assert.equal(b.hospitals.length, 2, 'cancelled visit does not create a card');
@@ -78,7 +81,16 @@ try {
   pass('empty delivery, bad time and unknown hospital are rejected before anything is written');
 
   const before = await prisma.transportStop.count();
-  const loose = await board.planDelivery({ on: day, hospitalId: h2.id, staffId: null, lines: [{ lotId: lot.id, quantity: 1 }], force: true }, admin);
+  await assert.rejects(() => board.planDelivery({ on: day, hospitalId: h2.id, staffId: d1.id, lines: [{ lotId: glot.id, quantity: 11 }] }, admin), /موجودی.*آزاد: 10/);
+  await assert.rejects(() => board.planDelivery({ on: day, hospitalId: h2.id, staffId: d1.id, lines: [{ lotId: lot.id, quantity: 1 }] }, admin), /بیمارستان آزاد.*جابجایی/);
+  await assert.rejects(() => board.planDelivery({ on: day, hospitalId: h2.id, lines: [{ lotId: lot.id, quantity: 1, move: true }] }, admin), /راننده/);
+  assert.equal(await prisma.stockTransfer.count(), 1, 'rejected requests write nothing');
+  pass('more than free stock is refused; a device that is at another hospital that day needs an explicit move with a driver');
+
+  const loose = await board.planDelivery({ on: day, hospitalId: h2.id, staffId: null, lines: [{ lotId: glot.id, quantity: 3 }] }, admin);
+  assert.equal((await board.availability([glot.id], day)).get(glot.id).free, 7, 'each registered delivery reduces free stock');
+  assert.equal((await board.availability([glot.id], '2026-10-20')).get(glot.id).free, 7, 'consumables stay reserved on other days too');
+  assert.equal((await board.availability([lot.id], '2026-10-20')).get(lot.id).free, 1, 'a device is free again on a different day');
   const k = loose.hospitals.find(h => h.hospitalId === h2.id);
   assert.equal(k.deliveries.length, 1); assert.equal(k.deliveries[0].staffId, null); assert.equal(loose.summary.noDriver, 1);
   assert.equal(await prisma.transportStop.count(), before + 1);
@@ -89,7 +101,7 @@ try {
   let after = await board.removeTransfer(tId, admin);
   assert.equal(after.hospitals.find(h => h.hospitalId === h2.id).deliveries.length, 0, 'last item of a driverless delivery takes the empty stop with it');
   assert.equal(await prisma.transportStop.count({ where: { id: stopId } }), 0);
-  const second = await board.planDelivery({ on: day, hospitalId: h2.id, lines: [{ lotId: lot.id, quantity: 1 }], force: true }, admin);
+  const second = await board.planDelivery({ on: day, hospitalId: h2.id, lines: [{ lotId: glot.id, quantity: 2 }] }, admin);
   after = await board.removeDelivery(second.hospitals.find(h => h.hospitalId === h2.id).deliveries[0].id, admin);
   assert.equal(after.hospitals.find(h => h.hospitalId === h2.id).deliveries.length, 0);
   assert.equal(await prisma.stockTransfer.count({ where: { hospitalId: h2.id } }), 0, 'removing a delivery removes its planned transfers');
@@ -97,6 +109,19 @@ try {
   await assert.rejects(() => board.removeDelivery(moved.id, admin), /ارسال/);
   await assert.rejects(() => board.removeTransfer(moved.transfers[0].id, admin), /ارسال/);
   pass('planned items can be removed; a shipped transfer can never be deleted from the board');
+
+  await prisma.stockTransfer.updateMany({ where: { stopId: moved.id }, data: { status: 'planned' } });
+  const mv = await board.planDelivery({ on: day, hospitalId: h2.id, staffId: d1.id, plannedAt: '10:00', lines: [{ lotId: lot.id, quantity: 1, move: true }] }, admin);
+  const kd = mv.hospitals.find(h => h.hospitalId === h2.id);
+  assert.equal(kd.deliveries.length, 1); assert.equal(kd.deliveries[0].staffId, d1.id);
+  const mt = await prisma.stockTransfer.findFirst({ where: { hospitalId: h2.id }, orderBy: { id: 'desc' } });
+  assert.equal(mt.fromLocation, 'بیمارستان آزاد'); assert.equal(mt.toLocation, 'بیمارستان کوثر'); assert.equal(mt.status, 'planned');
+  const run1 = await prisma.transportRun.findFirst({ where: { staffId: d1.id }, include: { stops: { orderBy: { seq: 'asc' } } } });
+  const kinds = run1.stops.map(s => `${s.kind}:${s.hospitalId}`);
+  assert.deepEqual(kinds, [`pickup:${h1.id}`, `deliver:${h2.id}`], 'pickup at the source hospital comes before the delivery');
+  assert.match(run1.stops[0].notes, /دستگاه مانیتورینگ.*بیمارستان کوثر/);
+  assert.equal(await prisma.stockMovement.count({ where: { kind: 'transfer' } }), 0, 'moving between hospitals does not touch home stock');
+  pass('move between hospitals: pickup from the first hospital, then delivery to the second, on the same driver run');
 
   const ok = await routes.day(new Date(day));
   assert.equal(ok.runs.length, 2);
