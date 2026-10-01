@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { jalaliMonthRange, toJalali } from '../common/jalali';
 import { OTHER_PX, procedureLabel } from './visit-coding';
+import { RoutesService } from './routes.service';
 
 /**
  * نقش‌هایی که ابلاغِ **per-visit** می‌گیرند.
@@ -36,7 +37,9 @@ export const ASSIGN_ROLES = ['driver', 'courier'] as const;
  */
 @Injectable()
 export class DispatchService {
-  constructor(private prisma: PrismaService, private audit: AuditService) {}
+  /* `routes` اختیاری است چون سوییتِ e2e این سرویس را مستقیم می‌سازد (`profile-workflows`)؛ Nest همیشه پاسش
+     می‌دهد. بی‌آن، حوالهٔ برنامه‌ریزی‌شده در ابلاغِ کارشناس نمی‌آید (رفتارِ پیش از ۱۴۰۵/۰۷/۰۹). */
+  constructor(private prisma: PrismaService, private audit: AuditService, private routes?: RoutesService) {}
 
   /** نیروهای حمل‌ونقلِ فعال — همان‌هایی که در تعاریفِ پایه تعریف شده‌اند. */
   async staff() {
@@ -132,6 +135,7 @@ export class DispatchService {
       },
     });
 
+    await this.routes?.withPlannedLots(visits.flatMap((v: any) => v.stockTransfers));
     return {
       year: jy, month: jm, day: jd,
       visits: visits.map((v) => this.shape(v)),
@@ -139,7 +143,17 @@ export class DispatchService {
   }
 
   private shape(v: any) {
-    const cargo = v.stockTransfers.flatMap((t: any) =>
+    /* ⚠️ حوالهٔ planned (تختهٔ روز) حرکتی ندارد — قلم‌هایش از `plannedLines` (`RoutesService.linesOf`)؛
+       وگرنه ابلاغِ کارشناس «ستِ ارسالی» را خالی می‌گفت و کسری دروغین می‌ساخت (۱۴۰۵/۰۷/۰۹). */
+    const plannedOf = (t: any) => (t.status === 'planned' && this.routes ? this.routes.linesOf(t) : null);
+    const cargo = v.stockTransfers.flatMap((t: any) => plannedOf(t)?.map((l: any) => ({
+      transferCode: t.code,
+      toLocation: t.toLocation,
+      itemName: l.itemName,
+      category: l.category ?? null,
+      lotNo: l.serialNo,
+      quantity: l.quantity,
+    })) ??
       t.movements
         .filter((m: any) => m.location === t.toLocation)
         .map((m: any) => ({
@@ -167,8 +181,15 @@ export class DispatchService {
        جلسه است — دو عمل یعنی اقلامِ هر دو، وگرنه کسریِ عملِ دوم دیده نمی‌شد. */
     const needs = Array.isArray(v.requiredItems) ? v.requiredItems : [];
     const loaded = new Map<number, number>();
-    for (const transfer of v.stockTransfers) for (const move of transfer.movements) {
-      if (move.location === transfer.toLocation && move.lot?.itemId) loaded.set(move.lot.itemId, (loaded.get(move.lot.itemId) ?? 0) + move.quantity);
+    for (const transfer of v.stockTransfers) {
+      const planned = plannedOf(transfer);
+      if (planned) {
+        for (const l of planned) if (l.itemId) loaded.set(l.itemId, (loaded.get(l.itemId) ?? 0) + l.quantity);
+        continue;
+      }
+      for (const move of transfer.movements) {
+        if (move.location === transfer.toLocation && move.lot?.itemId) loaded.set(move.lot.itemId, (loaded.get(move.lot.itemId) ?? 0) + move.quantity);
+      }
     }
     const missing = needs
       .filter((n: any) => (loaded.get(n.itemId) ?? 0) < n.quantity)
@@ -238,6 +259,7 @@ export class DispatchService {
       },
     });
     if (!v) throw new NotFoundException('مراجعه پیدا نشد');
+    await this.routes?.withPlannedLots(v.stockTransfers);
     return { role, roleLabel: JOB_LABELS[role] ?? role, text: briefingText(this.shape(v), v.opDate, role) };
   }
 }

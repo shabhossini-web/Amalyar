@@ -181,21 +181,30 @@ export class RoutesService {
    *
    * حوالهٔ فردا هنوز حرکتی ندارد؛ بدونِ این شاخه، بارِ مسیرِ فردا خالی دیده
    * می‌شد — یعنی دقیقاً همان مسیری که باید چیده شود.
+   *
+   * ⚠️ هر نمایی که «چه چیزی می‌رود» را نشان می‌دهد (پنلِ راننده، پنلِ کارشناس،
+   * ابلاغِ کارشناس) حوالهٔ planned را از همین‌جا می‌خوانَد، نه از `movements`:
+   * تختهٔ روز همهٔ تحویل‌ها را planned می‌سازد و آن نماها فقط شمارهٔ حواله را
+   * بی‌نامِ کالا نشان می‌دادند (۱۴۰۵/۰۷/۰۹).
    */
   linesOf(t: any) {
     if (t.status !== 'planned') {
       return t.movements
         .filter((m: any) => m.location === t.toLocation)
         .map((m: any) => ({
+          itemId: m.lot.itemId ?? null,
           itemName: [m.lot.item.name, m.lot.item.size].filter(Boolean).join(' '),
           assetKind: m.lot.item.assetKind,
+          category: m.lot.item.category ?? null,
           serialNo: m.lot.serialNo || m.lot.lotNo,
           quantity: m.quantity,
         }));
     }
     return ((t.plannedLines as any[] | null) ?? []).map((l) => ({
+      itemId: t.__lots?.[l.lotId]?.itemId ?? null,
       itemName: t.__lots?.[l.lotId]?.name ?? '—',
       assetKind: t.__lots?.[l.lotId]?.assetKind ?? 'consumable',
+      category: t.__lots?.[l.lotId]?.category ?? null,
       serialNo: t.__lots?.[l.lotId]?.serialNo ?? null,
       quantity: Number(l.quantity),
     }));
@@ -518,13 +527,15 @@ export class RoutesService {
     if (!ids.length) return rows;
     const lots = await this.prisma.stockLot.findMany({
       where: { id: { in: [...new Set(ids)] } },
-      include: { item: { select: { name: true, size: true, assetKind: true } } },
+      include: { item: { select: { name: true, size: true, assetKind: true, category: true } } },
     });
     const map: Record<number, any> = {};
     for (const l of lots) {
       map[l.id] = {
+        itemId: l.itemId,
         name: [l.item.name, l.item.size].filter(Boolean).join(' '),
         assetKind: l.item.assetKind,
+        category: l.item.category ?? null,
         serialNo: l.serialNo || l.lotNo,
       };
     }

@@ -173,7 +173,9 @@ export class DefinitionsService {
   // تعریف نمی‌شود. الگو همان جراح است: هویت در Person، نقش در جدولِ خودش.
 
   private static readonly STAFF_INCLUDE = {
-    person: true,
+    /* حسابِ همان شخص — تا در فهرست معلوم باشد کدام نیرو خودش وارد می‌شود (گزارشِ مالک
+       ۱۴۰۵/۰۷/۰۹: دو «test car»، یکی ساختهٔ همین‌جا و یکی حسابِ کاربری، و معلوم نبود کدام کدام است). */
+    person: { include: { account: { select: { username: true, status: true } } } },
     _count: { select: { runs: true } },
   } as const;
 
@@ -197,6 +199,8 @@ export class DefinitionsService {
       vehicle: s.vehicle,
       active: s.active,
       missionCount: s._count.runs,
+      /// نامِ کاربریِ حسابِ همین شخص؛ `null` یعنی رانندهٔ بی‌حساب که فقط پیامکِ برنامه می‌گیرد.
+      account: p.account ? p.account.username ?? 'دارد' : null,
     };
   }
 

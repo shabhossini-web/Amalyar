@@ -39,23 +39,35 @@ export async function seedFeatureRows(db: { setting: any; feature: any }, profil
  * تکرار می‌کرد و این صلاحیت را نمی‌دید: فهرستِ «از دست می‌دهند»ِ پنلِ کارشناسی راننده‌ها را هم
  * می‌شمرد.
  */
-export function eligibleFrom(f: { level: number; staff: boolean; surgeon: boolean; techVisits: boolean }) {
+export function eligibleFrom(f: { level: number; staff: boolean; surgeon: boolean; techVisits: boolean; jobRole?: string | null }) {
   const { staff, surgeon, techVisits: hasTechVisits } = f;
   const inTechBand = f.level >= LEVEL.TECH && f.level <= LEVEL.SUPERVISOR;
+  /* ⚠️ **راننده و پیک فقط کارِ میدانیِ خودشان را می‌بینند** (گزارشِ مالک ۱۴۰۵/۰۷/۰۹، حسابِ
+     «test car»): سطحِ ۲ همان سطحِ کارشناس است، پس میزِ پذیرش، اتاقِ عمل و مسیرِ درمان هم
+     برایشان باز می‌شد — کاشی‌هایی که هیچ ربطی به کارِ راننده ندارند. ملاک **نقشِ شغلی** است
+     نه رکوردِ نیرو، و همان استثنای پنلِ کارشناسی: کسی که واقعاً عملی به نامش خورده یا به
+     تعریفِ جراح وصل است این‌ها را از دست نمی‌دهد. */
+  const fieldOnly = FIELD_ROLES.has(f.jobRole ?? '') && !hasTechVisits && !surgeon;
   return {
     // پرتالِ راننده بدونِ رکوردِ نیرو صفحهٔ خطاست — حتی برای سوپرادمین.
     transport: staff,
     surgeon,
     /* نگهبانِ CI («portals follow permissions») همین جمله را می‌خوانَد — نامِ متغیرها بماند. */
     tech: inTechBand && (!staff || hasTechVisits) && (!surgeon || hasTechVisits),
+    ...Object.fromEntries(CLINICAL_FLOOR.map((k) => [k, !fieldOnly])),
   };
 }
 
+/** نقش‌های میدانی — کارشان مسیر است، نه بیمار. */
+export const FIELD_ROLES = new Set(['driver', 'courier']);
+/** ماژول‌های کفِ بالینیِ سطحِ کارشناس که نقشِ میدانی نمی‌بیند (`eligibleFrom`). */
+const CLINICAL_FLOOR = ['frontdesk', 'theatre', 'pathway', 'waitlist'];
+
 /** ماژول‌هایی که علاوه بر سطح صلاحیتِ نقش هم می‌خواهند (`eligibleFrom`). */
-export const ROLE_GATED = new Set(['transport', 'surgeon', 'tech']);
+export const ROLE_GATED = new Set(['transport', 'surgeon', 'tech', ...CLINICAL_FLOOR]);
 
 /** صلاحیتِ نقش‌محورِ چند حساب با سه کوئری — نه چهار کوئری به‌ازای هر نفر. */
-export async function eligibilityOf(db: any, accounts: { id: number; personId: number | null; level: number }[]) {
+export async function eligibilityOf(db: any, accounts: { id: number; personId: number | null; level: number; jobRole?: string | null }[]) {
   const persons = [...new Set(accounts.map((a) => a.personId).filter((x): x is number => !!x))];
   const ids = accounts.map((a) => a.id);
   const [staff, surgeons, visits] = await Promise.all([
@@ -71,6 +83,7 @@ export async function eligibilityOf(db: any, accounts: { id: number; personId: n
     staff: !!a.personId && staffP.has(a.personId),
     surgeon: !!a.personId && surgeonP.has(a.personId),
     techVisits: techIds.has(a.id),
+    jobRole: a.jobRole ?? null,
   })]));
 }
 
@@ -179,7 +192,7 @@ export class FeaturesService {
     const id = user?.id ?? -1;
     const account = await this.prisma.account.findUnique({
       where: { id },
-      select: { personId: true, level: true },
+      select: { personId: true, level: true, jobRole: true },
     });
     const staff = account?.personId
       ? await this.prisma.transportStaff.findFirst({ where: { personId: account.personId, active: true }, select: { id: true } })
@@ -188,10 +201,11 @@ export class FeaturesService {
     const surgeon = account?.personId ? await this.prisma.surgeon.findFirst({ where: { personId: account.personId, active: true }, select: { id: true } }) : null;
     /* شمارِ عمل‌ها فقط وقتی به کار می‌آید که سطح در بازهٔ کارشناس باشد (`eligibleFrom`). */
     const inTechBand = level >= LEVEL.TECH && level <= LEVEL.SUPERVISOR;
-    const techVisits = inTechBand && (staff || surgeon)
+    const jobRole = account?.jobRole ?? user?.jobRole ?? null;
+    const techVisits = inTechBand && (staff || surgeon || FIELD_ROLES.has(jobRole ?? ''))
       ? (await this.prisma.visit.count({ where: { techId: id } })) > 0
       : false;
-    return eligibleFrom({ level, staff: !!staff, surgeon: !!surgeon, techVisits });
+    return eligibleFrom({ level, staff: !!staff, surgeon: !!surgeon, techVisits, jobRole });
   }
 
   /**

@@ -167,6 +167,18 @@ export class AccountsService {
           create: { personId: row.personId },
         });
       }
+      /* ⚠️ **همان قرار برای راننده و پیک** (گزارشِ مالک ۱۴۰۵/۰۷/۰۹، حسابِ «test car»):
+         نقشِ «راننده» از صفحهٔ کاربران ست می‌شد ولی رکوردِ نیرو ساخته نمی‌شد؛ پس کاشیِ
+         «حمل‌ونقل» برای همان حساب پنهان بود (`eligibleFrom`: `transport: staff`) و پرتالش
+         می‌گفت «به هیچ رانندهٔ ثبت‌شده‌ای وصل نیست». نیروی غیرفعال با همین انتخاب دوباره
+         فعال می‌شود؛ برداشتنِ نقش رکورد را پاک نمی‌کند (مسیرهای گذشته به آن ارجاع دارند). */
+      if (jobRole === 'driver' || jobRole === 'courier') {
+        await tx.transportStaff.upsert({
+          where: { personId: row.personId },
+          update: { role: jobRole, active: true },
+          create: { personId: row.personId, role: jobRole },
+        });
+      }
       return row;
     });
     return this.auth.publicUser(acc);

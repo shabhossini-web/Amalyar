@@ -3193,6 +3193,9 @@ jobs:
       - name: Verify transport board (one save = transfer + driver run + stop per hospital/day)
         run: node scripts/e2e/transport-board.mjs
 
+      - name: Verify a driver account sees its route, its cargo and only its own tiles
+        run: node scripts/e2e/field-role-driver.mjs
+
       - name: Verify isolated test accounts sharing one phone
         run: node scripts/e2e/test-accounts.mjs
 

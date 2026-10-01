@@ -6,6 +6,7 @@ import { PatientsService } from './patients.service';
 import { RecordService } from './record.service';
 import { clinicDateIso, dayUtc } from '../common/clinic-day';
 import { HospitalDutiesService } from './hospital-duties.service';
+import { RoutesService } from './routes.service';
 import { OTHER_PX, procedureLabel } from './visit-coding';
 import { SERVICES, isServiceKey } from '../config/tenant-profile';
 
@@ -68,6 +69,8 @@ const VISIT_SELECT = {
     select: {
       id: true, code: true, status: true, toLocation: true,
       releasedAt: true, windowFrom: true, windowTo: true,
+      // حوالهٔ برنامه‌ریزی‌شده (تختهٔ روز) هنوز حرکتی ندارد؛ قلم‌هایش این‌جاست.
+      plannedLines: true,
       movements: {
         where: { kind: 'transfer', quantity: { gt: 0 } },
         select: {
@@ -106,6 +109,8 @@ export class TechService {
     private record: RecordService,
     private duties: HospitalDutiesService,
     private events: EventsService,
+    /* اختیاری: بی‌آن حوالهٔ برنامه‌ریزی‌شده بی‌نامِ کالا می‌ماند (رفتارِ پیش از ۱۴۰۵/۰۷/۰۹). */
+    private routes?: RoutesService,
   ) {}
 
   private range(scope: AgendaScope): [Date, Date] {
@@ -129,6 +134,7 @@ export class TechService {
       orderBy: [{ opDate: scope === 'past' ? 'desc' : 'asc' }, { opStartTime: 'asc' }, { id: 'asc' }],
       select: VISIT_SELECT,
     });
+    await this.routes?.withPlannedLots(rows.flatMap((v: any) => v.stockTransfers));
     /* برنامهٔ حضور: کارشناس فقط ردیفِ خودش، سوپرادمین ردیفِ همه — هر کدام با
        نامِ صاحبش، تا «پذیرش» به نامِ همان کارشناس بنشیند نه به نامِ ناظر. */
     const duties = scope === 'past' ? [] : await this.prisma.hospitalDuty.findMany({
@@ -225,14 +231,18 @@ export class TechService {
         releasedAt: t.releasedAt,
         windowFrom: t.windowFrom,
         windowTo: t.windowTo,
-        items: t.movements
-          .filter((m: any) => m.lot)
-          .map((m: any) => ({
-            quantity: m.quantity,
-            name: [m.lot.item.name, m.lot.item.size].filter(Boolean).join(' '),
-            assetKind: m.lot.item.assetKind,
-            serialNo: m.lot.serialNo ?? m.lot.lotNo ?? null,
-          })),
+        /* ⚠️ حوالهٔ planned (تختهٔ روز) حرکتی ندارد — بی‌این شاخه کارشناس فقط «HV-…، هنوز ارسال
+           نشده» می‌دید و نمی‌دانست چه ستی برایش می‌آید (۱۴۰۵/۰۷/۰۹). */
+        items: t.status === 'planned' && this.routes
+          ? this.routes.linesOf(t).map((l: any) => ({ quantity: l.quantity, name: l.itemName, assetKind: l.assetKind, serialNo: l.serialNo ?? null }))
+          : t.movements
+            .filter((m: any) => m.lot)
+            .map((m: any) => ({
+              quantity: m.quantity,
+              name: [m.lot.item.name, m.lot.item.size].filter(Boolean).join(' '),
+              assetKind: m.lot.item.assetKind,
+              serialNo: m.lot.serialNo ?? m.lot.lotNo ?? null,
+            })),
       })),
     };
   }
@@ -321,6 +331,7 @@ export class TechService {
   private async one(id: number, user: any) {
     const v = await this.prisma.visit.findFirst({ where: { id, ...visitScope(user) }, select: VISIT_SELECT });
     if (!v) throw this.notInScope(user);
+    await this.routes?.withPlannedLots(v.stockTransfers);
     return this.shape(v, isUnrestricted(user));
   }
 }

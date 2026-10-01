@@ -14,7 +14,7 @@ import { usePrefs } from './usePrefs.jsx';
 import { usePendingAccounts } from './usePending.js';
 import { useChatUnread } from './ChatBell.jsx';
 import { useConfig } from './config.jsx';
-import { Alert, ArrowStart, Calendar, Close, Diagnosis, Grid, Plus, Surgery } from '../ui/icons.jsx';
+import { Alert, ArrowStart, Calendar, Close, Diagnosis, Grid, Plus, Surgery, Truck } from '../ui/icons.jsx';
 import { jToFa, todayJStr, ymdToJStr } from '../lib/jalali.js';
 import './launcher.css';
 import './shell.css';
@@ -251,6 +251,7 @@ export default function Today() {
             <li className={`td-link${b.overdue ? ' hot' : ''}`}>
               <a href="#td-work" onClick={jump('td-work')}><b>{faNum(b.work)}</b> {team ? 'کارِ بازِ تیم' : 'کارِ باز'}{b.overdue > 0 && <em> ({faNum(b.overdue)} عقب‌افتاده)</em>}</a>
             </li>
+            {data.sections.route && <li className="td-link"><a href="#td-route" onClick={jump('td-route')}><b>{faNum(b.stopsLeft)}</b> توقفِ مانده</a></li>}
             {data.sections.visits && <li className="td-link"><a href="#td-visits" onClick={jump('td-visits')}><b>{faNum(b.visits)}</b> {t.todayVisit}</a></li>}
             {data.sections.appointments && <li className="td-link"><a href="#td-appt" onClick={jump('td-appt')}><b>{faNum(b.appointments)}</b> نوبتِ امروز</a></li>}
             {data.sections.intake && b.intakePending > 0 && (
@@ -317,6 +318,34 @@ export default function Today() {
       {/* ── برنامهٔ خودِ امروز **اول** (بازبینیِ UX ۱۴۰۵/۰۷): منشی و پزشک صفحه را برای «امروز چه
           کسی می‌آید» باز می‌کنند؛ ویزیت‌های مطب از ارتفاعِ ۶۵۰ و عمل‌های شرکت از صفحهٔ سوم شروع
           می‌شد، زیرِ سه خانهٔ خالی و فهرستِ کارها. کارها بعد از برنامه می‌آیند و چیپِ بالا به آن‌ها می‌پرد. */}
+      {/* مسیرِ امروزِ راننده و پیک (گزارشِ مالک ۱۴۰۵/۰۷/۰۹): تحویلی که روی تختهٔ حمل‌ونقل به نامش
+          ثبت شده همین‌جا دیده می‌شود؛ جزئیاتِ بار و ثبتِ تحویل در پنلِ «حمل‌ونقل» است. */}
+      {data?.sections.route && (
+        <section className="td-sec" id="td-route" aria-labelledby="td-route-h">
+          <div className="td-sec-head">
+            <h2 id="td-route-h" tabIndex={-1}><Truck width="16" height="16" aria-hidden="true" /> مسیرِ امروز</h2>
+            <Link to="/app/transport" className="td-more">مسیرِ من <ArrowStart width="14" height="14" /></Link>
+          </div>
+          {data.route.length === 0 ? <p className="td-empty">امروز توقفی به نامِ شما ثبت نشده.</p> : (
+            <ul className="td-list">
+              {data.route.map((s) => (
+                <li key={s.id} className="td-item">
+                  {s.plannedAt
+                    ? <span className="td-time"><bdi dir="ltr">{jToFa(s.plannedAt)}</bdi></span>
+                    : <span className="td-time none">ساعت؟</span>}
+                  <span className="td-main">
+                    <Link to="/app/transport" className="td-name">{s.place || 'مقصدِ نامشخص'}</Link>
+                    <span className="td-kind">{s.kindFa}</span>
+                  </span>
+                  <span className="td-sub">{s.waybills > 0 ? `${faNum(s.waybills)} حواله` : 'بی‌حواله'}</span>
+                  <span className={`td-tag${s.done ? ' op-done' : ''}`}>{s.done ? 'انجام شد' : 'مانده'}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
       {data?.sections.visits && (
         <section className="td-sec" id="td-visits" aria-labelledby="td-visits-h">
           <div className="td-sec-head">

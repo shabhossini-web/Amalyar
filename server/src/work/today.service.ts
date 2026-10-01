@@ -122,6 +122,10 @@ export class TodayService {
        `inbox`ش خودش همه را دارد — به‌علاوهٔ تفکیکِ «مالِ کیست» برای فیلترِ بالای فهرست.
        رابط سطح را حساب نمی‌کند؛ همین `team` را می‌خواند (قانونِ ۳). */
     const team = isUnrestricted(user);
+    /* «مسیرِ امروز» — راننده و پیک (گزارشِ مالک ۱۴۰۵/۰۷/۰۹، حسابِ «test car»): تحویلی که امروز روی
+       تختهٔ حمل‌ونقل به نامش ثبت شده بود در «امروز»ش هیچ اثری نداشت و صفحه فقط «کارِ بازی ندارید»
+       می‌گفت. سوپرادمین نه: او تختهٔ روز را دارد و «امروز»ش صفِ تیم است. */
+    const route = can('transport') && !team ? await this.routeToday(user, start, end).catch(() => null) : null;
     const [counts, items, visits, appointments, intakePending, exceptions, canProcess, canCreateVisit, bookingOn] = await Promise.all([
       this.work.counts(user, { owners: team }),
       this.work.list(user, { scope: 'inbox', limit: team ? TEAM_WORK_LIMIT : WORK_LIMIT }),
@@ -178,17 +182,45 @@ export class TodayService {
         intakePending,
         nextAt,
         next,
+        stops: route?.length ?? 0,
+        stopsLeft: route?.filter((x) => !x.done).length ?? 0,
       },
       work: items,
       visits,
       appointments,
+      route: route ?? [],
       exceptions,
       canProcess,
       canCreateVisit,
       /* «امروز»ِ مطب (YYYY-MM-DD) — تاریخِ پیش‌فرضِ «+»، همان تعریفی که فهرستِ امروز با آن فیلتر می‌شود. */
       clinicToday: clinicTodayIso(now),
-      sections: { visits: seesVisits, appointments: apptSection, intake: can('formgen'), exceptions: seesExceptions },
+      sections: { visits: seesVisits, appointments: apptSection, intake: can('formgen'), exceptions: seesExceptions, route: route !== null },
     };
+  }
+
+  /**
+   * توقف‌های امروزِ **همین** راننده/پیک — همان دامنهٔ پرتالِ حمل‌ونقل (`TransportService.agenda`): نیرو از
+   * شخصِ مشترکِ حساب، روز از `clinic-day`. فقط خواندنی و بی‌دادهٔ بیمار؛ جزئیاتِ بار در خودِ پرتال است.
+   * `null` یعنی این حساب نیرو نیست (بخش رندر نشود)، `[]` یعنی امروز توقفی ندارد.
+   */
+  private async routeToday(user: any, from: Date, to: Date) {
+    const account = await this.prisma.account.findUnique({ where: { id: user?.id ?? -1 }, select: { personId: true } });
+    if (!account?.personId) return null;
+    const staff = await this.prisma.transportStaff.findFirst({ where: { personId: account.personId, active: true }, select: { id: true } });
+    if (!staff) return null;
+    const stops = await this.prisma.transportStop.findMany({
+      where: { run: { staffId: staff.id, runDate: { gte: from, lt: to } } },
+      orderBy: [{ plannedAt: 'asc' }, { seq: 'asc' }, { id: 'asc' }],
+      select: { id: true, kind: true, plannedAt: true, doneAt: true, locationName: true, hospital: { select: { name: true } }, _count: { select: { transfers: true } } },
+    });
+    return stops.map((s) => ({
+      id: s.id,
+      kindFa: s.kind === 'pickup' ? 'جمع‌آوری' : 'تحویل',
+      plannedAt: s.plannedAt,
+      done: !!s.doneAt,
+      place: s.hospital?.name ?? s.locationName ?? null,
+      waybills: s._count.transfers,
+    }));
   }
 
   /**

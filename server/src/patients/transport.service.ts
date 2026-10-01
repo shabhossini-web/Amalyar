@@ -4,6 +4,7 @@ import { AuditService } from '../audit/audit.service';
 import { isUnrestricted } from '../common/own-scope';
 import { clinicDateIso, dayUtc } from '../common/clinic-day';
 import { PlacesService } from './places.service';
+import { RoutesService } from './routes.service';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -35,7 +36,9 @@ function dayBounds(at: Date): [Date, Date] {
  */
 @Injectable()
 export class TransportService {
-  constructor(private prisma: PrismaService, private audit: AuditService, private places: PlacesService) {}
+  /* `routes` اختیاری است چون سوییتِ e2e این سرویس را ممکن است مستقیم بسازد؛ Nest همیشه پاسش
+     می‌دهد. بی‌آن، حوالهٔ برنامه‌ریزی‌شده فقط شماره‌اش را نشان می‌دهد (رفتارِ پیش از ۱۴۰۵/۰۷/۰۹). */
+  constructor(private prisma: PrismaService, private audit: AuditService, private places: PlacesService, private routes?: RoutesService) {}
 
   /** رکوردِ نیرویِ حمل‌ونقلِ همین کاربر — از روی شخصِ مشترک. */
   private async me(user: any) {
@@ -49,7 +52,7 @@ export class TransportService {
       include: { person: { select: { firstName: true, lastName: true, phone: true } } },
     });
     if (!staff) {
-      throw new NotFoundException('این حساب به هیچ رانندهٔ ثبت‌شده‌ای وصل نیست — در تعاریفِ پایه نیرو را با همین شخص بسازید');
+      throw new NotFoundException('این حساب هنوز راننده یا پیک نیست — در «کاربران» نقشِ این حساب را «راننده» یا «پیک» بگذارید');
     }
     return staff;
   }
@@ -86,6 +89,8 @@ export class TransportService {
               select: {
                 id: true, code: true, status: true, toLocation: true, fromLocation: true,
                 releasedAt: true, pickupAt: true, leftAt: true,
+                // حوالهٔ برنامه‌ریزی‌شده (تختهٔ روز) هنوز حرکتی ندارد؛ قلم‌هایش این‌جاست.
+                plannedLines: true,
                 // ⚠️ فقط عنوانِ کالا و تعداد. نه بیمار، نه مبلغ.
                 movements: {
                   where: { kind: 'transfer', quantity: { gt: 0 } },
@@ -98,6 +103,8 @@ export class TransportService {
         },
       },
     });
+    /* نامِ کالای حوالهٔ برنامه‌ریزی‌شده — یک کوئری برای همهٔ توقف‌ها (`RoutesService.linesOf`). */
+    await this.routes?.withPlannedLots(runs.flatMap((r: any) => r.stops.flatMap((s: any) => s.transfers)));
 
     return {
       scope,
@@ -151,11 +158,15 @@ export class TransportService {
         id: t.id, code: t.code, status: t.status,
         from: t.fromLocation, to: t.toLocation,
         pickupAt: t.pickupAt, leftAt: t.leftAt, releasedAt: t.releasedAt,
-        items: t.movements.map((m: any) => ({
-          name: [m.lot?.item?.name, m.lot?.item?.size].filter(Boolean).join(' '),
-          serialNo: m.lot?.serialNo ?? m.lot?.lotNo ?? null,
-          quantity: m.quantity,
-        })),
+        /* ⚠️ تختهٔ روز همهٔ تحویل‌ها را **planned** می‌سازد و حوالهٔ planned حرکتی ندارد؛ تا
+           ۱۴۰۵/۰۷/۰۹ راننده فقط شمارهٔ حواله را می‌دید، نه اینکه چه چیزی ببرد. */
+        items: t.status === 'planned' && this.routes
+          ? this.routes.linesOf(t).map((l: any) => ({ name: l.itemName, serialNo: l.serialNo, quantity: l.quantity }))
+          : t.movements.map((m: any) => ({
+            name: [m.lot?.item?.name, m.lot?.item?.size].filter(Boolean).join(' '),
+            serialNo: m.lot?.serialNo ?? m.lot?.lotNo ?? null,
+            quantity: m.quantity,
+          })),
       })),
     };
   }

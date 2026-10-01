@@ -1,12 +1,24 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: idle
-branch: claude/ux-sec2-rest
-since: 2026-09-30
-paths: []
+status: active
+branch: claude/planned-cargo-panels
+since: 2026-10-01
+paths:
+  - server/src/accounts/accounts.service.ts
+  - server/src/features/features.service.ts
+  - server/src/work/today.service.ts
+  - server/src/patients/transport.service.ts
+  - server/src/patients/tech.service.ts
+  - server/src/patients/dispatch.service.ts
+  - server/src/patients/routes.service.ts
+  - server/prisma/migrations/20261001000000_field_role_staff/
+  - src/app/Today.jsx
+  - scripts/e2e/field-role-driver.mjs
 note: >-
-  بازبینیِ کاملِ UX (۱۱۶ یافته) + بازبینی‌های خصمانه + دورِ دومِ امنیت (PS1–PS12) در #119 و PRِ تکمیلی رفت.
-  بازِ بعدی منتظرِ تصمیمِ مالک است (لینکِ پیامکِ اولِ ادامهٔ ثبت‌نام) — STATUS.md.
+  گزارشِ مالک ۱۴۰۵/۰۷/۰۹ (حسابِ رانندهٔ «test car»): نقشِ راننده/پیک از صفحهٔ کاربران رکوردِ نیرو
+  نمی‌ساخت، «امروز»ِ راننده خالی بود، کاشی‌های بالینی برایش باز بود، و پنلِ راننده/کارشناس بارِ
+  تحویلِ تختهٔ روز را بی‌نامِ کالا نشان می‌داد. در routes.service.ts فقط دو فیلدِ افزایشی در
+  linesOf/withPlannedLots (itemId، category) — بی‌تغییرِ رفتار برای تختهٔ روز.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
