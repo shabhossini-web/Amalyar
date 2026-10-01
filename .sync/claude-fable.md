@@ -1,16 +1,12 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: active
+status: idle
 branch: claude/page-title-tile
 since: 2026-10-01
-paths:
-  - src/app/Tech.jsx
-  - src/app/Transport.jsx
-  - src/ui/PageHeader.jsx
-  - scripts/e2e/superadmin-field.mjs
+paths: []
 note: >-
-  بستهٔ حسابِ راننده/پیک (f3b9bb5) روی main رفت. حالا «گزینهٔ الف»ِ مصوبِ مالک: عنوانِ «پنل کارشناسی» و
-  «حمل‌ونقل» همان نامِ کاشی (قانونِ ۲۴)؛ «دفترِ کار» / «مسیرِ من» به اولِ زیرعنوان. فقط متنِ سربرگ و سنجه‌هایش.
+  حسابِ راننده/پیک (f3b9bb5) و «گزینهٔ الف»ِ عنوانِ صفحه‌ها روی main رفتند. بازِ بعدی منتظرِ تصمیمِ مالک است
+  (لینکِ پیامکِ اولِ ادامهٔ ثبت‌نام) — STATUS.md.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
