@@ -4,6 +4,8 @@ import { faDate, J_MONTHS, jToday } from '../lib/jalali.js';
 import JGrid from '../app/JGrid.jsx';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
+/** «16:00» ← «۱۶:۰۰»: تاریخِ کنارش فارسی است و ساعتِ لاتین کنارِ آن («۶ مهر ساعتِ 16:00») ناهمخوان بود. */
+const faTime = (t) => String(t ?? '').replace(/[0-9]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
 
 /**
  * **انتخابِ نوبت توسطِ بیمار** — `docs/BOOKING.md` مرحلهٔ ۳.
@@ -16,7 +18,7 @@ const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
  * اولین اختلافِ کبیسه از هم جدا می‌شوند — و آن‌وقت بیمار و منشی دو تقویمِ
  * متفاوت می‌بینند.
  */
-export default function BookingPick({ token, booking, onBooked, disabled }) {
+export default function BookingPick({ token, booking, onBooked, disabled, error = '' }) {
   const [ty, tm] = jToday();
   const [ym, setYm] = useState({ y: ty, m: tm });
   const [cal, setCal] = useState(null);
@@ -66,15 +68,17 @@ export default function BookingPick({ token, booking, onBooked, disabled }) {
   const chosen = booking?.appointment;
 
   return (
-    <section className="ik-book">
+    <section className={`ik-book${error ? ' bad' : ''}`} aria-describedby={error ? 'ik-book-need' : undefined}>
       <h3>روزِ نوبت را انتخاب کنید</h3>
+      {/* «روزی انتخاب نشده» روی خودِ تقویم — فرم با اسکرول همین‌جا می‌آورد (بازبینیِ UX، بندِ ۱۰۵). */}
+      {error && <p id="ik-book-need" className="ik-book-err" role="alert">{error}</p>}
 
       {chosen && (
         <p className="ik-book-has">
           {/* ⚠️ تاریخ به بیمار **شمسی** نشان داده می‌شود — ISOِ خامِ سرور
               (2026-08-15) روی نصبِ واقعی دیده شد و برای بیمار بی‌معنی است. */}
           نوبتِ شما: <b>{faDate(chosen.date) || chosen.date}</b>
-          {chosen.time ? <> ساعتِ <b dir="ltr">{chosen.time}</b></> : null}
+          {chosen.time ? <> ساعتِ <b dir="ltr">{faTime(chosen.time)}</b></> : null}
           {chosen.topicName ? <> — {chosen.topicName}</> : null}
           <small>می‌توانید روزِ دیگری بزنید تا جابه‌جا شود.</small>
         </p>
@@ -130,26 +134,36 @@ export default function BookingPick({ token, booking, onBooked, disabled }) {
           <b>{faNum(picked.day)} {J_MONTHS[ym.m - 1]}</b>
           {slotMode ? (
             <>
-              <small>ساعت را انتخاب کنید</small>
-              <div className="ik-slots">
-                {picked.windows.filter((w) => w.mode === 'slot').flatMap((w) => w.slots).map((sl) => (
-                  <button
-                    key={sl.startMin}
-                    type="button"
-                    dir="ltr"
-                    disabled={sl.taken || busy || disabled}
-                    className={chosen?.date === picked.date && chosen?.startMin === sl.startMin ? 'on' : ''}
-                    onClick={() => book(sl.startMin)}
-                  >
-                    {sl.time}
-                  </button>
-                ))}
+              <small id="ik-slots-q">ساعت را انتخاب کنید</small>
+              <div className="ik-slots" role="radiogroup" aria-labelledby="ik-slots-q">
+                {picked.windows.filter((w) => w.mode === 'slot').flatMap((w) => w.slots).map((sl) => {
+                  /* هشدار: ساعتِ **خودِ بیمار** «انتخاب‌شده» است، نه «پر» (بازبینیِ UX، بندِ ۹۶): سرور آن را
+                     هم «گرفته» می‌شمارد (نوبتِ خودش جا را گرفته) و تا دیروز دکمه‌اش کم‌رنگ و خط‌خورده می‌شد —
+                     بیمار فکر می‌کرد رزرو نشده. زدنِ دوباره‌اش کاری نمی‌کند. */
+                  const mine = chosen?.date === picked.date && chosen?.startMin === sl.startMin;
+                  const state = mine ? '' : sl.past ? ' — گذشته' : sl.taken ? ' — پر' : '';
+                  return (
+                    <button
+                      key={sl.startMin}
+                      type="button"
+                      role="radio"
+                      aria-checked={mine}
+                      aria-label={`${faTime(sl.time)}${state}`}
+                      dir="ltr"
+                      disabled={(sl.taken && !mine) || busy || disabled}
+                      className={mine ? 'on' : ''}
+                      onClick={() => { if (!mine) book(sl.startMin); }}
+                    >
+                      {faTime(sl.time)}
+                    </button>
+                  );
+                })}
               </div>
             </>
           ) : (
             <>
               <small>
-                {picked.windows.map((w) => `${w.start}–${w.end}`).join('، ')} · {faNum(picked.free)} جا مانده
+                {faTime(picked.windows.map((w) => `${w.start}–${w.end}`).join('، '))} · {faNum(picked.free)} جا مانده
               </small>
               <button type="button" className="ik-book-go" disabled={busy || disabled} onClick={() => book(null)}>
                 {busy ? 'در حال ثبت…' : 'همین روز را می‌خواهم'}

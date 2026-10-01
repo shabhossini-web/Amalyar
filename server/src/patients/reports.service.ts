@@ -83,13 +83,15 @@ export class ReportsService {
         collected,
         due: m.due,
         month: monthKey(v.opDate ?? v.createdAt),
-        surgeon: v.surgeon ? `${v.surgeon.person.firstName} ${v.surgeon.person.lastName}`.trim() : v.surgeonName ?? '—',
-        hospitalLabel: v.hospital?.name ?? v.hospitalName ?? '—',
+        /* ⚠️ ردیفِ بی‌نام نامِ خودش را می‌گوید، نه «—» (بازبینیِ UX ۱۴۰۵/۰۷): خطِ تیره در تفکیک
+           شبیهِ «داده نیامد» خوانده می‌شد، در حالی که یعنی «مراجعه‌هایی که جراح/مرکز ندارند». */
+        surgeon: v.surgeon ? `${v.surgeon.person.firstName} ${v.surgeon.person.lastName}`.trim() : v.surgeonName || NO_SURGEON,
+        hospitalLabel: v.hospital?.name ?? (v.hospitalName || NO_HOSPITAL),
         /// ⚠️ **فقط عملِ اصلی** (بستهٔ ۷ج): درآمد مالِ مراجعه است و یک‌بار شمرده
         ///    می‌شود؛ پخش‌کردنش روی چند عمل یعنی ساختنِ عددی که هیچ‌جا ثبت نشده، و
         ///    گروه‌بندی با برچسبِ ترکیبی («A + B») جمعِ تفکیک را از جمعِ کل جدا می‌کرد.
         ///    نامِ کلید عمداً `procedureLabel` نیست — آن در همهٔ endpointها برچسبِ ترکیبی است.
-        principalProcedure: principalProcedureName(v) ?? '—',
+        principalProcedure: principalProcedureName(v) || NO_PROCEDURE,
       };
     });
 
@@ -124,6 +126,11 @@ export class ReportsService {
     };
   }
 }
+
+/** برچسبِ ردیفِ «بی‌نام» در تفکیک‌ها — متن است نه نشانه، تا کاربر بداند این ردیف یعنی چه. */
+const NO_SURGEON = 'بدونِ جراح';
+const NO_HOSPITAL = 'بدونِ بیمارستان';
+const NO_PROCEDURE = 'بدونِ نوعِ عمل';
 
 /** «۱۴۰۵/۰۵» — کلیدِ ماهِ شمسی، تا نمودار با تقویمِ کاربر بخواند نه میلادی. */
 function monthKey(d: Date): string {

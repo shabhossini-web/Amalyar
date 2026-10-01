@@ -1,14 +1,14 @@
 /**
- * فرمِ عمل — سه مرحله، سه تب: قبل / حین / بعد از عمل (بازخوردِ مالک ۱۴۰۵/۰۶/۲۹، بستهٔ ۴)
- * — سرورِ زنده + مرورگرِ واقعی.
+ * فرمِ عمل — زبانه‌ها ساختارِ اصلی‌اند: «مشخصاتِ عمل | قبل | حین | بعد از عمل» (بازخوردِ مالک
+ * ۱۴۰۵/۰۶/۲۹، بستهٔ ۴؛ بازبینیِ UX ۱۴۰۵/۰۷، surgery-10) — سرورِ زنده + مرورگرِ واقعی.
  *
  *  باید بیفتد:
- *   - پایینِ فرمِ عمل نوارِ تبِ سه‌تایی از `Tabs` (تک‌منبع) باشد، نه یک ستونِ شلوغ
- *   - عملِ آینده روی «قبل از عمل» باز شود؛ عملِ گذشتهٔ بی‌شرح روی «حین عمل»؛ با شرح روی «بعد از عمل»
- *   - «شرحِ عمل» و ساعت‌ها در تبِ «حین عمل» باشند، نه در کارتِ بالا
+ *   - نوارِ چهارزبانه از `Tabs` (تک‌منبع) **درست زیرِ سربرگ** باشد، نه پایینِ فرم داخلِ «برنامهٔ مراقبت»
+ *   - ثبتِ تازه روی «مشخصات» باز شود؛ عملِ آینده روی «قبل از عمل»؛ گذشتهٔ بی‌شرح روی «حین»؛ با شرح روی «بعد»
+ *   - «شرحِ عمل» و ساعت‌ها در زبانهٔ «حین عمل» باشند، نه در کارتِ مشخصات
  *   - «قبل از عمل» درخواست‌های پاراکلینیک را هم داشته باشد (یافتهٔ جانبیِ بستهٔ ۱)
- *   - جابه‌جایی بین تب‌ها مقدارها را پاک نکند و «ذخیره» هر سه مرحله را با هم بنشاند
- *   - خطِ برنامه بیرونِ تب‌ها همیشه دیده شود
+ *   - «برنامهٔ مراقبت و پیگیری» (با خطِ خلاصه‌اش) درونِ زبانهٔ «بعد از عمل» باشد
+ *   - جابه‌جایی بین زبانه‌ها مقدارها را پاک نکند و «ذخیره» همه را با هم بنشاند
  *  نباید بیفتد:
  *   - فرمِ ویزیت (غیرِ عمل) تبِ مرحله نگیرد؛ هیچ خطای JS/کنسول
  */
@@ -74,12 +74,21 @@ try {
     await page.waitForTimeout(600);
   };
   await openForm(future.id);
-  const sect = page.locator('.db-postop');
-  const tabs = sect.locator('.ui-tabs button');
-  const active = () => sect.locator('.ui-tabs button[aria-selected="true"]').innerText();
-  const tab = (name) => sect.locator('.ui-tabs button', { hasText: name }).click();
-  ok('**سه تبِ مرحله از کامپوننتِ مشترکِ Tabs**', (await tabs.count()) === 3 && (await tabs.allInnerTexts()).join('|').includes('قبل از عمل') && (await tabs.allInnerTexts()).join('|').includes('حین عمل') && (await tabs.allInnerTexts()).join('|').includes('بعد از عمل'), (await tabs.allInnerTexts()).join('|'));
+  const sect = page.locator('.db-sheet');
+  const tabs = sect.locator('.db-phasetabs button');
+  const active = () => sect.locator('.db-phasetabs button[aria-selected="true"]').innerText();
+  const tab = (name) => sect.locator('.db-phasetabs button', { hasText: name }).click();
+  const names = (await tabs.allInnerTexts()).join('|');
+  ok('**چهار زبانه از کامپوننتِ مشترکِ Tabs: مشخصات، قبل، حین، بعد**', (await tabs.count()) === 4 && /^مشخصاتِ /.test((await tabs.first().innerText()).trim())
+    && names.includes('قبل از عمل') && names.includes('حین عمل') && names.includes('بعد از عمل'), names);
+  const bar = await sect.locator('[data-visit-bar]').boundingBox();
+  const strip = await sect.locator('.db-phasetabs').boundingBox();
+  ok('**زبانه‌ها درست زیرِ سربرگ‌اند، بالای کارتِ مشخصات** (ساختارِ اصلی، نه پایینِ فرم)',
+    !!bar && !!strip && strip.y > bar.y && strip.y - (bar.y + bar.height) < 40
+    && (await sect.locator('.db-postop .ui-tabs').count()) === 0,
+    JSON.stringify({ bar, strip }));
   ok('عملِ آینده روی «قبل از عمل» باز می‌شود', (await active()).includes('قبل از عمل'), await active());
+  ok('کارتِ مشخصات در زبانهٔ دیگر پنهان است، نه پاک', (await sect.locator('.db-formcard').count()) === 1 && (await sect.locator('.db-formcard').isHidden()));
   const pre = sect.locator('.db-phase[data-phase="pre"]');
   ok('تبِ قبل: مراقبتِ قبل از عمل + درخواست‌های پیش از عمل', (await pre.innerText()).includes('مراقبت‌های قبل از عمل') && (await pre.innerText()).includes('درخواست‌های پیش از عمل'));
   ok('**درخواستِ آزمایش/تصویربرداری از خودِ فرمِ عمل ممکن است**', (await pre.locator('.db-orders .db-daychip').count()) === 4);
@@ -94,11 +103,17 @@ try {
   await tab('بعد از عمل');
   const post = sect.locator('.db-phase[data-phase="post"]');
   ok('تبِ بعد: مراقبتِ بعد، روزهای پیگیری، ویزیتِ پست‌آپ', (await post.innerText()).includes('مراقبت‌های بعد از عمل') && (await post.locator('.db-dayinput').count()) === 1 && (await post.innerText()).includes('اولین مراجعهٔ بعد از عمل'));
+  const plan = post.locator('.db-postop');
+  ok('**«برنامهٔ مراقبت و پیگیری» درونِ زبانهٔ «بعد از عمل» است**', (await plan.count()) === 1 && (await plan.locator('h4').innerText()).includes('برنامهٔ مراقبت و پیگیری'));
+  const fs = (loc) => loc.evaluate((e) => parseFloat(getComputedStyle(e).fontSize));
+  if (await plan.locator(':scope > .db-hint').count()) {
+    ok('راهنمای بخش کوچک‌تر از عنوانِ خودِ بخش است', (await fs(plan.locator(':scope > .db-hint'))) < (await fs(plan.locator('h4'))));
+  }
   await post.locator('.db-daychip', { hasText: /^روزِ ۷$/ }).click();
   /* روزِ انتخابی فقط وقتی در خط می‌آید که فرمِ پیگیری تعریف شده باشد (وگرنه «ارسال نمی‌شود»)؛
-     این‌جا فقط «بیرونِ تب‌ها و همیشه» سنجیده می‌شود — خودِ روز در `postop-flow` سنجیده شده. */
-  const planTxt = await sect.locator('.db-postop-plan').innerText();
-  ok('خطِ برنامه بیرونِ تب‌ها همیشه دیده می‌شود (هر سه مرحله را خلاصه می‌کند)', (await sect.locator('.db-postop-plan').count()) === 1 && planTxt.includes('پیگیری') && planTxt.includes('مراقبتِ بعد') && planTxt.includes('مراقبتِ قبل'), planTxt.slice(0, 120));
+     این‌جا فقط جای خط سنجیده می‌شود — خودِ روز در `postop-flow` سنجیده شده. */
+  const planTxt = await plan.locator('.db-postop-plan').innerText();
+  ok('خطِ خلاصهٔ برنامه ته‌ِ همان بخش است (هر سه مرحله را خلاصه می‌کند)', (await sect.locator('.db-postop-plan').count()) === 1 && planTxt.includes('پیگیری') && planTxt.includes('مراقبتِ بعد') && planTxt.includes('مراقبتِ قبل'), planTxt.slice(0, 120));
 
   await tab('قبل از عمل');
   ok('**جابه‌جایی بین تب‌ها مقدار را پاک نمی‌کند**', (await pre.locator('.db-careblock').first().locator('textarea').inputValue()) === `ناشتاییِ ${tag}`);
@@ -118,9 +133,10 @@ try {
   await page.locator('.db-sheet .db-x').first().click();
   await page.locator('.db-sheet').waitFor({ state: 'detached', timeout: 8000 });
 
-  console.log('\n۴) نباید بیفتد — فرمِ ویزیت تبِ مرحله ندارد');
+  console.log('\n۴) نباید بیفتد — فرمِ ویزیت زبانهٔ مرحله ندارد');
   await openForm(clinic.id);
-  ok('**فرمِ ویزیت تبِ قبل/حین/بعد ندارد** و برنامهٔ پیام‌هایش سرِ جاست', (await page.locator('.db-postop .ui-tabs').count()) === 0 && (await page.locator('.db-msgplan').count()) === 1);
+  ok('**فرمِ ویزیت زبانه‌های فرمِ عمل را ندارد** و برنامهٔ پیام‌هایش سرِ جاست', (await page.locator('.db-sheet .db-phasetabs').count()) === 0 && (await page.locator('.db-msgplan').count()) === 1
+    && !(await page.locator('.db-formcard').isHidden()));
   ok('هیچ خطای JS/کنسول', errors.length === 0, errors.slice(0, 2).join(' | '));
 } finally {
   await browser?.close().catch(() => {});

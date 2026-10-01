@@ -234,15 +234,17 @@ try {
     'نامِ جراح دو بار نوشته نمی‌شود (از سطرِ فرعی به سطرِ «مالِ کیست» آمد)');
 
   await page.locator(`.th-item[data-visit-id="${vFree.id}"]`).click();
-  await page.waitForSelector('.th-card .th-acts', { timeout: 10000 });
+  await page.waitForSelector('.th-card .th-steps', { timeout: 10000 });
   const cardTeam = (await page.locator('.th-card .th-team').innerText().catch(() => '')).replace(/\s+/g, ' ');
   ok(cardTeam.includes('تعیین نشده') && cardTeam.includes(`اتاق${tag}`),
     `کارتِ همان عمل هم «تعیین نشده» را نگه می‌دارد، نه جای خالی («${cardTeam.trim()}»)`);
-  const finishBtn = page.locator('.th-acts button', { hasText: 'پایان یافت' });
-  ok(await finishBtn.isEnabled(), 'در کارتِ عملِ بی‌کارشناس، «پایان یافت» برای سوپرادمین فعال است');
+  /* مراحلِ میز (بازبینیِ UX، surgery-03): «ثبتِ پایان» دکمهٔ مرحلهٔ بعدی است و بعد از ثبت جایش را به
+     تیک و ساعت می‌دهد — نه دکمهٔ خاموش. */
+  const finishBtn = page.locator('.th-steps [data-act="finish"]');
+  ok(await finishBtn.isEnabled(), 'در کارتِ عملِ بی‌کارشناس، «ثبتِ پایان» برای سوپرادمین فعال است');
   await finishBtn.click();
-  await page.waitForFunction(() => [...document.querySelectorAll('.th-acts button')].find((b) => b.textContent.includes('پایان یافت'))?.disabled === true, null, { timeout: 8000 });
-  ok(sql(`SELECT coalesce(op_end_time,'-') FROM visits WHERE id=${vFree.id}`) !== '-', '**«پایان یافت» از رابط نشست**');
+  await page.waitForSelector('.th-steps [data-step="end"][data-state="done"]', { timeout: 8000 });
+  ok(sql(`SELECT coalesce(op_end_time,'-') FROM visits WHERE id=${vFree.id}`) !== '-', '**«ثبتِ پایان» از رابط نشست**');
   ok(num(`SELECT actor_id FROM audit_events WHERE action='visit.finish' AND entity_id='${vFree.id}' ORDER BY id DESC LIMIT 1`) === adminId,
     '… با بازیگرِ سوپرادمین در ردِ ممیزی');
   await page.locator('.th-head button', { hasText: 'فهرستِ روز' }).click();
@@ -269,7 +271,7 @@ try {
   }, { a: vA.id, free: vFree.id }, { timeout: 8000 }).then(() => true).catch(() => false);
   ok(onlyFree && (await page.locator('.th-owners button').last().innerText()).includes('بی‌'), '**دکمهٔ آخر «بی‌کارشناس»: فقط عمل‌هایی که کسی برایشان گذاشته نشده**');
   await page.locator(`.th-item[data-visit-id="${vFree.id}"]`).click();
-  await page.waitForSelector('.th-card .th-acts', { timeout: 10000 });
+  await page.waitForSelector('.th-card .th-steps', { timeout: 10000 });
   await page.locator('.th-head button', { hasText: 'فهرستِ روز' }).click();
   await page.waitForSelector(`.th-item[data-visit-id="${vFree.id}"]`, { timeout: 8000 });
   ok(await page.locator(`.th-item[data-visit-id="${vA.id}"]`).count() === 0, 'باز و بستنِ کارت فیلتر را نگه می‌دارد');

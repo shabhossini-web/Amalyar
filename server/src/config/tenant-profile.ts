@@ -125,6 +125,24 @@ export function featurePlanForProfile(kind: TenantKind, services: readonly Servi
   return out;
 }
 
+/**
+ * **ردیف‌های ماژول به پروفایلِ همین نصب** — برای ساختِ تنبلِ ردیف‌های غایب (بازبینیِ UX، global-07).
+ *
+ * ⚠️ تا امروز ساختِ تنبل (`ensureSeeded`) هر ماژولِ غایب را با سطحِ پیش‌فرضِ سراسری و **روشن**
+ * می‌ساخت، بی‌توجه به نوعِ نصب. اگر نوعِ نصب پیش از اولین بازشدنِ لانچر «مطب» می‌شد، خاموش‌کردنِ
+ * ماژول‌های شرکتی فقط روی ردیف‌های ازپیش‌موجود می‌نشست و ساختِ بعدی «چینشِ نیروها»، «پنلِ
+ * کارشناسی»، «حمل‌ونقل» و «انبار» را روشن در لانچرِ پزشک می‌گذاشت. حالا ردیفِ غایب همان چیزی است
+ * که پلانِ این پروفایل می‌گوید: عضوِ پلان روشن با سطحِ پلان، بقیه خاموش — پس ترتیبِ «ساختن» و
+ * «عوض‌کردنِ نوع» در حالتِ نهایی اثری ندارد.
+ */
+export function featureSeedRows(
+  profile: TenantProfile,
+  features: readonly { key: string; defaultLevel: number }[],
+): { key: string; minLevel: number; enabled: boolean }[] {
+  const plan = featurePlanForProfile(profile.kind, profile.services);
+  return features.map((f) => ({ key: f.key, minLevel: plan[f.key] ?? f.defaultLevel, enabled: f.key in plan }));
+}
+
 /** اعتبارسنجیِ پروفایلِ درخواستی؛ خطای فارسی یا `null`. */
 export function profileError(kind: unknown, services: unknown): string | null {
   if (kind !== 'clinic' && kind !== 'company') return 'نوعِ نصب باید «مطب / کلینیک» یا «شرکتی» باشد';

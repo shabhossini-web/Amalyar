@@ -19,7 +19,8 @@
  *
  *  باید بیفتد:
  *   - هر ماژول آیکونِ یکتا دارد (هم نام، هم شکلِ رندرشده)
- *   - نام‌ها کارمحورند: «بیماران» و «پذیرش» به‌جای «داشبورد مدیریت» و «ثبت‌نامِ بیماران»
+ *   - نام‌ها کارمحورند: «بیماران» و «ثبت‌نام‌های آنلاین» به‌جای «داشبورد مدیریت» و «ثبت‌نامِ بیماران»
+ *     («پذیرش» هم نه — کنارِ «میزِ پذیرش» دو کاشیِ هم‌نام می‌ساخت؛ بازبینیِ UX، shell-17)
  *   - واژهٔ حوزه‌ای در دکمهٔ میزِ پذیرش از `terms.js` می‌آید، نه هاردکد
  *  نباید بیفتد:
  *   - «ویزیت» به‌عنوانِ **نوعِ** مراجعه (`visit-kinds.js`) دست نخورده بماند —
@@ -60,7 +61,7 @@ for (const [icon, had] of [['Wave', 3], ['Book', 3], ['Chart', 2], ['Clock', 2]]
 console.log('\n۲) نام بر پایهٔ کارِ کاربر (یافتهٔ B3)');
 const labelOf = (k) => entries.find((e) => e.key === k)?.label;
 ok(labelOf('dashboard') === 'بیماران', `داشبورد → «${labelOf('dashboard')}»`);
-ok(labelOf('formgen') === 'پذیرش', `ثبت‌نام → «${labelOf('formgen')}»`);
+ok(labelOf('formgen') === 'ثبت‌نام‌های آنلاین', `ثبت‌نام → «${labelOf('formgen')}»`);
 const toolish = entries.filter((e) => /پرتالِ|پنلِ /.test(e.label));
 ok(toolish.length === 0, toolish.length
   ? `هنوز نامِ ابزارمحور: ${toolish.map((e) => e.label).join('، ')}`
@@ -136,7 +137,7 @@ try {
     : `هر ${shapes.length} کاشی شکلِ متمایز دارد`);
 
   ok(shapes.some((s) => s.label === 'بیماران'), 'کاشیِ «بیماران» روی صفحه است');
-  ok(shapes.some((s) => s.label === 'پذیرش'), 'کاشیِ «پذیرش» روی صفحه است');
+  ok(shapes.some((s) => s.label === 'ثبت‌نام‌های آنلاین'), 'کاشیِ «ثبت‌نام‌های آنلاین» روی صفحه است');
   ok(c.errors.length === 0, c.errors.length ? 'خطای JS: ' + c.errors[0] : 'بدونِ خطای JS');
 
   console.log('\n۶) نامِ کاشی و عنوانِ صفحه‌اش باید یکی باشد');
@@ -164,7 +165,7 @@ try {
      این بند دوباره چیزی را نمی‌بینند (همان تلهٔ بندِ بالا، از راهِ دیگر). */
   const appt = {
     id: 7, fullName: 'بیمار آزمایشی', status: 'confirmed', statusLabel: 'قطعی', time: '10:00', seq: 1,
-    next: ['arrived'], nextOptions: [{ status: 'arrived', label: 'رسید' }],
+    next: ['arrived'], nextOptions: [{ status: 'arrived', label: 'ثبتِ رسیدن' }],
     canStart: true, startHint: null,
     visitId: null, topicName: '', patientCode: 'AM-001', phone: '',
   };

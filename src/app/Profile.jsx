@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { useAuth } from './auth.jsx';
 import SelfieCapture from './SelfieCapture.jsx';
 import PasswordInput from './PasswordInput.jsx';
@@ -10,12 +9,14 @@ import './profile.css';
 import { api } from '../lib/api.js';
 import { toEnDigits } from '../lib/identity.js';
 import { faDate } from '../lib/jalali.js';
-import { Back, User } from '../ui/icons.jsx';
+import { User } from '../ui/icons.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
+import Toast, { useToast } from '../ui/Toast.jsx';
 
 
 export default function Profile() {
   const { user, updateProfile, changePassword, setUser } = useAuth();
-  const [toast, setToast] = useState('');
+  const { msg: toast, show: setToast } = useToast(1800);
   const [firstName, setFirstName] = useState(user?.firstName || '');
   const [lastName, setLastName] = useState(user?.lastName || '');
   const [selfie, setSelfie] = useState(''); // فقط وقتی عکسِ جدید گرفته شود
@@ -33,12 +34,6 @@ export default function Profile() {
     } catch (e) { setPhoneMessage(e.message); } finally { setPhoneBusy(false); }
   };
 
-  useEffect(() => { document.title = 'عمل‌یار — پروفایل من'; }, []);
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(''), 1800);
-    return () => clearTimeout(t);
-  }, [toast]);
   useEffect(() => {
     setFirstName(user?.firstName || '');
     setLastName(user?.lastName || '');
@@ -62,7 +57,7 @@ export default function Profile() {
       });
       setSelfie('');
       setRetaking(false);
-      setToast('پروفایل ذخیره شد ✓');
+      setToast('پروفایل ذخیره شد');
     } catch (e2) {
       setToast(e2.message);
     } finally {
@@ -75,10 +70,11 @@ export default function Profile() {
     setPwErr('');
     setSavingPw(true);
     try {
-      await changePassword(curPw, newPw);
+      const r = await changePassword(curPw, newPw);
       setCurPw('');
       setNewPw('');
-      setToast('رمز عبور تغییر کرد ✓');
+      /* پس‌کی‌ها هم با تغییرِ رمز پاک می‌شوند (بستهٔ PS، PS3) — کاربر باید بداند چرا اثر انگشت دیگر کار نمی‌کند. */
+      setToast(`رمز عبور تغییر کرد.${r?.passkeysRemoved ? ' اثر انگشت/پس‌کیِ این حساب هم پاک شد؛ پس از ورودِ دوباره، از منوی حساب «فعال‌سازی ورود با اثر انگشت» را دوباره بزنید.' : ''}`);
     } catch (e2) {
       setPwErr(e2.message);
     } finally {
@@ -92,13 +88,13 @@ export default function Profile() {
       <div className="lx-grid" aria-hidden="true" />
 
       <div className="lx-shell us-shell">
-        <header className="us-head">
-          <Link to="/app" className="lx-back" aria-label="بازگشت به صفحهٔ امروز"><Back width="15" height="15" /> سامانه</Link>
-          <h1>پروفایل من</h1>
-        </header>
+        {/* صفحهٔ حسابِ خودِ کاربر کاشی نیست؛ آیکونش همان آیکونِ «پروفایلِ من» در منوی پروفایل است. */}
+        <PageHeader title="پروفایل من" icon={User} />
 
         {user.verificationDueAt && !user.phoneVerifiedAt && <section className="glass us-card pf-card"><h2 className="pf-h2">تأیید حساب موقت</h2>
-          <p>شماره {user.phone} را تا {faDate(user.verificationDueAt)} تأیید کنید. حساب تأییدنشده بعد از مهلت غیرفعال می‌شود.</p>
+          {user.verificationOverdue
+            ? <p>مهلتِ تأییدِ شمارهٔ <bdi dir="ltr">{user.phone}</bdi> ({faDate(user.verificationDueAt)}) گذشته است. حسابتان فقط چون تنها مدیرِ کلِ فعالِ سامانه هستید بسته نشد — همین حالا شماره را تأیید کنید.</p>
+            : <p>شماره <bdi dir="ltr">{user.phone}</bdi> را تا {faDate(user.verificationDueAt)} تأیید کنید. حساب تأییدنشده بعد از مهلت غیرفعال می‌شود.</p>}
           <button className="us-btn" disabled={phoneBusy} onClick={() => verifyPhone(false)}>دریافت کد پیامکی</button>
           <label className="lg-field"><span>کد تأیید</span><input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={phoneCode} onChange={e => setPhoneCode(toEnDigits(e.target.value).replace(/[^0-9]/g, ''))} /></label>
           <button className="lg-btn" disabled={phoneBusy || phoneCode.length < 5} onClick={() => verifyPhone(true)}>تأیید شماره</button>
@@ -158,7 +154,7 @@ export default function Profile() {
         </form>
       </div>
 
-      <div className={`lx-toast${toast ? ' on' : ''}`}>{toast}</div>
+      <Toast msg={toast} />
     </div>
   );
 }

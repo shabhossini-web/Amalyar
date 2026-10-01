@@ -153,31 +153,29 @@ border-color: rgba(124, 58, 237, 0.22);       /* ❌ عددِ خام */
 
 ## ۴. اسکلتِ صفحهٔ /app
 
-هر صفحهٔ جدید همین پوسته را دارد (جزئیات در اسکیلِ `amalyar-standard` §۲):
+نوارِ بالا (جستجو، زنگ، پیام‌رسان، منوی پروفایل) مالِ **پوسته** است (`Shell.jsx`)، نه صفحه.
+هر صفحهٔ جدید فقط این را دارد (جزئیات در اسکیلِ `amalyar-standard` §۲):
 
 ```jsx
-<div className="lx">
-  <div className="lx-bg" aria-hidden="true" />
-  <div className="lx-grid" aria-hidden="true" />
-  <div className="lx-shell us-shell">
-    <header className="us-head">
-      <Link to="/app" className="lx-back"><Back width="15" height="15" /> لانچر</Link>
-      <h1>عنوان</h1>
-      <div className="us-head-left"><ProfileMenu onToast={setToast} /></div>
-    </header>
-    {/* کارت‌های `glass us-card` */}
-  </div>
-  <div className={`lx-toast${toast ? ' on' : ''}`}>{toast}</div>
+import PageHeader from '../ui/PageHeader.jsx';
+import Toast, { useToast } from '../ui/Toast.jsx';
+
+<div className="rp">                                   {/* ریشه: `--page-w` را می‌گذارد */}
+  <div className="rp-bg" aria-hidden="true" />
+  <PageHeader tool="reports" sub="یک خطِ توضیح (اختیاری)">
+    <button className="btn-ghost">اکشنِ صفحه</button> {/* اختیاری — در RTL سمتِ چپ */}
+  </PageHeader>
+  {/* محتوا: کارت‌های `glass` با `max-width: var(--page-w); margin-inline: auto` */}
+  <Toast msg={toast} />
 </div>
 ```
 
-| کلاس | نقش |
+| چیز | قاعده |
 |---|---|
-| `.lx-bg` / `.lx-grid` | آئورا + گریدِ بنفش (همیشه `aria-hidden`) |
-| `.lx-shell` | ستونِ مرکزی با عرضِ محدود |
-| `.us-head` | هدرِ سه‌بخشی: بازگشت / عنوان / ProfileMenu |
-| `.us-card` · `.db-stat` · `.us-list` | کارت، کاشیِ آمار، لیست |
-| `.lx-toast` | توستِ پایین‌چین؛ با کلاسِ `on` ظاهر می‌شود |
+| `PageHeader` | **تنها** سربرگِ صفحه (بازبینیِ UX، shell-15): بازگشتِ «امروز» با یک شکل، عنوانِ ۲۱px با آیکونِ **همان کاشی**، زیرعنوان و اکشن‌ها. نام و آیکون از `tool` (کاتالوگِ `tools.jsx`، قانونِ ۲۴)؛ عنوانِ زبانه «نامِ صفحه — نامِ مطب». زیرصفحه `back={{ to, label }}`. سربرگِ دست‌ساز / کلاسِ `*-back` تازه ممنوع. |
+| `--page-w` | ریشهٔ صفحه یکی از دو عرضِ استاندارد را می‌گذارد: `var(--maxw)` (فهرست/جدول، ۱۱۴۰) یا `var(--maxw-form)` (فرم/خواندن، ۷۲۰). سربرگ، `.ui-tabs` و کارت‌ها از همان می‌خوانند — عرضِ دلخواهِ سوم نساز. |
+| `Toast` / `useToast` | توستِ مشترک (`--toast-bg/ink/edge`، در هر دو تم تیره، ظرفِ `aria-live` همیشه در DOM). توستِ دست‌سازِ صفحه نساز. |
+| `.xx-bg` | آئورای پس‌زمینه (همیشه `aria-hidden`). |
 
 ---
 

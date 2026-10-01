@@ -30,6 +30,8 @@ class DeskWalkInDto {
   @IsOptional() @IsInt() startMin?: number;
   @IsOptional() @IsInt() topicId?: number;
   @IsOptional() @IsString() @MaxLength(200) note?: string;
+  /** مراجعهٔ امروزِ پرونده‌ای که همین حالا از میز ساخته شد — نوبت هدفِ همان می‌شود (`forVisitId`). */
+  @IsOptional() @IsInt({ message: 'مراجعه نامعتبر است' }) visitId?: number;
 }
 
 /**

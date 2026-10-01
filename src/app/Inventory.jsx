@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../lib/api.js';
 import { faDate, jStr, jStrToIso, jToday, toEnDigits } from '../lib/jalali.js';
 import JDate from './JDate.jsx';
 import './inventory.css';
-import { Back, Box, Close, Plus, Route, Wave } from '../ui/icons.jsx';
+import { Box, Close, Plus, Route, Wave } from '../ui/icons.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import { useStagger } from '../ui/stagger.js';
@@ -45,7 +45,6 @@ export default function Inventory() {
   const [tab, setTab] = useState('lots');
   const [openTransfers, setOpenTransfers] = useState(0);
 
-  useEffect(() => { document.title = 'عمل‌یار — انبار'; }, []);
   useEffect(() => {
     if (!toast) return undefined;
     const t = setTimeout(() => setToast(''), 2600);
@@ -83,13 +82,7 @@ export default function Inventory() {
   return (
     <div className="iv">
       <div className="iv-bg" aria-hidden="true" />
-      <header className="iv-head">
-        <Link to="/app" className="iv-back"><Back width="15" height="15" /> سامانه</Link>
-        <div>
-          <h1>انبار</h1>
-          <p>موجودی جمعِ دفترِ حرکت است — هر ورود و مصرف ردیفِ خودش را دارد و پاک نمی‌شود.</p>
-        </div>
-      </header>
+      <PageHeader tool="inventory" sub="موجودی جمعِ دفترِ حرکت است — هر ورود و مصرف ردیفِ خودش را دارد و پاک نمی‌شود." />
 
       <Tabs
         label="بخش‌های انبار"
@@ -121,6 +114,7 @@ export default function Inventory() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="جستجو: نامِ کالا، شمارهٔ لات، سریال یا محلِ نگه‌داری"
+          aria-label="جستجو در انبار"
         />
         <div className="iv-filters">
           {FILTERS.map((f) => (
@@ -784,7 +778,7 @@ function TransferSheet({ onClose, onSaved, onError }) {
           lines: lines.map((l) => ({ lotId: l.lot.id, quantity: Number(toEnDigits(l.quantity)) || 0 })),
         },
       });
-      onSaved(`حوالهٔ ${t.code} صادر شد ✓`);
+      onSaved(`حوالهٔ ${t.code} صادر شد`);
     } catch (e) { onError(e.message); } finally { setBusy(false); }
   };
 
@@ -920,7 +914,7 @@ function TransferDetail({ id, onClose, onChanged, onError }) {
                     onClick={() => act(
                       `/stock/transfers/${id}/usage`,
                       { lines: t.lines.map((l) => ({ lotId: l.lotId, used: Number(toEnDigits(used[l.lotId] ?? String(l.used))) || 0 })) },
-                      'برگهٔ مصرف ثبت شد ✓',
+                      'برگهٔ مصرف ثبت شد',
                     )}>
               ثبتِ برگهٔ مصرف
             </button>
@@ -932,7 +926,7 @@ function TransferDetail({ id, onClose, onChanged, onError }) {
             <label className="iv-field"><span>رسیدِ تحویل به CSR</span>
               <input value={csr} onChange={(e) => setCsr(e.target.value)} placeholder="نامِ تحویل‌گیرنده" />
               <button type="button" className="iv-mini" disabled={busy}
-                      onClick={() => act(`/stock/transfers/${id}/receive`, { receivedBy: csr.trim() }, 'رسیدِ CSR ثبت شد ✓')}>
+                      onClick={() => act(`/stock/transfers/${id}/receive`, { receivedBy: csr.trim() }, 'رسیدِ CSR ثبت شد')}>
                 ثبتِ رسید
               </button>
             </label>
@@ -950,7 +944,7 @@ function TransferDetail({ id, onClose, onChanged, onError }) {
               <label className="iv-field"><span>پایانِ عمل — آمادهٔ جمع‌آوری</span>
                 <input value={rel} onChange={(e) => setRel(e.target.value)} placeholder="یادداشت (اختیاری)" />
                 <button type="button" className="iv-mini" disabled={busy}
-                        onClick={() => act(`/stock/transfers/${id}/release`, { note: rel.trim() }, 'پایانِ عمل اعلام شد ✓')}>
+                        onClick={() => act(`/stock/transfers/${id}/release`, { note: rel.trim() }, 'پایانِ عمل اعلام شد')}>
                   اعلامِ پایان
                 </button>
               </label>
@@ -1001,7 +995,7 @@ function TransferDetail({ id, onClose, onChanged, onError }) {
             <button type="button" className="iv-mini" onClick={() => printTransfer(t)}>چاپِ حواله</button>
             {t.status !== 'closed' && (
               <button type="button" className="iv-mini warn" disabled={busy}
-                      onClick={() => act(`/stock/transfers/${id}/return`, undefined, 'ماندهٔ حواله برگشت خورد ✓')}>
+                      onClick={() => act(`/stock/transfers/${id}/return`, undefined, 'ماندهٔ حواله برگشت خورد')}>
                 برگشتِ مانده و بستنِ حواله
               </button>
             )}
@@ -1121,7 +1115,7 @@ function LotSheet({ onClose, onSaved, onError }) {
           expiresAt,
         },
       });
-      await onSaved('لات ثبت شد ✓');
+      await onSaved('لات ثبت شد');
     } catch (e) { onError(e.message); } finally { setBusy(false); }
   };
 
@@ -1193,9 +1187,9 @@ function LotSheet({ onClose, onSaved, onError }) {
 }
 
 const MOVE_META = {
-  in: { title: 'ورودِ کالا', label: 'تعدادِ ورودی', path: 'receive', ok: 'ورود ثبت شد ✓' },
-  out: { title: 'مصرف / خروج', label: 'تعدادِ مصرفی', path: 'consume', ok: 'مصرف ثبت شد ✓' },
-  adjust: { title: 'اصلاحِ شمارش', label: 'چند عدد شمردید؟', path: 'adjust', ok: 'موجودی اصلاح شد ✓' },
+  in: { title: 'ورودِ کالا', label: 'تعدادِ ورودی', path: 'receive', ok: 'ورود ثبت شد' },
+  out: { title: 'مصرف / خروج', label: 'تعدادِ مصرفی', path: 'consume', ok: 'مصرف ثبت شد' },
+  adjust: { title: 'اصلاحِ شمارش', label: 'چند عدد شمردید؟', path: 'adjust', ok: 'موجودی اصلاح شد' },
 };
 
 function MoveSheet({ lot, mode, onClose, onSaved, onError }) {

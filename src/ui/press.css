@@ -296,7 +296,6 @@
   .db-st-pending, .db-st-done, .db-st-cancelled { min-height: 36px; }
   .db-add { min-height: 42px; }
   .ax-cell { min-width: 36px; min-height: 36px; }
-  .ax-back, .ia-back { padding: 8px 10px; margin: -8px -10px; }
   .fb-color { width: 26px; height: 26px; }
   .fb-color.auto { width: auto; min-height: 30px; }
   .fb-req { min-height: 34px; }

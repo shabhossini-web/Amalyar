@@ -54,6 +54,29 @@ async function scenario(name, act) {
   if (n) { await p.reload({ waitUntil: 'networkidle' }); await p.waitForTimeout(1500); }
 }
 
+/**
+ * تا گامِ ۳ِ فرمِ عمل — جایی که شیت `Tabs` دارد («مشخصات | قبل | حین | بعد»). گامِ ۱ از بازبینیِ UX
+ * (clinic-daily-22) یک جست‌وجوی واحد است و دیگر تبِ «بیمارِ جدید/موجود» ندارد؛ نگهبانِ همان باگ حالا
+ * روی زبانه‌های فرمِ عمل است. نوعِ «عمل» اگر پرسیده نشود (شرکتِ تک‌فرمه) همان پیش‌فرض است.
+ */
+const toSurgeryTabs = async () => {
+  await p.locator('.db-sheet [data-act="new-record"]').click();
+  await p.locator('.db-sheet .db-grid2 input').nth(0).fill('آزمونِ');
+  await p.locator('.db-sheet .db-grid2 input').nth(1).fill('شیت');
+  await p.locator('.db-stepnav .db-submit').click();
+  const sk = p.locator('.db-kindrow button[data-kind="surgery"]');
+  await sk.first().waitFor({ timeout: 5000 }).catch(() => {});
+  if (await sk.count()) await sk.first().click();
+  /* فرمِ تک‌نوع در نصبِ تک‌خدمته گامِ «نوع» ندارد (company-24) — «بعدی»ِ دوم فقط اگر هنوز در گامِ ۲ایم. */
+  if (await p.locator('.db-stepnav .db-submit').count()) await p.locator('.db-stepnav .db-submit').click();
+  await p.locator('.db-sheet .db-phasetabs').waitFor({ timeout: 8000 });
+};
+/* نام‌ها تایپ شده‌اند، پس بستن اول می‌پرسد (clinic-daily-08) — «دور ریختن». */
+const closeTyped = async () => {
+  await p.locator('.db-x').click();
+  await p.locator('[data-unsaved="discard"]').click({ timeout: 4000 });
+};
+
 console.log('۱) مسیرهای بستنِ شیتِ مراجعه');
 await scenario('بستن با ضربدر، بدونِ دست‌زدن به تب', async () => {
   await p.locator('.db-x').click();
@@ -61,15 +84,22 @@ await scenario('بستن با ضربدر، بدونِ دست‌زدن به تب'
 
 // ⚠️ همان سناریویی که باگ را داشت.
 await scenario('عوض‌کردنِ تبِ داخلِ شیت و بعد بستن', async () => {
-  await p.locator('.db-modetabs button:has-text("بیمارِ موجود")').click();
+  await toSurgeryTabs();
+  await p.locator('.db-phasetabs button').nth(1).click();
   await p.waitForTimeout(500);
-  await p.locator('.db-modetabs button:has-text("بیمارِ جدید")').click();
+  await p.locator('.db-phasetabs button').nth(0).click();
   await p.waitForTimeout(500);
-  await p.locator('.db-x').click();
+  await closeTyped();
 });
 
-await scenario('بستن با کلیک روی پس‌زمینه', async () => {
+/* ⚠️ از بازبینیِ UX ۱۴۰۵/۰۷ (clinic-daily-08) لمسِ پس‌زمینه فرمِ بلندِ مراجعه را **نمی‌بندد** — بیشتر
+   اشتباهِ انگشت بود تا خواستنِ بستن. سناریو همان می‌ماند (پس‌زمینه، بعد بستن) و می‌سنجد که لمس شیت را
+   نگه داشت و بستنِ واقعی باز هم هیچ پوششی جا نگذاشت. */
+await scenario('کلیک روی پس‌زمینه نمی‌بندد؛ بعد بستن با ضربدر', async () => {
   await p.locator('.db-overlay').click({ position: { x: 8, y: 8 } });
+  await p.waitForTimeout(400);
+  ok(await p.locator('.db-sheet').count() === 1, 'لمسِ پس‌زمینه شیتِ مراجعه را باز نگه داشت');
+  await p.locator('.db-x').click();
 });
 
 console.log('\n۲) بعد از بستن، صفحه واقعاً کار می‌کند');
@@ -81,18 +111,21 @@ ok(usable, 'دکمهٔ «مراجعهٔ جدید» دوباره قابلِ کل�
 console.log('\n۳) قرصِ تب دقیقاً روی دکمهٔ فعال می‌نشیند');
 await p.locator('.db-add').click();
 await p.waitForTimeout(800);
-const geom = async () => p.evaluate(() => [...document.querySelectorAll('.ui-tabs')].map((nav) => {
+await toSurgeryTabs();
+const geom = async () => p.evaluate(() => [...document.querySelectorAll('.db-sheet .ui-tabs')].map((nav) => {
   const pill = nav.querySelector('.ui-tab-pill');
   const on = nav.querySelector('button[aria-selected="true"]');
   if (!pill || !on) return null;
   const a = pill.getBoundingClientRect(), c = on.getBoundingClientRect();
   return Math.max(Math.abs(a.left - c.left), Math.abs(a.top - c.top), Math.abs(a.width - c.width), Math.abs(a.height - c.height));
 }).filter((x) => x !== null));
-ok((await geom()).every((d) => d <= 1), 'قبل از لغزش، انطباق زیرِ ۱ پیکسل');
-await p.locator('.db-modetabs button:has-text("بیمارِ موجود")').click();
+const g0 = await geom();
+ok(g0.length >= 1 && g0.every((d) => d <= 1), 'قبل از لغزش، انطباق زیرِ ۱ پیکسل');
+await p.locator('.db-phasetabs button').nth(2).click();
 await p.waitForTimeout(900);
-ok((await geom()).every((d) => d <= 1), 'بعد از لغزش هم همان‌طور');
-await p.locator('.db-x').click();
+const g1 = await geom();
+ok(g1.length >= 1 && g1.every((d) => d <= 1), 'بعد از لغزش هم همان‌طور');
+await closeTyped();
 await p.waitForTimeout(1200);
 ok(await leftovers() === 0, 'و باز هم overlayی نماند');
 

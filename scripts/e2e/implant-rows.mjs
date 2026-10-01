@@ -70,7 +70,9 @@ try {
   ok(byItem(r, A.id)?.prescribedQuantity === 4 && byItem(r, B.id)?.prescribedQuantity === 2, '**تأیید تعدادها را «طبقِ نسخه» ثبت می‌کند**', JSON.stringify(r));
 
   console.log('\n۲) پرتالِ جراح — برنامه عوض می‌شود، نسخه نه');
-  const grant = await surgeonPortal.grantAccount(surgeon.id, admin);
+  /* بستهٔ PS (PS6): شماره را سوپرادمین از خودِ جراح می‌پرسد و با تعاریف سنجیده می‌شود. */
+  const surgeonPhone = (await prisma.person.findUnique({ where: { id: surgeon.personId }, select: { phone: true } })).phone;
+  const grant = await surgeonPortal.grantAccount(surgeon.id, admin, surgeonPhone);
   const doctor = await prisma.account.findUnique({ where: { id: grant.id } });
   await surgeonPortal.saveInstructions(vid, { instructions: 'یک پیچِ یدک هم بیاورید', requiredItems: [
     { itemId: A.id, quantity: 5, notes: 'یدک' }, { itemId: B.id, quantity: 2, notes: '' }, { itemId: C.id, quantity: 1, notes: '' }] }, doctor);

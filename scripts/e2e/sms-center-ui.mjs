@@ -42,7 +42,8 @@ try {
   const smsGroup = page.locator('.st-group', { has: page.locator('b:has-text("پیامک‌ها و زمان‌بندی")') });
   ok(await smsGroup.locator('textarea').count() >= 6, 'متن‌های پیامک به‌شکلِ textarea');
   ok(await smsGroup.locator('input[inputmode="numeric"]').count() >= 5, 'زمان‌بندی‌ها به‌شکلِ عددی');
-  ok(await page.locator('h3:has-text("سربرگِ شرکت")').count() === 1, 'پنلِ سربرگ هست');
+  /* «سربرگِ شرکت» یا «سربرگِ مطب» — واژهٔ سازمان از حوزه (بازبینیِ UX، shell-08). */
+  ok(await page.locator('h3', { hasText: /^سربرگِ (شرکت|مطب)$/ }).count() === 1, 'پنلِ سربرگ هست');
   ok(await page.locator('.st-letterhead .st-file').count() === 1, 'دکمهٔ انتخابِ تصویرِ سربرگ');
   ok(await page.locator('label:has-text("سربرگ — شناسهٔ فایل")').count() === 0,
     '**کلیدهای پنهانِ سربرگ در فرمِ عمومی نیستند**');

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { J_MONTHS, jToday } from '../lib/jalali.js';
 import { toEnDigits } from '../lib/identity.js';
+import { faTime } from '../lib/time.js';
 import JGrid from './JGrid.jsx';
 import TimePick from '../ui/TimePick.jsx';
-import { ChevronEnd, Plus, Trash } from '../ui/icons.jsx';
+import { Plus, Trash } from '../ui/icons.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import './schedule.css';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
@@ -57,7 +58,6 @@ export default function Schedule() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  useEffect(() => { document.title = 'عمل‌یار — برنامهٔ کاری'; }, []);
 
   const loadDefs = useCallback(async () => {
     try {
@@ -107,7 +107,7 @@ export default function Schedule() {
       setForm(EMPTY);
       setAdding(false);
       await Promise.all([loadDefs(), loadCal(ym.y, ym.m)]);
-      say('روزِ کاری اضافه شد ✓');
+      say('روزِ کاری اضافه شد');
     } catch (e) { say(e.message, true); } finally { setBusy(false); }
   };
 
@@ -119,12 +119,17 @@ export default function Schedule() {
     } catch (e) { say(e.message, true); } finally { setBusy(false); }
   };
 
+  /* هشدار: حذفِ روزِ کاری **می‌پرسد** (بازبینیِ UX، clinic-daily-15): سطلِ هر روز کنارِ کلیدِ «فعال»
+     بود و با یک لمس کلِ آن روزِ هفته را از نوبت‌دهی برمی‌داشت، بی‌پرسش و بی‌برگشت. پرسش همان‌جا
+     روی ردیف باز می‌شود (نامِ روز و ساعت + پیامد)، فوکوس روی «انصراف» می‌نشیند. */
+  const [askDel, setAskDel] = useState(0);
   const remove = async (r) => {
+    setAskDel(0);
     setBusy(true);
     try {
       await api(`/availability/rules/${r.id}`, { method: 'DELETE' });
       await Promise.all([loadDefs(), loadCal(ym.y, ym.m)]);
-      say('حذف شد ✓');
+      say('حذف شد');
     } catch (e) { say(e.message, true); } finally { setBusy(false); }
   };
 
@@ -136,7 +141,7 @@ export default function Schedule() {
     try {
       await api('/availability/exceptions', { method: 'POST', body: { date: picked.date, closed: true } });
       await loadCal(ym.y, ym.m);
-      say('این روز تعطیل شد ✓');
+      say('این روز تعطیل شد');
     } catch (e) { say(e.message, true); } finally { setBusy(false); }
   };
 
@@ -148,7 +153,7 @@ export default function Schedule() {
       const row = list.find((x) => String(x.date).slice(0, 10) === picked.date);
       if (row) await api(`/availability/exceptions/${row.id}`, { method: 'DELETE' });
       await loadCal(ym.y, ym.m);
-      say('تعطیلی برداشته شد ✓');
+      say('تعطیلی برداشته شد');
     } catch (e) { say(e.message, true); } finally { setBusy(false); }
   };
 
@@ -158,13 +163,7 @@ export default function Schedule() {
     <div className="sc">
       <div className="sc-bg" aria-hidden="true" />
 
-      <header className="sc-head">
-        <Link to="/app" className="sc-back"><ChevronEnd width="15" height="15" /> سامانه</Link>
-        <div>
-          <h1>برنامهٔ کاری</h1>
-          <p>روزها و ساعت‌هایی که بیمار می‌تواند نوبت بگیرد</p>
-        </div>
-      </header>
+      <PageHeader tool="schedule" sub="روزها و ساعت‌هایی که بیمار می‌تواند نوبت بگیرد" />
 
       <section className="sc-card">
         <div className="sc-title">
@@ -274,32 +273,53 @@ export default function Schedule() {
 
         <div className="sc-week">
           {grouped.map((g) => (
+            /* هشدار: نامِ روز یک ستون و ساعت‌های همان روز کنارش (بازبینیِ UX، clinic-daily-25): تا پیش از
+               این ساعت با `dir="ltr"` روی خودِ بلوک وسطِ کارت می‌افتاد، دور از نامِ روز، و رقمش لاتین بود. */
             <div key={g.i} className={`sc-day${g.rows.length ? '' : ' empty'}`}>
               <b>{g.label}</b>
-              {g.rows.length === 0 ? <small>—</small> : g.rows.map((r) => (
-                <article key={r.id} className={`sc-rule${r.active ? '' : ' off'}`}>
-                  <div>
-                    <b dir="ltr">{r.start}–{r.end}</b>
-                    <small>
-                      {r.mode === 'slot'
-                        ? `هر ${faNum(r.slotMinutes)} دقیقه · ${faNum(r.slotsPerDay)} نوبت`
-                        : `ظرفیت ${faNum(r.capacity)} نفر`}
-                      {r.doctorName ? ` · ${r.doctorName}` : ''}
-                    </small>
-                    {r.topics.length > 0 && (
-                      <small className="sc-topics">{r.topics.map((t) => t.name).join('، ')}</small>
+              <div className="sc-day-rules">
+                {g.rows.length === 0 ? <small>—</small> : g.rows.map((r) => (
+                  <article key={r.id} className={`sc-rule${r.active ? '' : ' off'}`}>
+                    <div>
+                      <b className="sc-hours"><bdi dir="ltr">{faTime(r.start)}–{faTime(r.end)}</bdi></b>
+                      <small>
+                        {r.mode === 'slot'
+                          ? `هر ${faNum(r.slotMinutes)} دقیقه · ${faNum(r.slotsPerDay)} نوبت`
+                          : `ظرفیت ${faNum(r.capacity)} نفر`}
+                        {r.doctorName ? ` · ${r.doctorName}` : ''}
+                      </small>
+                      {r.topics.length > 0 && (
+                        <small className="sc-topics">{r.topics.map((t) => t.name).join('، ')}</small>
+                      )}
+                    </div>
+                    {askDel === r.id ? (
+                      <div className="sc-ask" role="group" aria-label={`حذفِ روزِ کاریِ ${g.label}`}>
+                        <p>
+                          حذفِ «{g.label} <bdi dir="ltr">{faTime(r.start)}–{faTime(r.end)}</bdi>»؟ نوبت‌دهیِ این ساعت‌ها در همهٔ {g.label}‌ها
+                          برداشته می‌شود و برگشت ندارد. برای بستنِ فقط یک روز، «تعطیل‌کردنِ این روز» در پیش‌نمایش کافی است.
+                        </p>
+                        <div>
+                          <button type="button" className="danger" onClick={() => remove(r)} disabled={busy}>حذفِ روزِ کاری</button>
+                          {/* فوکوس روی گزینهٔ امن، همان لحظه که پرسش باز شد. */}
+                          <button type="button" autoFocus onClick={() => setAskDel(0)}>انصراف</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="sc-tools">
+                        <button type="button" onClick={() => toggle(r)} disabled={busy} aria-pressed={r.active}
+                                title={r.active ? 'خاموش‌کردنِ نوبت‌دهیِ این ساعت‌ها' : 'روشن‌کردنِ نوبت‌دهیِ این ساعت‌ها'}>
+                          {r.active ? 'فعال' : 'خاموش'}
+                        </button>
+                        {/* سطل **دور** از کلیدِ روشن/خاموش، با جداکننده — و خودش فقط پرسش را باز می‌کند. */}
+                        <button type="button" className="del" onClick={() => setAskDel(r.id)} disabled={busy}
+                                aria-label={`حذفِ روزِ کاریِ ${g.label} ${faTime(r.start)} تا ${faTime(r.end)}`} title="حذفِ این روزِ کاری">
+                          <Trash width="14" height="14" />
+                        </button>
+                      </div>
                     )}
-                  </div>
-                  <div className="sc-tools">
-                    <button type="button" onClick={() => toggle(r)} disabled={busy} title={r.active ? 'خاموش' : 'روشن'}>
-                      {r.active ? 'فعال' : 'خاموش'}
-                    </button>
-                    <button type="button" className="del" onClick={() => remove(r)} disabled={busy} title="حذف">
-                      <Trash width="14" height="14" />
-                    </button>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                ))}
+              </div>
             </div>
           ))}
         </div>
@@ -344,13 +364,13 @@ export default function Schedule() {
               <>
                 {picked.windows.map((w, i) => (
                   <div key={i} className="sc-win">
-                    <b dir="ltr">{w.start}–{w.end}</b>
+                    <b><bdi dir="ltr">{faTime(w.start)}–{faTime(w.end)}</bdi></b>
                     {w.mode === 'capacity' ? (
                       <small>{faNum(w.left)} از {faNum(w.capacity)} جا مانده</small>
                     ) : (
                       <div className="sc-slots">
                         {w.slots.map((sl) => (
-                          <span key={sl.startMin} className={sl.taken ? 'taken' : ''} dir="ltr">{sl.time}</span>
+                          <span key={sl.startMin} className={sl.taken ? 'taken' : ''} dir="ltr">{faTime(sl.time)}</span>
                         ))}
                       </div>
                     )}

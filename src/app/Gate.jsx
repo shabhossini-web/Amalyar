@@ -42,7 +42,7 @@ export default function Gate({ feature, children }) {
         <span className="gt-ic"><Lock width="22" height="22" /></span>
         <b>{state.label ?? 'این بخش'} در دسترسِ شما نیست</b>
         <p>{state.reason ?? 'برای این بخش دسترسی ندارید.'}</p>
-        <Link to="/app" className="gt-back">بازگشت به سامانه</Link>
+        <Link to="/app" className="gt-back">بازگشت به امروز</Link>
       </div>
     </div>
   );

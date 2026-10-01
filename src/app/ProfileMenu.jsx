@@ -6,6 +6,8 @@ import { getAccounts } from '../lib/accountsStore.js';
 import './profile-menu.css';
 import { Caret, Check, Fingerprint, Grid, LogOut, Moon, Plus, Sun, User } from '../ui/icons.jsx';
 import { setTheme, setDensity } from '../lib/theme.js';
+import { useConfirm } from '../ui/Confirm.jsx';
+import { canLeave } from '../lib/leave-guard.js';
 
 
 const Avatar = ({ u, size = 32 }) => (
@@ -18,8 +20,14 @@ const Avatar = ({ u, size = 32 }) => (
 
 /**
  * کامپوننتِ استانداردِ پروفایل — بالای هر صفحهٔ سامانه.
- * چیپ (سلفی + نام + سطح) → دراپ‌داون: حساب‌های فعال (سوییچ/خروجِ تکی)،
- * افزودن حساب، بازگشت به صفحهٔ نخست، اثر انگشت، خروج از همه.
+ * چیپ (سلفی + نام + سطح) → پنجرهٔ بازشو: حساب‌های فعال (سوییچ/خروجِ تکی)، «پروفایلِ من»،
+ * افزودن حساب، بازگشت به صفحهٔ نخست، اثر انگشت، نمایش، «خروج» و — فقط با بیش از یک حساب —
+ * «خروج از همهٔ حساب‌ها» با پرسشِ تأیید.
+ *
+ * بازبینیِ UX (۱۴۰۵/۰۷): رفتن به پروفایل فقط با زدنِ نامِ خودتان در فهرستِ حساب‌ها ممکن بود
+ * (راهنمایش tooltipی که روی گوشی دیده نمی‌شد)، تنها «خروج»ِ آشکار «خروج از همهٔ حساب‌ها»ی قرمز
+ * و بی‌پرسش بود — حتی با یک حساب — و منو `role="menu"` داشت بی‌آنکه با کلیدهای جهت حرکت کند.
+ * حالا پنجره‌ای ساده است (Tab و Escape؛ کلیدهای بالا/پایین هم بینِ گزینه‌ها می‌برند) و نقشِ menu ندارد.
  */
 export default function ProfileMenu({ onToast }) {
   const { user, accountsVersion, switchAccount, logoutAccount, logoutAll, webauthnRegister } = useAuth();
@@ -28,6 +36,9 @@ export default function ProfileMenu({ onToast }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const ref = useRef(null);
+  const chipRef = useRef(null);
+  const menuRef = useRef(null);
+  const [confirmNode, confirm] = useConfirm();
   const toast = (m) => onToast?.(m);
   /* ⚠️ حالتِ تم از **خودِ DOM** خوانده می‌شود، نه از یک state موازی: منبعِ حقیقت
      صفتِ `data-theme` روی `<html>` است که `main.jsx` و `config.jsx` هم آن را
@@ -56,7 +67,8 @@ export default function ProfileMenu({ onToast }) {
     const onDown = (e) => {
       if (ref.current && !ref.current.contains(e.target)) setOpen(false);
     };
-    const onKey = (e) => e.key === 'Escape' && setOpen(false);
+    /* Escape می‌بندد و فوکوس را به چیپ برمی‌گرداند — کاربرِ صفحه‌کلید سرِ `body` نمی‌افتد. */
+    const onKey = (e) => { if (e.key === 'Escape') { setOpen(false); chipRef.current?.focus(); } };
     document.addEventListener('pointerdown', onDown);
     document.addEventListener('keydown', onKey);
     return () => {
@@ -65,7 +77,30 @@ export default function ProfileMenu({ onToast }) {
     };
   }, [open]);
 
+  /* بازشدن با صفحه‌کلید: فوکوس به اولین گزینه — نه ماندن روی چیپ پشتِ پنجره. */
+  useEffect(() => {
+    if (!open) return;
+    const id = requestAnimationFrame(() => {
+      if (document.activeElement === chipRef.current && chipRef.current?.matches(':focus-visible')) {
+        menuRef.current?.querySelector('button:not([disabled])')?.focus();
+      }
+    });
+    return () => cancelAnimationFrame(id);
+  }, [open]);
+
   if (!user) return null;
+
+  /* بالا/پایین/Home/End بینِ دکمه‌های پنجره. */
+  const onMenuKey = (e) => {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+    const items = [...(menuRef.current?.querySelectorAll('button:not([disabled])') ?? [])];
+    if (!items.length) return;
+    e.preventDefault();
+    const i = items.indexOf(document.activeElement);
+    const next = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1
+      : e.key === 'ArrowDown' ? (i + 1) % items.length : (i - 1 + items.length) % items.length;
+    items[next].focus();
+  };
 
   const run = async (fn) => {
     if (busy) return;
@@ -79,14 +114,18 @@ export default function ProfileMenu({ onToast }) {
     }
   };
 
+  /* پیش‌نویسِ ذخیره‌نشدهٔ صفحه (`leave-guard`، R11): رفتن به صفحهٔ دیگر، جابه‌جاییِ حساب و خروج
+     هر سه صفحهٔ فعلی را رها می‌کنند؛ پس پیش از خودِ کار پرسیده می‌شود — نه بعد از خروج. */
   const doSwitch = (id) =>
     run(async () => {
       if (id === user.id) {
         // حسابِ خودت → صفحهٔ پروفایل
+        if (!canLeave('/app/profile')) return;
         setOpen(false);
         navigate('/app/profile');
         return;
       }
+      if (!canLeave()) return;
       const me = await switchAccount(id);
       toast(`سوییچ به «${me.displayName}»`);
       setOpen(false);
@@ -94,22 +133,34 @@ export default function ProfileMenu({ onToast }) {
 
   const doLogoutOne = (id, name) =>
     run(async () => {
+      if (id === user.id && !canLeave()) return;
       const nextId = await logoutAccount(id);
       toast(`«${name}» خارج شد`);
       if (nextId === null) navigate('/login', { replace: true });
     });
 
-  const doLogoutAll = () =>
+  const doLogoutAll = async () => {
+    if (!canLeave()) return;
+    const ok = await confirm({
+      title: 'از همهٔ حساب‌ها خارج می‌شوید؟',
+      body: `از ${accounts.length.toLocaleString('fa-IR')} حسابِ این مرورگر خارج می‌شوید و برای هر کدام باید دوباره وارد شوید.`,
+      ok: 'خروج از همه',
+      danger: true,
+    });
+    if (!ok) return;
     run(async () => {
       await logoutAll();
       navigate('/login', { replace: true });
     });
+  };
+
+  const goProfile = () => { if (!canLeave('/app/profile')) return; setOpen(false); navigate('/app/profile'); };
 
   const doBio = () =>
     run(async () => {
       try {
         await webauthnRegister();
-        toast('ورود با اثر انگشت فعال شد ✓');
+        toast('ورود با اثر انگشت فعال شد');
       } catch (e) {
         if (e?.name === 'InvalidStateError') toast('اثر انگشتِ این دستگاه قبلاً فعال شده');
         else throw e;
@@ -124,11 +175,12 @@ export default function ProfileMenu({ onToast }) {
   return (
     <div className="pm" ref={ref}>
       <button
+        ref={chipRef}
         className="glass pm-chip"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        aria-haspopup="menu"
-        aria-label="منوی پروفایل"
+        aria-controls="pm-menu"
+        aria-label={`منوی پروفایل — ${user.displayName}`}
       >
         <Avatar u={user} size={34} />
         <span className="pm-chip-meta">
@@ -141,8 +193,12 @@ export default function ProfileMenu({ onToast }) {
       <AnimatePresence>
         {open && (
           <motion.div
+            ref={menuRef}
+            id="pm-menu"
             className="glass pm-menu"
-            role="menu"
+            role="dialog"
+            aria-label="حساب و نمایش"
+            onKeyDown={onMenuKey}
             initial={{ opacity: 0, y: -8, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.98 }}
@@ -153,7 +209,6 @@ export default function ProfileMenu({ onToast }) {
                 <div key={a.user.id} className={`pm-acc${a.user.id === user.id ? ' active' : ''}`}>
                   <button
                     className="pm-acc-main"
-                    role="menuitem"
                     disabled={busy}
                     onClick={() => doSwitch(a.user.id)}
                     title={a.user.id === user.id ? 'مشاهدهٔ پروفایل' : 'ورود به این حساب'}
@@ -165,35 +220,41 @@ export default function ProfileMenu({ onToast }) {
                     </span>
                     {a.user.id === user.id && <span className="pm-active-mark"><Check width="15" height="15" /></span>}
                   </button>
-                  <button
-                    className="pm-acc-out"
-                    disabled={busy}
-                    onClick={() => doLogoutOne(a.user.id, a.user.displayName)}
-                    aria-label={`خروج از ${a.user.displayName}`}
-                    title="خروج از این حساب"
-                  >
-                    <LogOut width="15" height="15" />
-                  </button>
+                  {a.user.id !== user.id && (
+                    <button
+                      className="pm-acc-out"
+                      disabled={busy}
+                      onClick={() => doLogoutOne(a.user.id, a.user.displayName)}
+                      aria-label={`خروج از ${a.user.displayName}`}
+                      title="خروج از این حساب"
+                    >
+                      <LogOut width="15" height="15" />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
 
             <div className="pm-sep" />
 
-            <button className="pm-item" role="menuitem" disabled={busy}
-              onClick={() => { setOpen(false); navigate('/login?add=1'); }}>
+            <button className="pm-item" disabled={busy} onClick={goProfile}>
+              <User width="17" height="17" /> پروفایلِ من
+            </button>
+
+            <button className="pm-item" disabled={busy}
+              onClick={() => { if (!canLeave('/login?add=1')) return; setOpen(false); navigate('/login?add=1'); }}>
               <Plus width="17" height="17" /> افزودن حساب کاربری
             </button>
 
             {!onHome && (
-              <button className="pm-item" role="menuitem" disabled={busy}
-                onClick={() => { setOpen(false); navigate('/app'); }}>
+              <button className="pm-item" disabled={busy}
+                onClick={() => { if (!canLeave('/app')) return; setOpen(false); navigate('/app'); }}>
                 <Grid width="17" height="17" /> صفحهٔ امروز
               </button>
             )}
 
             {'PublicKeyCredential' in window && (
-              <button className="pm-item" role="menuitem" disabled={busy} onClick={doBio}>
+              <button className="pm-item" disabled={busy} onClick={doBio}>
                 <Fingerprint width="17" height="17" /> فعال‌سازی ورود با اثر انگشت
               </button>
             )}
@@ -229,12 +290,19 @@ export default function ProfileMenu({ onToast }) {
 
             <div className="pm-sep" />
 
-            <button className="pm-item danger" role="menuitem" disabled={busy} onClick={doLogoutAll}>
-              <LogOut width="17" height="17" /> خروج از همهٔ حساب‌ها
+            <button className="pm-item" disabled={busy} onClick={() => doLogoutOne(user.id, user.displayName)}>
+              <LogOut width="17" height="17" /> خروج
             </button>
+            {/* «خروج از همه» فقط وقتی بیش از یک حساب هست — و با پرسش. */}
+            {accounts.length > 1 && (
+              <button className="pm-item danger" disabled={busy} onClick={doLogoutAll}>
+                <LogOut width="17" height="17" /> خروج از همهٔ حساب‌ها
+              </button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
+      {confirmNode}
     </div>
   );
 }

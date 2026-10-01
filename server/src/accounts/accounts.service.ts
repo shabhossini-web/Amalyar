@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { AuthService } from '../auth/auth.service';
+import { AuthService, USERNAME_NEEDS_LETTER, usernameHasLetter } from '../auth/auth.service';
 import { LEVEL } from '../common/levels';
 import { JOB_ROLE_KEYS } from '../common/job-roles';
 import { buildPersonPatch, PersonInput } from '../common/person';
@@ -32,6 +32,8 @@ export class AccountsService {
       const existing = dto.testAccount ? null : await tx.person.findUnique({ where: { phone_phoneScope: { phone: String(person.phone), phoneScope: 'primary' } }, include: { account: true } });
       if (existing?.account) throw new BadRequestException('این شماره حساب دارد؛ حساب موجود را ویرایش کنید');
       const username = dto.username?.trim() || `staff-${randomBytes(5).toString('hex')}`;
+      /* تمام‌رقم با شمارهٔ موبایلِ کسِ دیگری اشتباه می‌شد (بستهٔ PS، PS9). */
+      if (!usernameHasLetter(username)) throw new BadRequestException(USERNAME_NEEDS_LETTER);
       if (await tx.account.findUnique({ where: { username } })) throw new BadRequestException('این نام کاربری قبلاً گرفته شده است');
       if (dto.testAccount) (person as any).phoneScope = `test:${randomUUID()}`;
       const row = await tx.account.create({ data: { ...(existing ? { personId: existing.id } : { person: { create: person as any } }), username, passwordHash, level: dto.level, jobRole: dto.jobRole, status: 'active', verificationDueAt: verificationDeadline(), approvedById: actorId, approvedAt: new Date() }, include: { person: true } });
@@ -223,20 +225,30 @@ export class AccountsService {
    * مقصدِ پرداخت است و دستمزد رقمِ قرارداد — هیچ‌کدام نباید با حسابِ لو رفتهٔ
    * خودِ کاربر قابلِ تغییر باشند.
    */
-  async updateProfile(id: number, dto: PersonInput & { fee?: number | null }) {
+  async updateProfile(id: number, dto: PersonInput & { fee?: number | null }, actor?: { id?: number; sid?: string }) {
     const acc = await this.prisma.account.findUnique({ where: { id }, include: { person: true } });
     if (!acc || acc.systemKey) throw new NotFoundException('حساب یافت نشد');
 
     const personPatch = buildPersonPatch(dto, false);
     const phoneChanged = personPatch.phone !== undefined && personPatch.phone !== acc.person.phone;
     if (phoneChanged && !personPatch.phone) throw new BadRequestException('حساب کاربری باید شماره همراه داشته باشد');
-    await this.prisma.account.update({
-      where: { id },
-      data: {
-        ...(phoneChanged ? { phoneVerifiedAt: null, verificationDueAt: verificationDeadline() } : {}),
-        ...(dto.fee !== undefined ? { fee: dto.fee === null ? null : Math.max(0, Math.trunc(dto.fee)) } : {}),
-        ...(Object.keys(personPatch).length ? { person: { update: personPatch } } : {}),
-      },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.account.update({
+        where: { id },
+        data: {
+          ...(phoneChanged ? { phoneVerifiedAt: null, verificationDueAt: verificationDeadline() } : {}),
+          ...(dto.fee !== undefined ? { fee: dto.fee === null ? null : Math.max(0, Math.trunc(dto.fee)) } : {}),
+          ...(Object.keys(personPatch).length ? { person: { update: personPatch } } : {}),
+        },
+      });
+      if (!phoneChanged) return;
+      /* هشدار — **شماره عوض شد ← نشست‌های همان حساب بسته** (بستهٔ PS، PS3). شماره راهِ ورود و بازیابی است؛
+         نشستی که با شمارهٔ قبلی باز شده بود نباید بماند. فقط نشستِ جاریِ خودِ کسی که شمارهٔ **خودش** را عوض
+         می‌کند می‌ماند — وگرنه با ذخیرهٔ فرم بیرون می‌افتاد. */
+      const keep = actor?.id === id && actor?.sid ? actor.sid : undefined;
+      await tx.session.updateMany({ where: { accountId: id, revokedAt: null, ...(keep ? { id: { not: keep } } : {}) }, data: { revokedAt: new Date() } });
+      await tx.auditEvent.create({ data: { actorId: actor?.id ?? null, action: 'account.phone.change', entityType: 'account', entityId: String(id),
+        beforeJson: { phone: acc.person.phone }, afterJson: { phone: String(personPatch.phone) } } });
     });
     return this.get(id);
   }

@@ -2,14 +2,15 @@
  * **رابطِ زیرفرم‌های مراجعه** (طرحِ مصوبِ ۱۴۰۵/۰۷/۰۳) — سمتِ API در `visit-subforms.mjs`.
  *
  *  باید بیفتد:
- *   - سربرگ فقط نامِ مراجعه + موضوع + «الصاقِ فرم» + سه «فرمِ منتخب»؛ ویرایش انتخابگرِ نوع ندارد
+ *   - سربرگ فقط نامِ مراجعه + موضوع + «الصاقِ فرم» + منتخب‌ها (تا ستاره‌ای نخورده، یک خطِ راهنما به‌جای سه
+ *     اسلاتِ خالی — بازبینیِ UX، surgery-22)؛ ویرایش انتخابگرِ نوع ندارد
  *   - ستاره در پنجرهٔ الصاق فرم را منتخب می‌کند (سمتِ سرور) و اسلات با یک کلیک الصاقش می‌کند
  *   - زیرفرمِ پرشده با ذخیرهٔ مراجعه می‌نشیند و دوباره باز می‌شود؛ × فقط روی خالی
  *   - تصمیمِ کشویی: گزینهٔ انحصاری بقیه را پاک می‌کند
  *   - اندازهٔ علائمِ حیاتیِ تایپ‌شده بی «ثبت» با ذخیرهٔ فرم می‌نشیند
  *   - ابزارهای دستیار آیکونِ کوچکِ داخلِ کادرند
  *   - دسکتاپ دوستونه، موبایل زیرفرم‌ها بالا؛ بدونِ سرریزِ افقی
- *   - «ابزارکِ منتخب»ِ صفحهٔ امروز با «+» پر، ماندگار و با × خالی می‌شود
+ *   - «میان‌بُر»ِ صفحهٔ امروز با «+ افزودنِ میان‌بُر» پر، ماندگار و با × خالی می‌شود
  *  نباید بیفتد:
  *   - جعبهٔ «اطلاعات تکمیلی» برگردد
  *   - «درخواست» روی فرمِ عمل الصاق شود (تبِ ثابتِ «قبل از عمل» را دارد)
@@ -98,8 +99,9 @@ try {
   const bar = page.locator('.db-sheet [data-visit-bar]');
   ok('سربرگِ مراجعه هست', await bar.count() === 1);
   ok('ویرایش انتخابگرِ نوع ندارد', await page.locator('.db-sheet .db-kindrow').count() === 0);
-  ok('«الصاقِ فرم» و سه خانهٔ خالیِ «فرمِ منتخب»',
-    await bar.locator('.vf-attach').count() === 1 && await bar.locator('.vf-pin[data-pin-slot]:not([data-pin])').count() === 3);
+  ok('«الصاقِ فرم» و به‌جای سه خانهٔ خالیِ «فرمِ منتخب» یک خطِ راهنما (surgery-22)',
+    await bar.locator('.vf-attach').count() === 1 && await bar.locator('.vf-pin').count() === 0
+    && (await bar.locator('[data-pin-hint]').innerText()).includes('ستاره'));
   ok('**جعبهٔ «اطلاعات تکمیلی» برنگشت**', !(await page.locator('.db-sheet').innerText()).includes('اطلاعات تکمیلی'));
   ok('برگهٔ پهن', await page.locator('.db-sheet.vf-wide').count() === 1);
   const main = await page.locator('.vf-main').boundingBox();
@@ -135,6 +137,7 @@ try {
   await page.waitForTimeout(400);
   const slot = bar.locator('.vf-pin[data-pin="subform.wound"]');
   ok('اسلاتِ اول «زخم» شد', await slot.count() === 1 && (await slot.innerText()).includes('زخم'));
+  ok('با اولین منتخب خطِ راهنما کنار رفت', await bar.locator('[data-pin-hint]').count() === 0);
   await slot.click();
   const wound = page.locator('[data-subform="subform.wound"]');
   await wound.waitFor({ timeout: 5000 }).catch(() => {});
@@ -231,34 +234,37 @@ try {
   ok(`بدونِ سرریزِ افقی در موبایل (${over2}px)`, over2 <= 1);
   await mctx.close();
 
-  console.log('\n۸) صفحهٔ امروز — ابزارکِ منتخب');
+  console.log('\n۸) صفحهٔ امروز — میان‌بُرها');
   const tctx = await browser.newContext({ viewport: { width: 1200, height: 900 } });
   const t = await tctx.newPage();
   watch(t);
   await browserLogin(t, login.accessToken, { ui: UI });
   await t.goto(UI + '/app', { waitUntil: 'networkidle' });
   await t.locator('[data-today-favs]').waitFor({ timeout: 15000 }).catch(() => {});
-  ok('سه خانهٔ «ابزارکِ منتخب»', await t.locator('[data-today-favs] .td-fav[data-fav-slot]').count() === 3);
-  await t.locator('.td-fav[data-fav-slot="1"]').click();
+  /* بازبینیِ UX (shell-13): خانه‌های خالی دیگر سه کادرِ بزرگ نیستند — یک دکمهٔ «+ افزودنِ میان‌بُر»
+     که کشو را برای **اولین خانهٔ خالی** باز می‌کند. */
+  ok('خانهٔ پُری نیست و دکمهٔ «+ افزودنِ میان‌بُر» یک‌بار هست',
+    await t.locator('[data-today-favs] .td-fav.on').count() === 0 && await t.locator('[data-today-favs] [data-fav-add]').count() === 1);
+  await t.locator('[data-fav-add]').click();
   const drawer = t.locator('.td-drawer');
   await drawer.waitFor({ timeout: 5000 }).catch(() => {});
-  ok('«+» کشوی ابزارها را برای همان خانه باز کرد', (await drawer.locator('h2').innerText().catch(() => '')).includes('ابزارکِ منتخب ۲'));
+  ok('«+» کشوی ابزارها را برای انتخابِ میان‌بُر باز کرد', (await drawer.locator('h2').innerText().catch(() => '')).includes('میان‌بُر'));
   const pathBefore = new URL(t.url()).pathname;
   const firstTile = drawer.locator('.td-tile').first();
   const tileLabel = (await firstTile.locator('.td-tile-label').innerText()).trim();
   const tp = t.waitForResponse((r) => r.url().includes('/auth/prefs') && r.request().method() === 'PATCH', { timeout: 8000 }).catch(() => null);
   await firstTile.click();
   await tp;
-  const fav = t.locator('.td-fav.on[data-fav-slot="1"]');
-  ok(`خانهٔ دوم «${tileLabel}» شد`, await fav.count() === 1 && (await fav.innerText()).includes(tileLabel));
+  const fav = t.locator('.td-fav.on[data-fav-slot="0"]');
+  ok(`اولین خانه «${tileLabel}» شد`, await fav.count() === 1 && (await fav.innerText()).includes(tileLabel));
   await t.locator('.td-drawer').waitFor({ state: 'detached', timeout: 4000 }).catch(() => {});
   ok('کشو بسته شد و صفحه جابه‌جا نشد (انتخاب، نه بازکردنِ ابزار)',
     await t.locator('.td-drawer').count() === 0 && new URL(t.url()).pathname === pathBefore, `${pathBefore} → ${new URL(t.url()).pathname}`);
   await t.reload({ waitUntil: 'networkidle' });
   await t.locator('[data-today-favs]').waitFor({ timeout: 15000 }).catch(() => {});
-  ok('**بعد از بارگذاریِ دوباره ماند** (سمتِ سرور)', await t.locator('.td-fav.on[data-fav-slot="1"]').count() === 1);
+  ok('**بعد از بارگذاریِ دوباره ماند** (سمتِ سرور)', await t.locator('.td-fav.on[data-fav-slot="0"]').count() === 1);
   const tp2 = t.waitForResponse((r) => r.url().includes('/auth/prefs') && r.request().method() === 'PATCH', { timeout: 8000 }).catch(() => null);
-  await t.locator('.td-fav.on[data-fav-slot="1"] .td-fav-x').click();
+  await t.locator('.td-fav.on[data-fav-slot="0"] .td-fav-x').click();
   await tp2;
   ok('× خانه را خالی کرد', await t.locator('.td-fav.on').count() === 0
     && JSON.stringify((await send('/auth/prefs')).json?.todayPins) === '[null,null,null]');

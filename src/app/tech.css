@@ -1,6 +1,7 @@
 /* پنلِ کارشناسی — دفترِ کار.
    موبایل‌اول: این صفحه در راهروی بیمارستان روی گوشی باز می‌شود، نه پشتِ میز. */
-.tk { position: relative; min-height: 100dvh; padding: 16px 14px 40px; color: var(--text1); }
+/* عرضِ محتوا = «فهرست/جدول»ِ استاندارد (shell-15)؛ سربرگ، نوارِ تب و کارت‌ها از `--page-w` می‌خوانند. */
+.tk { position: relative; min-height: 100dvh; padding: 20px 14px 40px; color: var(--text1); --page-w: var(--maxw); }
 .tk-bg {
   position: fixed; inset: 0; z-index: -1;
   background:
@@ -9,22 +10,13 @@
     var(--bg);
 }
 
-.tk-head { max-width: 940px; margin: 0 auto 14px; }
-.tk-back {
-  display: inline-flex; align-items: center; gap: 6px; margin-bottom: 10px;
-  font-size: 12.5px; text-decoration: none; color: var(--text2);
-}
-.tk-back:hover { color: var(--brand-2); }
-.tk-head h1 { font-size: 20px; font-weight: 900; }
-.tk-head p { margin-top: 4px; font-size: 12.5px; color: var(--text2); }
-
-.tk-list { display: grid; gap: 11px; max-width: 940px; margin: 0 auto; }
+.tk-list { display: grid; gap: 11px; max-width: var(--page-w); margin: 0 auto; }
 .tk-empty {
   padding: 26px 16px; text-align: center; font-size: 13px; color: var(--text3);
   border: 1px dashed rgba(var(--veil-rgb), .12); border-radius: 16px;
 }
 .tk-err {
-  display: flex; align-items: center; gap: 7px; max-width: 940px; margin: 0 auto 12px;
+  display: flex; align-items: center; gap: 7px; max-width: var(--page-w); margin: 0 auto 12px;
   padding: 10px 13px; border-radius: 12px; font-size: 12.5px;
   color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
 }
@@ -42,7 +34,17 @@
   flex: 0 0 auto; display: grid; place-items: center; min-width: 58px; padding: 7px 9px;
   border-radius: 12px; font-size: 14px; font-weight: 800; color: #fff;
   background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
+  /* دکمه است (company-22): لمس «ثبتِ ساعت» را باز می‌کند. */
+  border: 0; font-family: inherit; line-height: 1.35; cursor: pointer;
 }
+.tk-time small { font-size: 10.5px; font-weight: 700; opacity: .88; }
+/* نبودِ ساعت خبر است، نه کنش: «ساعت؟»ِ کم‌رنگ با قابِ خط‌چین — نه قرصِ پررنگِ «—» که
+   درشت‌ترین جزءِ کارت بود و شبیهِ دکمهٔ جمع‌کردن. */
+.tk-time.empty {
+  font-size: 12px; font-weight: 700; color: var(--text3);
+  background: none; border: 1px dashed rgba(var(--veil-rgb), .24);
+}
+.tk-time.empty:hover { color: var(--text2); border-color: rgba(var(--brand-2-rgb), .5); }
 .tk-title { flex: 1; min-width: 0; }
 .tk-title b { display: block; font-size: 14px; }
 .tk-title small { display: block; margin-top: 3px; font-size: 11px; color: var(--text3); }
@@ -96,6 +98,11 @@
 }
 .tk-report.on { color: var(--green-text); border-color: rgba(52, 211, 153, .3); background: rgba(52, 211, 153, .08); }
 .tk-ghost:hover, .tk-report:hover { border-color: rgba(var(--brand-2-rgb), .5); }
+/* «شروع شد / پایان یافت» — کارِ اصلیِ کارتِ امروز، پس پوستهٔ دکمهٔ اصلی (`tk-save`) با آیکون. */
+.tk-stamp {
+  flex: 1; min-width: 130px; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+}
+.tk-stamp svg { flex: 0 0 auto; }
 /* `tk-ghost` هم: هنگامِ یک پذیرش همهٔ دکمه‌های پذیرش قفل‌اند و باید قفل هم دیده شوند. */
 .tk-mini:disabled, .tk-save:disabled, .tk-report:disabled, .tk-ghost:disabled { opacity: .5; cursor: not-allowed; }
 
@@ -146,6 +153,21 @@
 .tk-line input:focus, .tk-rel input:focus, .tk-field input:focus { border-color: rgba(var(--brand-2-rgb), .6); }
 
 .tk-field { display: grid; gap: 5px; font-size: 12px; color: var(--text2); }
+/* کادرِ ساعت + «اکنون»ِ کنارش (company-15). ستونِ «اکنون» خودش `tk-field` است با برچسبِ خالی،
+   پس دکمه هم‌ترازِ کادر می‌نشیند نه هم‌ترازِ پیامِ خطای زیرش. */
+.tk-trow { display: flex; align-items: flex-start; gap: 8px; }
+.tk-trow > .tp-wrap { flex: 1; min-width: 0; }
+.tk-now-col { flex: 0 0 auto; }
+/* «اکنون» پیشنهاد است نه پاک‌کردن: خنثی — نه صورتیِ «پاک‌کردن»ِ ساعتِ مشترک، نه بنفشِ ذخیره.
+   قلم و پدینگ همان کادرِ ساعت (`.tk-field input`)، تا هم‌قد باشند. */
+.tk-now {
+  font: inherit; font-size: 13px; font-weight: 700; padding: 8px 14px; cursor: pointer; border-radius: 10px;
+  color: var(--text1); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .16);
+  transition: border-color .2s, background-color .2s;
+}
+.tk-now:hover { border-color: rgba(var(--brand-2-rgb), .5); background: rgba(var(--veil-rgb), .08); }
+.tk-now:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .tk-now { transition: none; } }
 .tk-rel { display: grid; gap: 8px; }
 /* میان‌بُرهای محلِ تحویل — تایپ همچنان آزاد است، این‌ها فقط لمسی‌اند. */
 .tk-chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -161,6 +183,19 @@
 .tk-note { font-size: 12px; line-height: 1.9; color: var(--text2); }
 .tk-note.ok { color: var(--green-text); }
 .tk-note.no { color: var(--red-text); }
+.tk-done-note { display: flex; align-items: center; gap: 6px; font-weight: 700; }
+.tk-done-note svg { flex: 0 0 auto; }
+/* پرسشِ «عملِ آینده — تاریخ به امروز؟» (company-20). پرسشِ احتیاط است نه خطا: کهربایی فقط
+   در نوارِ کنار و عنوان، متن خوانا روی سطحِ گود. */
+.tk-ask {
+  display: grid; gap: 4px; padding: 11px 13px; border-radius: 12px;
+  background: var(--well-bg); border: 1px solid rgba(var(--veil-rgb), .12);
+  border-inline-start: 3px solid var(--amber-text);
+}
+.tk-ask b { font-size: 13px; line-height: 1.8; color: var(--amber-text); }
+.tk-ask p { font-size: 12px; line-height: 1.9; color: var(--text2); }
+.tk-ask:focus, .tk-done-note:focus { outline: none; }
+.tk-ask:focus-visible, .tk-done-note:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
 /* ── وضعیتِ عمل: انجام شد / موکول شد / لغو شد (مالک، ۱۴۰۵/۰۷/۰۵) ──
    سه گزینهٔ بزرگ و خوانا، نه کشویی: کارشناس سرِ عمل با یک دست روی گوشی انتخاب می‌کند و باید
@@ -182,7 +217,7 @@
 .tk-status-opt:hover { border-color: rgba(var(--brand-2-rgb), .45); }
 .tk-status-opt.on { background: rgba(var(--brand-soft-rgb), .14); border-color: rgba(var(--brand-2-rgb), .7); }
 .tk-status-opt:disabled { opacity: .55; cursor: not-allowed; }
-.tk-status-opt:focus-visible, .tk-ghost:focus-visible, .tk-save:focus-visible, .tk-x:focus-visible {
+.tk-status-opt:focus-visible, .tk-ghost:focus-visible, .tk-save:focus-visible, .tk-x:focus-visible, .tk-time:focus-visible {
   outline: 2px solid var(--cyan); outline-offset: 2px;
 }
 @media (prefers-reduced-motion: reduce) { .tk-status-opt { transition: none; } }
@@ -190,19 +225,25 @@
 .tk-toast {
   position: fixed; inset-block-end: 18px; inset-inline-start: 50%; transform: translateX(50%) translateY(20px);
   padding: 10px 16px; border-radius: 12px; font-size: 12.5px; pointer-events: none;
-  /* متن از توکن: سطحِ توست در تمِ روشن سفید است و `#fff` رویش نامرئی می‌شد. */
-  color: var(--text1); background: rgba(var(--surface-rgb), .96); border: 1px solid rgba(var(--brand-soft-rgb), .35);
+  /* رنگ از توکنِ توست (index.css) — یک ظاهر برای همهٔ توست‌ها، خوانا در هر دو تم. */
+  color: var(--toast-ink); background: var(--toast-bg); border: 1px solid var(--toast-edge);
   opacity: 0; transition: opacity .2s, transform .2s;
 }
 .tk-toast.on { opacity: 1; transform: translateX(50%) translateY(0); }
 @media (prefers-reduced-motion: reduce) { .tk-toast { transition: none; } }
 
 @media (max-width: 560px) {
-  .tk { padding: 12px 10px 32px; }
+  .tk { padding: 20px 10px 32px; }
   .tk-card { padding: 11px; }
   /* دو دکمهٔ کوتاه («وضعیتِ عمل»، «ثبتِ ساعت») کنارِ هم و گزارش در ردیفِ خودش — با دکمهٔ سوم،
      چیدمانِ ستونیِ قبلی هر کارت را سه ردیفِ تمام‌عرض بلند می‌کرد. */
   .tk-acts > .fdrop { flex-basis: 100%; }
+  /* یک‌لمسیِ «شروع شد / پایان یافت» ردیفِ اولِ خودش — کارِ همین لحظه، پیش از بقیه. */
+  .tk-acts > .tk-stamp { flex-basis: 100%; }
+}
+/* لمس: هدفِ ≥ ۴۴px برای ساعتِ کارت، دکمهٔ یک‌لمسی و «اکنون». */
+@media (pointer: coarse) {
+  .tk-time, .tk-stamp, .tk-now { min-height: 44px; }
 }
 /* مراجعه‌های آزادِ همان بیمارستان و روزِ برنامهٔ حضور — فقط پذیرش‌پذیرها. */
 .tk-open-visit { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid rgba(var(--veil-rgb), .12); }

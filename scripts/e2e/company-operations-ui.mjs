@@ -59,7 +59,8 @@ try {
   });
   const page = await ctx.newPage(); page.on('pageerror', e => errors.push(e.message));
   await page.goto(`${base}/app/users`);
-  await page.getByRole('button', { name: '+ ساخت حساب موقت', exact: true }).click();
+  /* دکمه دیگر «+ ساخت حساب موقت»ِ سبزِ تمام‌عرض نیست — «ساختِ حسابِ موقت» کنارِ زبانه‌ها (بازبینیِ UX، shell-18). */
+  await page.getByRole('button', { name: 'ساختِ حسابِ موقت', exact: true }).click();
   await page.getByLabel('نام *', { exact: true }).fill('فرد');
   await page.getByLabel('نام خانوادگی *', { exact: true }).fill('آزمایشی');
   await page.getByLabel('موبایل', { exact: true }).fill('۰۹۱۲۰۰۰۰۰۰۹');
@@ -69,8 +70,10 @@ try {
   assert.equal(created.payload.phone, '09120000009'); assert.equal(created.payload.level, 2);
   pass('manager creates provisional account on mobile and sees one-time credentials');
   await page.goto(`${base}/app/users`);
+  /* ابزارِ آزمایشیِ نقش‌ها تاشوی پایینِ صفحه است — اول باز می‌شود (shell-18). */
+  await page.locator('.us-testing summary').click();
   await page.getByRole('button', { name: 'فعال‌کردن ساخت حساب آزمایشی', exact: true }).click();
-  await page.getByRole('button', { name: '+ ساخت حساب موقت', exact: true }).click();
+  await page.getByRole('button', { name: 'ساختِ حسابِ موقت', exact: true }).click();
   await page.getByRole('checkbox', { name: 'حساب آزمایشی با شماره مشترک' }).check();
   await page.getByLabel('نام کاربری (الزامی)', { exact: true }).fill('test-doctor');
   await page.getByLabel('نام *', { exact: true }).fill('پزشک');
@@ -82,6 +85,8 @@ try {
   const testWrite = writes.filter(w => w.path === '/accounts/temporary').at(-1).payload;
   assert.equal(testWrite.testAccount, true); assert.equal(testWrite.phone, user.phone); assert.equal(testWrite.username, 'test-doctor');
   await page.goto(`${base}/app/users`);
+  /* بارگذاریِ دوباره تاشو را بسته برمی‌گرداند — دکمهٔ «پایان تست» هم داخلِ همان است. */
+  await page.locator('.us-testing summary').click();
   await page.getByRole('button', { name: 'پایان تست و غیرفعال‌کردن حساب‌های آزمایشی' }).click();
   await page.getByRole('button', { name: 'فعال‌کردن ساخت حساب آزمایشی' }).waitFor();
   assert.equal(writes.filter(w => w.path === '/accounts/testing-mode').at(-1).payload.enabled, false);
@@ -103,7 +108,8 @@ try {
   await page.goto(`${base}/app/dispatch`);
   await page.getByLabel('کارشناس بیمار تست').selectOption('2');
   assert.equal((await waitWrite('/dispatch/roster/visits/1')).payload.techId, 2);
-  await page.getByRole('button', { name: 'پیش‌نمایش ابلاغ برنامه روز' }).click();
+  /* company-02: دکمهٔ اصلیِ درشتِ پایینِ روز — «ابلاغِ برنامهٔ روز» (اول پیش‌نمایش، بعد ارسال). */
+  await page.getByRole('button', { name: 'ابلاغِ برنامهٔ روز' }).click();
   await page.getByText('برنامه تست؛ بیمار احتمالی').waitFor();
   pass('hospital roster assigns a patient and previews technician notification');
   await page.getByRole('tab', { name: /حمل/ }).click();

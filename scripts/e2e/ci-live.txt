@@ -51,6 +51,7 @@ next-visit-booking
 note-kinds
 order-review-sheet
 org-chat
+password-reset
 pick-ui
 platform-domains
 platform-domain-change
@@ -145,3 +146,4 @@ company-flow-ui
 p89-clinical
 waitlist
 p89-ui
+multi-procedure

@@ -1,6 +1,6 @@
 import AssistedTextarea from '../ui/AssistedTextarea.jsx';
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { api, apiBlobUrl, apiStream, apiUpload } from '../lib/api.js';
 import VoiceNote, { VoiceClip } from '../ui/VoiceNote.jsx';
@@ -8,7 +8,7 @@ import { DocThumb, openDoc } from '../ui/DocThumb.jsx';
 import { ThingPopups, surgeryPrefill, useThings, workTarget } from './thing-popups.jsx';
 import { kindOf } from './visit-kinds.js';
 import { faDate, isoToJStr, jStrToIso } from '../lib/jalali.js';
-import { fmtMoney } from '../lib/money.js';
+import { fmtToman } from '../lib/money.js';
 import { toEnDigits } from '../lib/identity.js';
 import './launcher.css';
 import './definitions.css';
@@ -16,10 +16,11 @@ import JDate from './JDate.jsx';
 import './work.css';
 import './record.css';
 import {
-  Alert, Back, Book, Calendar, Check, Clock, Close, Copy, Doctor, Download, Form, LinkIcon, Lock,
+  Alert, Book, Calendar, Check, Clock, Close, Copy, Doctor, Download, Form, LinkIcon, Lock,
   Mic, Money, Pencil, Phone, Plus, Send, Trash,
 } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import { useConfig, useStatusList } from './config.jsx';
 import WorkRow from './WorkRow.jsx';
 import { WORK_CHANGED } from './WorkBell.jsx';
@@ -119,7 +120,7 @@ function ProfileTab({ rec, onSave, toast }) {
           'emergencyName', 'emergencyPhone', 'emergencyRelation', 'notes']) delete body[k];
       }
       await onSave(body);
-      toast('پرونده به‌روز شد ✓');
+      toast('پرونده به‌روز شد');
     } catch (e) {
       toast(e.message, true);
     } finally {
@@ -309,6 +310,7 @@ function VisitDiagnoses({ v }) {
 }
 
 function VisitsTab({ rec, onErr, onOpen }) {
+  const t = useConfig().t;
   if (!rec.visits.length) return <div className="df-empty">هنوز مراجعه‌ای ثبت نشده است</div>;
   return (
     <div className="df-list">
@@ -329,7 +331,8 @@ function VisitsTab({ rec, onErr, onOpen }) {
               </b>
             </button>
             <small>
-              {[v.surgeonName && `جراح: ${v.surgeonName}`, v.hospitalName, v.techName && `کارشناس: ${v.techName}`,
+              {/* «جراح/کارشناس» از واژه‌نامهٔ حوزه — در مطب «پزشک/دستیار» (clinic-daily-05). */}
+              {[v.surgeonName && `${t.surgeon}: ${v.surgeonName}`, v.hospitalName, v.techName && `${t.tech}: ${v.techName}`,
                 v.opDate && faDate(v.opDate)].filter(Boolean).join(' · ') || '—'}
             </small>
             <VisitDiagnoses v={v} />
@@ -465,7 +468,7 @@ function DocsTab({ rec, reload, toast }) {
     await apiUpload(`/patients/${rec.id}/documents`, fd);
     setTitle('');
     await reload();
-    toast('توضیحِ صوتی ثبت شد ✓');
+    toast('توضیحِ صوتی ثبت شد');
   };
 
   /* مدرکِ لینکی — MRI/پاراکلینیکی که روی پکس/درایو/سایتِ آزمایشگاه است و
@@ -500,7 +503,7 @@ function DocsTab({ rec, reload, toast }) {
       });
       setLinkUrl(''); setTitle(''); setTakenJ(''); setVisitId(''); setPhase(''); setLinkUser(''); setLinkPass(''); setLinkAuth(false);
       await reload();
-      toast('لینک ثبت شد ✓');
+      toast('لینک ثبت شد');
     } catch (e) {
       toast(e.message, true);
     } finally {
@@ -559,10 +562,13 @@ function DocsTab({ rec, reload, toast }) {
           maxMb={25}
           hint={`عکس، PDF یا هر مدرکِ دیگر — تا ${faNum(25)} مگابایت`}
           onUpload={upload}
-          onAllDone={async () => {
-            setTitle(''); setTakenJ(''); setVisitId(''); setPhase('');
+          onAllDone={async ({ ok = 0, failed = 0 } = {}) => {
+            if (!ok) return;
+            /* «اضافه شدند» فقط وقتی همه رفتند (R2). با فایلِ خطادار عنوان، تاریخ و مراجعه
+               می‌مانند تا «تلاشِ دوباره»ِ همان فایل با همان‌ها برود، نه بی‌برچسب. */
+            if (!failed) { setTitle(''); setTakenJ(''); setVisitId(''); setPhase(''); }
             await reload();
-            toast('مدارک اضافه شدند ✓');
+            if (!failed) toast('مدارک اضافه شدند');
           }}
         />
         {/* لینک به‌جای فایل: MRI/پاراکلینیکی که جای دیگری میزبانی می‌شود. */}
@@ -837,7 +843,7 @@ function NotesTab({ rec, reload, toast }) {
       }
       lastDraftRef.current = null;
       setBody(''); setVisitId('');
-      toast('شرح ثبت شد ✓');
+      toast('شرح ثبت شد');
     } catch (e) { toast(e.message, true); } finally { setBusy(false); }
   };
 
@@ -853,7 +859,7 @@ function NotesTab({ rec, reload, toast }) {
         return;
       }
       setEditing(null);
-      toast('نسخهٔ تازه ثبت شد ✓ (نسخهٔ قبلی در تاریخچه می‌ماند)');
+      toast('نسخهٔ تازه ثبت شد (نسخهٔ قبلی در تاریخچه می‌ماند)');
     } catch (e) { toast(e.message, true); } finally { setBusy(false); }
   };
 
@@ -1085,7 +1091,7 @@ function NotesTab({ rec, reload, toast }) {
  * جای خالیِ واژهٔ حوزه‌ای را پُر می‌کند (قانون ۲۴). سرور `{visit}` می‌فرستد چون
  * واژه‌نامه فقط یک نسخه دارد و آن `src/lib/terms.js` است.
  */
-const withTerm = (str, t) => (str ? String(str).replaceAll('{visit}', t.visit).replaceAll('{visits}', t.visits) : str);
+const withTerm = (str, t) => (str ? String(str).replaceAll('{visit}', t.visit).replaceAll('{visits}', t.visits).replaceAll('{tech}', t.tech) : str);
 
 /** نگاشتِ نوعِ ردیفِ خطِ زمان به آیکون و برچسب — تک‌منبع. */
 const TL_META = {
@@ -1166,7 +1172,7 @@ function NextUp({ live, onGo, onActed, toast, onOpen }) {
     try {
       await api(`/work/${item.id}`, { method: 'PATCH', body: { action, ...body } });
       window.dispatchEvent(new Event(WORK_CHANGED));
-      toast(action === 'done' ? 'انجام شد ✓' : 'به فردا موکول شد');
+      toast(action === 'done' ? (body.outcome?.dismissed ? 'یادآوری بسته شد' : 'انجام شد') : 'یادآوری به فردا افتاد');
       await onActed();
     } catch (e) { toast(e?.message || 'انجام نشد', true); } finally { setBusy(0); }
   };
@@ -1210,11 +1216,77 @@ function NextUp({ live, onGo, onActed, toast, onOpen }) {
         )}
         {due > 0 && (
           <button type="button" className="rc-chip is-money" onClick={() => onGo('visits')}>
-            <Money width="13" height="13" /> ماندهٔ مالی: <b>{fmtMoney(due)}</b>
-            <i>از {fmtMoney(live.billing.total)} — {faNum(live.billing.paidPct)}٪ پرداخت شده</i>
+            <Money width="13" height="13" /> ماندهٔ مالی: <b>{fmtToman(due)}</b>
+            <i>از {fmtToman(live.billing.total)} — {faNum(live.billing.paidPct)}٪ پرداخت شده</i>
           </button>
         )}
       </div>
+    </section>
+  );
+}
+
+/**
+ * عرضِ گوشی — همان مرزِ `record.css` که نوارِ مرحله در آن یک‌خطی می‌شود.
+ * هشدار: شمارِ ردیف‌های «چه شده» با CSS نمی‌شود (متنِ «بیشتر» شمار را می‌گوید)، پس این‌جا
+ * پرسیده می‌شود؛ قاعدهٔ دیداریِ همان مرز در CSS است.
+ */
+const NARROW_Q = '(max-width: 720px)';
+function useNarrow() {
+  const [narrow, setNarrow] = useState(() => (typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(NARROW_Q).matches : false));
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return undefined;
+    const mq = window.matchMedia(NARROW_Q);
+    const on = () => setNarrow(mq.matches);
+    on();
+    mq.addEventListener?.('change', on);
+    return () => mq.removeEventListener?.('change', on);
+  }, []);
+  return narrow;
+}
+
+/**
+ * **خلاصهٔ آخرین مراجعه** (بازبینیِ UX، clinic-daily-21) — تشخیص، طرحِ درمان، دارو، حساسیت، بالای صفحه.
+ * پزشکی که بینِ دو بیمار پرونده را روی گوشی باز می‌کرد این چهار را زیرِ دو صفحه اسکرول پیدا می‌کرد.
+ *
+ * هشدار: فرمولی این‌جا نیست — فهرست‌ها مرتب از سرور می‌آیند (`visits` تازه‌ترین تاریخ اول،
+ * `clinicalNotes` تازه‌ترین اول و فقط نسخهٔ جاری) و این‌جا فقط «اولیِ هر کدام» برداشته می‌شود.
+ * «آخرین» یعنی آخرین مراجعه‌ای که **رخ داده** و محتوای بالینی دارد: عملِ فردا هنوز خبری ندارد و
+ * طرحِ درمان در ویزیتِ قبلش است. اگر هیچ‌کدام نگذشته، اولین مراجعهٔ دارای محتوا.
+ */
+function lastClinical(rec) {
+  if (!rec.clinicalVisible) return null;
+  const notes = rec.clinicalNotes ?? [];
+  const rich = (rec.visits ?? []).filter((v) => v.diagnoses?.length > 0 || notes.some((n) => n.visitId === v.id));
+  const now = Date.now();
+  const v = rich.find((x) => !x.opDate || new Date(x.opDate).getTime() <= now) ?? rich[0];
+  if (!v) return null;
+  const note = (kind) => notes.find((n) => n.visitId === v.id && n.kind === kind) ?? null;
+  return { v, dx: v.diagnoses?.find((d) => d.primary) ?? v.diagnoses?.[0] ?? null, plan: note('plan'), rx: note('rx') };
+}
+
+/**
+ * هشدار: حساسیتِ **ثبت‌شده** این‌جا تکرار نمی‌شود — بنرِ قرمزِ `rc-alert` درست بالای همین کارت است
+ * و باید تنها و پررنگ بماند. فقط نبودنش گفته می‌شود («ثبت نشده»): برای پزشک «نمی‌دانیم» با «ندارد»
+ * فرق دارد. داروی بیمار هم اگر نسخه‌ای نیست از پروفایل می‌آید و آن‌وقت کارتِ هویت تکرارش نمی‌کند.
+ */
+function LastVisit({ s, rec, t, onOpen }) {
+  const { v, dx, plan, rx } = s;
+  const meds = rx?.body || rec.medications || '';
+  return (
+    <section className="rc-last" aria-labelledby="rc-last-h">
+      <h3 id="rc-last-h">
+        <button type="button" className="rc-last-open" onClick={() => onOpen({ type: 'visit', id: v.id, patientId: rec.id })}>
+          <span>آخرین {v.kindTitle || t.visit}</span>
+          {v.opDate && <time dateTime={v.opDate}>{faDate(v.opDate)}</time>}
+          <bdi dir="ltr">{v.code}</bdi>
+        </button>
+      </h3>
+      <dl>
+        {dx && <div><dt>تشخیص</dt><dd>{dx.title}{dx.icdCode && <> <bdi dir="ltr" className="rc-last-icd">{dx.icdCode}</bdi></>}</dd></div>}
+        {plan && <div><dt>{plan.kindFa}</dt><dd>{faNum(plan.body)}</dd></div>}
+        <div><dt>دارو</dt><dd className={meds ? '' : 'is-none'}>{meds ? faNum(meds) : 'ثبت نشده'}</dd></div>
+        {!rec.allergies && <div><dt>حساسیت</dt><dd className="is-none">ثبت نشده</dd></div>}
+      </dl>
     </section>
   );
 }
@@ -1229,9 +1301,12 @@ function NextUp({ live, onGo, onActed, toast, onOpen }) {
 function Timeline({ live, onGo, t, onOpen }) {
   const noteFa = Object.fromEntries(useStatusList('note').map((k) => [k.key, k.label]));
   const [all, setAll] = useState(false);
+  /* روی گوشی سه ردیفِ آخر (بازبینیِ UX، clinic-daily-21): بیشترِ «چه شده» تکرارِ همان تب‌های پایین
+     است و دوازده ردیف تب‌ها را تا دو صفحه پایین‌تر هل می‌داد. */
+  const limit = useNarrow() ? 3 : 12;
   const tl = live.timeline;
   if (!tl?.items?.length) return null;
-  const items = all ? tl.items : tl.items.slice(0, 12);
+  const items = all ? tl.items : tl.items.slice(0, limit);
 
   return (
     <section className="rc-tl" aria-label="خطِ زمانِ پرونده">
@@ -1279,9 +1354,9 @@ function Timeline({ live, onGo, t, onOpen }) {
           return <li key={it.id} className="rc-tl-row"><div>{inner}</div></li>;
         })}
       </ol>
-      {tl.items.length > 12 && (
-        <button type="button" className="rc-tl-more" onClick={() => setAll(!all)}>
-          {all ? 'کوتاه کن' : `${faNum(tl.items.length - 12)} رویدادِ قدیمی‌تر`}
+      {tl.items.length > limit && (
+        <button type="button" className="rc-tl-more" aria-expanded={all} onClick={() => setAll(!all)}>
+          {all ? 'کوتاه کن' : `بیشتر — ${faNum(tl.items.length - limit)} رویدادِ قدیمی‌تر`}
         </button>
       )}
       {/* ⚠️ بریدنِ بی‌صدا ممنوع: اگر سرور سقف زده، صفحه باید بگوید — و متنش
@@ -1326,7 +1401,7 @@ function Pathway({ patientId, toast }) {
     setBusy(step.id);
     try {
       await api(`/pathway/steps/${step.id}`, { method: 'PATCH', body: { status } });
-      toast(status === 'done' ? 'مرحله انجام شد ✓' : 'مرحله رد شد');
+      toast(status === 'done' ? 'مرحله انجام شد' : 'مرحله رد شد');
       await load();
     } catch (e) { toast(e?.message || 'ثبت نشد', true); } finally { setBusy(0); }
   };
@@ -1474,15 +1549,29 @@ export default function PatientRecord() {
      همان‌جا خوانده می‌شود، و هر ثبتی «پاسخ» را تازه می‌کند. */
   const things = useThings({ patientId: Number(id), onChanged: loadLive, toast: say });
   const openThing = things.open;
-
+  /* **مقصدِ یک کار از بیرونِ پرونده** — زنگِ کارها (`WorkBell`، بازبینیِ خصمانه R12) پرونده را با
+     `state.open` باز می‌کند و همان پاپ‌آپ («ثبتِ وضعیت»، «بارگذاریِ گزارش»، سفارش…) این‌جا باز
+     می‌شود؛ پرونده میزبانِ پاپ‌آپ‌هاست. `replace` با `state: null` تا «بازگشت» دوباره بازش نکند.
+     کلیدِ `location.key`، نه mountِ اول: زنگ روی خودِ همین پرونده هم می‌تواند بزند. */
+  const location = useLocation();
+  const navigate = useNavigate();
   useEffect(() => {
-    document.title = rec ? `پروندهٔ ${rec.fullName} — عمل‌یار` : 'پروندهٔ بیمار — عمل‌یار';
-  }, [rec]);
+    const spec = location.state?.open;
+    if (!spec?.type) return;
+    openThing({ ...spec, patientId: spec.patientId ?? Number(id) });
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.key]);
 
   const save = async (body) => { setRec(await api(`/patients/${id}`, { method: 'PATCH', body })); };
 
-  if (err) return <div className="df"><div className="df-bg" /><div className="df-empty">{err}</div></div>;
-  if (!rec) return <div className="df"><div className="df-bg" /><div className="df-empty">در حال بارگذاری…</div></div>;
+  /* پرونده زیرصفحهٔ «بیماران» است: بازگشت به همان فهرست، و آیکونِ همان کاشی. سربرگ در بارگذاری و
+     خطا هم هست — راهِ برگشت نباید منتظرِ پاسخِ سرور بماند (shell-15). */
+  const back = { to: '/app/dashboard', label: 'بیماران' };
+  if (err) return <div className="df"><div className="df-bg" /><PageHeader className="df-head" tool="dashboard" title="پروندهٔ بیمار" back={back} /><div className="df-empty">{err}</div></div>;
+  if (!rec) return <div className="df"><div className="df-bg" /><PageHeader className="df-head" tool="dashboard" title="پروندهٔ بیمار" back={back} /><div className="df-empty">در حال بارگذاری…</div></div>;
+
+  const last = lastClinical(rec);
+  const medsInLast = !!(last && !last.rx?.body && rec.medications);
 
   const TABS = [
     /* «خلاصه» نامِ درستی نبود: این تب یک فرمِ ویرایشِ کامل است و خلاصه حالا
@@ -1502,35 +1591,38 @@ export default function PatientRecord() {
   return (
     <div className="df">
       <div className="df-bg" />
-      <header className="df-head">
-        <Link className="df-back" to="/app/dashboard"><Back width="14" height="14" /> داشبورد</Link>
-        <div>
-          <h1>{rec.fullName}</h1>
-          <p>
-            <span dir="ltr">{rec.code}</span>
-            {rec.age != null && ` · ${faNum(rec.age)} ساله`}
-            {rec.gender && ` · ${rec.gender === 'female' ? 'زن' : 'مرد'}`}
-            {rec.nationalId && ` · کد ملی ${faNum(rec.nationalId)}`}
-            {rec.phone && ` · ${faNum(rec.phone)}`}
-          </p>
-        </div>
+      {/* `df-head` فقط قلابِ آزمون است (کنتراستِ نامِ بیمار)؛ ظاهر از `PageHeader`. */}
+      <PageHeader
+        className="df-head" tool="dashboard" back={back}
+        title={rec.fullName} docTitle={`پروندهٔ ${rec.fullName}`}
+        sub={<>
+          <span dir="ltr">{rec.code}</span>
+          {rec.age != null && ` · ${faNum(rec.age)} ساله`}
+          {rec.gender && ` · ${rec.gender === 'female' ? 'زن' : 'مرد'}`}
+          {rec.nationalId && ` · کد ملی ${faNum(rec.nationalId)}`}
+          {rec.phone && ` · ${faNum(rec.phone)}`}
+        </>}
+      >
         {rec.clinicalVisible && (
           <RefSummary rec={rec} toast={say} />
         )}
-      </header>
+      </PageHeader>
 
       {/* هشدارِ حساسیت باید پیش از هر چیزِ دیگری دیده شود، نه لای فرم. */}
       {rec.allergies && <div className="rc-alert"><Alert size={13} /> حساسیت: {rec.allergies}</div>}
 
-      {/* کارتِ هویت **فقط‌خواندنی** است و ویرایش یک اقدام (§۴.۳ بندِ ۱). */}
-      {(rec.insurer || rec.bloodType || rec.chronicConditions || rec.medications) && (
+      {/* کارتِ هویت **فقط‌خواندنی** است و ویرایش یک اقدام (§۴.۳ بندِ ۱). داروها وقتی کارتِ «آخرین
+          مراجعه» نسخه ندارد همان‌جا نشان داده می‌شوند، نه دو بار (clinic-daily-21). */}
+      {(rec.insurer || rec.bloodType || rec.chronicConditions || (rec.medications && !medsInLast)) && (
         <dl className="rc-id">
           {rec.bloodType && <div><dt>گروهِ خونی</dt><dd dir="ltr">{rec.bloodType}</dd></div>}
           {rec.insurer && <div><dt>بیمه</dt><dd>{rec.insurer}{rec.insuranceNo ? ` — ${faNum(rec.insuranceNo)}` : ''}</dd></div>}
           {rec.chronicConditions && <div><dt>بیماریِ زمینه‌ای</dt><dd>{rec.chronicConditions}</dd></div>}
-          {rec.medications && <div><dt>داروها</dt><dd>{rec.medications}</dd></div>}
+          {rec.medications && !medsInLast && <div><dt>داروها</dt><dd>{rec.medications}</dd></div>}
         </dl>
       )}
+
+      {last && <LastVisit s={last} rec={rec} t={t} onOpen={openThing} />}
 
       <RecordActions
         rec={rec} onEdit={() => goTab('profile')} toast={say} t={t}
@@ -1567,12 +1659,12 @@ export default function PatientRecord() {
           load();
           /* «کاندیدای جراحی» — همان رفتارِ داشبورد: فرمِ عملِ همین بیمار بلافاصله. */
           if (opts?.openSurgery) {
-            say('تصمیم ثبت شد ✓ حالا فرمِ عمل را برای همین بیمار پر کنید');
+            say('تصمیم ثبت شد؛ حالا فرمِ عمل را برای همین بیمار پر کنید');
             /* همان پیوندِ داشبورد — شکایتِ اولیه از ویزیتِ تصمیم مشتق می‌شود. */
             setTimeout(() => things.show({ type: 'visit', prefill: surgeryPrefill(saved, rec.fullName) }), 400);
             return;
           }
-          say(wasEdit ? `${t.visit} ویرایش شد ✓` : `${t.visit} ثبت شد ✓`);
+          say(wasEdit ? `${t.visit} ویرایش شد` : `${t.visit} ثبت شد`);
         }}
       />
 
@@ -1618,7 +1710,7 @@ function RefSummary({ rec, toast }) {
   };
 
   const copy = async () => {
-    try { await navigator.clipboard.writeText(text); toast('کپی شد ✓'); }
+    try { await navigator.clipboard.writeText(text); toast('کپی شد'); }
     catch { toast('کپی نشد — دستی انتخاب کنید', true); }
   };
 
@@ -1626,7 +1718,7 @@ function RefSummary({ rec, toast }) {
     setBusy(true);
     try {
       await api(`/patients/${rec.id}/notes`, { method: 'POST', body: { kind: 'consult', body: text } });
-      toast('به‌عنوانِ «مشاوره» در پرونده ثبت شد ✓');
+      toast('به‌عنوانِ «مشاوره» در پرونده ثبت شد');
       setText(null);
     } catch (e) { toast(e.message, true); } finally { setBusy(false); }
   };

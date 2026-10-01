@@ -6,17 +6,21 @@ import FileDrop from '../ui/FileDrop.jsx';
 import { J_MONTHS, jStrToIso, jToday, toEnDigits } from '../lib/jalali.js';
 import JGrid from './JGrid.jsx';
 import './dispatch.css';
-import { Alert, ArrowDown, ArrowUp, CheckCircle, ChevronEnd, Close, Copy, Money, Route, Send, User } from '../ui/icons.jsx';
+import { Alert, ArrowDown, ArrowUp, CheckCircle, Close, Copy, Money, Route, Send, User } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import TimePick from '../ui/TimePick.jsx';
 import HospitalRoster from './HospitalRoster.jsx';
 import TransportBoard from './TransportBoard.jsx';
 import { badTime, normTime } from '../lib/time.js';
 import { usePlaces } from '../lib/places.js';
+import { useTerms } from './config.jsx';
 
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
+/* «مراجعه‌ای» / «عملی» — پسوندِ نکره به حرفِ آخرِ واژهٔ حوزه بسته است. */
+const indef = (w) => (/ه$/.test(w) ? `${w}‌ای` : `${w}ی`);
 
 /** ساعتِ HH:MM — همان قاعدهٔ سرور، تا پیش از رفت‌وبرگشت خطا معلوم شود. */
 const timeOk = (v) => !badTime(v);
@@ -35,6 +39,9 @@ const timeOk = (v) => !badTime(v);
  * نمی‌گیرد» باید یک‌جا اعمال شود تا کانالِ بعدی (بله/پیامک) دورش نزند.
  */
 export default function Dispatch() {
+  /* واژهٔ «عمل/مراجعه» یک‌جا و از حوزه (قانونِ ۲۴، company-18): سرِ صفحه، خانه‌های تقویم و
+     برنامهٔ حضور یک چیز می‌گویند — نه «۹ عمل» بالا و «۲ مراجعه» پایین. */
+  const terms = useTerms();
   const [ty, tm, td] = jToday();
   const [tab, setTab] = useState('tech');
   const [ym, setYm] = useState({ y: ty, m: tm });
@@ -53,7 +60,6 @@ export default function Dispatch() {
   const [brief, setBrief] = useState(null); // {visitId, role, text}
   const [costFor, setCostFor] = useState(null); // مسیرِ در حالِ هزینه‌گذاری
 
-  useEffect(() => { document.title = 'عمل‌یار — چینش'; }, []);
   useEffect(() => {
     if (!toast) return undefined;
     const t = setTimeout(() => setToast(''), 2200);
@@ -134,11 +140,11 @@ export default function Dispatch() {
   };
 
   const addStop = (runId, body) =>
-    guard(() => api(`/routes/${runId}/stops`, { method: 'POST', body }), 'توقف اضافه شد ✓');
+    guard(() => api(`/routes/${runId}/stops`, { method: 'POST', body }), 'توقف اضافه شد');
 
   /** توقفِ بی‌راننده را به مسیرِ یک نیرو می‌سپارد. */
   const assignStop = (stopId, runId) =>
-    guard(() => api(`/routes/stops/${stopId}/assign`, { method: 'POST', body: { runId: Number(runId) } }), 'به مسیر سپرده شد ✓');
+    guard(() => api(`/routes/stops/${stopId}/assign`, { method: 'POST', body: { runId: Number(runId) } }), 'به مسیر سپرده شد');
 
   const patchStop = (id, body) => guard(() => api(`/routes/stops/${id}`, { method: 'PATCH', body }));
   /* ⚠️ ساعتِ توقف هم باید از همان دروازهٔ اعتبارسنجی رد شود؛ پیش از این متنِ
@@ -159,7 +165,7 @@ export default function Dispatch() {
     await apiUpload(`/routes/stops/${stopId}/proofs`, fd);
   };
 
-  const addTo = (stopId, tid) => guard(() => api(`/routes/stops/${stopId}/transfers`, { method: 'POST', body: { transferIds: [tid] } }), 'بار به توقف اضافه شد ✓');
+  const addTo = (stopId, tid) => guard(() => api(`/routes/stops/${stopId}/transfers`, { method: 'POST', body: { transferIds: [tid] } }), 'بار به توقف اضافه شد');
   const move = (run, i, dir) => {
     const ids = run.stops.map((s) => s.id);
     const j = i + dir;
@@ -180,7 +186,7 @@ export default function Dispatch() {
   const copy = async (text) => {
     try {
       await navigator.clipboard.writeText(text);
-      setToast('متن کپی شد ✓');
+      setToast('متن کپی شد');
     } catch {
       // Safariِ قدیمی و بسترهای بدونِ clipboard API: کاربر خودش انتخاب کند
       setToast('کپیِ خودکار ممکن نشد — متن را دستی انتخاب کنید');
@@ -196,20 +202,17 @@ export default function Dispatch() {
   return (
     <div className="dp">
       <div className="dp-bg" aria-hidden="true" />
-      <header className="dp-head">
-        <Link to="/app" className="dp-back"><ChevronEnd width="15" height="15" /> سامانه</Link>
-        <div>
-          <h1>چینشِ نیروها</h1>
-          <p>
-            {month ? `${faNum(month.total)} عمل در ${J_MONTHS[ym.m - 1]}` : 'در حال بارگذاری…'}
-            {gapNow > 0 && (
-              <em className="dp-gapnote">
-                {' — '}{faNum(gapNow)} عمل بدونِ {tab === 'tech' ? 'کارشناس' : 'راننده'}
-              </em>
-            )}
-          </p>
-        </div>
-      </header>
+      <PageHeader
+        tool="dispatch"
+        sub={<>
+          {month ? `${faNum(month.total)} ${terms.surgery} در ${J_MONTHS[ym.m - 1]}` : 'در حال بارگذاری…'}
+          {gapNow > 0 && (
+            <em className="dp-gapnote">
+              {' — '}{faNum(gapNow)} {terms.surgery} بدونِ {tab === 'tech' ? 'کارشناس' : 'راننده'}
+            </em>
+          )}
+        </>}
+      />
 
       <Tabs
         label="نوعِ چینش"
@@ -236,7 +239,7 @@ export default function Dispatch() {
           const gap = tab === 'tech' ? cell.noTech : cell.noDriver;
           return (
             <div className="dp-cell">
-              <i className="t">{faNum(cell.total)} عمل</i>
+              <i className="t">{faNum(cell.total)} {terms.surgery}</i>
               {gap > 0 && (
                 <i className="g" title={tab === 'tech' ? 'بدونِ کارشناس' : 'بار دارد ولی راننده ندارد'}>
                   {faNum(gap)} بدونِ {tab === 'tech' ? 'کارشناس' : 'راننده'}
@@ -290,7 +293,7 @@ export default function Dispatch() {
             <div className={`dp-loose${loose.length ? ' has' : ''}`}>
               <b>بارِ بی‌مسیر {loose.length > 0 && <i>{faNum(loose.length)}</i>}</b>
               {loose.length === 0
-                ? <span className="dp-none ok">همهٔ بارِ امروز روی مسیر است ✓</span>
+                ? <span className="dp-none ok">همهٔ بارِ امروز روی مسیر است</span>
                 : loose.map((t) => (
                   <span key={t.id} className="dp-chip cargo" title={t.lines.map((l) => l.itemName).join('، ')}>
                     <em dir="ltr">{t.code}</em>
@@ -379,7 +382,7 @@ export default function Dispatch() {
                           disabled={busy}
                           label="+ رسیدِ تحویل"
                           onUpload={(file) => addProof(st.id, file)}
-                          onAllDone={() => { refresh(); setToast("رسید ثبت شد ✓"); }}
+                          onAllDone={({ ok = 0, failed = 0 } = {}) => { if (!ok) return; refresh(); if (!failed) setToast('رسید ثبت شد'); }}
                         />
                         {st.handedTo && <span className="dp-handed">تحویل به: {st.handedTo}</span>}
                       </div>
@@ -470,7 +473,7 @@ export default function Dispatch() {
         )}
       </AnimatePresence>
 
-      <div className={`dp-toast${toast ? ' on' : ''}`}>{toast}</div>
+      <div className={`dp-toast${toast ? ' on' : ''}`} role="status" aria-live="polite">{toast}</div>
     </div>
   );
 }
@@ -616,6 +619,7 @@ function TimeBox({ label, value, disabled, onSave }) {
  * سرشکنِ per-visit نمایشی است و ذخیره نمی‌شود — وگرنه هزینه دو بار شمرده می‌شد.
  */
 function RunCost({ run, busy, onClose, onSave }) {
+  const terms = useTerms();
   const [fuel, setFuel] = useState(run.cost?.fuelCost != null ? String(run.cost.fuelCost) : '');
   const [fee, setFee] = useState(run.cost?.driverFee != null ? String(run.cost.driverFee) : '');
   const [other, setOther] = useState(run.cost?.otherCost != null ? String(run.cost.otherCost) : '');
@@ -644,8 +648,8 @@ function RunCost({ run, busy, onClose, onSave }) {
         <p className="dp-costsum">
           جمع: <b>{faNum(total)}</b> تومان
           {visits.length > 0
-            ? ` · سرشکن روی ${faNum(visits.length)} عمل ≈ ${faNum(per)} تومان`
-            : ' · هیچ عملی روی این مسیر نیست؛ کلِ مبلغ هزینهٔ عمومیِ حمل می‌ماند'}
+            ? ` · سرشکن روی ${faNum(visits.length)} ${terms.surgery} ≈ ${faNum(per)} تومان`
+            : ` · هیچ ${indef(terms.surgery)} روی این مسیر نیست؛ کلِ مبلغ هزینهٔ عمومیِ حمل می‌ماند`}
         </p>
       </div>
       <footer>

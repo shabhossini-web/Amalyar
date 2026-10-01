@@ -9,7 +9,7 @@
 .vc-btn:disabled { opacity: .55; cursor: default; }
 /* حالتِ ضبط: قرمزِ ملایم + تپش — کاربر باید از دور ببیند که میکروفون باز است. */
 .vc-btn.vc-rec {
-  color: #f87171; border-color: rgba(248, 113, 113, .55); background: rgba(248, 113, 113, .12);
+  color: var(--red-text); border-color: rgba(248, 113, 113, .55); background: rgba(248, 113, 113, .12);
   animation: vc-pulse 1.2s ease-in-out infinite;
 }
 @keyframes vc-pulse {

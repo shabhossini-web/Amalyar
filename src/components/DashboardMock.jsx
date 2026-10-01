@@ -95,7 +95,7 @@ export default function DashboardMock() {
             <h4>فرم‌های در انتظار تأیید</h4>
             <div className="mock-num">۳</div>
             <div className="mock-row">فیش واریزی — تأیید خودکار AI
-              <span className="mock-pill" style={{ background: 'rgba(0,229,255,.1)', color: 'var(--cyan)' }}>✓ معتبر</span>
+              <span className="mock-pill" style={{ background: 'rgba(0,229,255,.1)', color: 'var(--cyan)' }}>معتبر</span>
             </div>
           </div>
           <div className="mock-card">

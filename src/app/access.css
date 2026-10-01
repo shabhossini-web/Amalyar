@@ -1,5 +1,6 @@
 /* ماتریسِ سطوحِ دسترسی — ردیف‌ها درها، ستون‌ها سطح‌ها. */
-.ax { position: relative; min-height: 100dvh; padding: 16px 14px 60px; color: var(--text1); }
+/* عرضِ محتوا = «فهرست/جدول»ِ استاندارد (shell-15)؛ سربرگ و بلوک‌ها از `--page-w` می‌خوانند. */
+.ax { position: relative; min-height: calc(100dvh - var(--shell-h)); padding: 20px 14px 60px; color: var(--text1); --page-w: var(--maxw); }
 .ax-bg {
   position: fixed; inset: 0; z-index: -1;
   background:
@@ -7,25 +8,16 @@
     var(--bg);
 }
 
-.ax-head { max-width: 980px; margin: 0 auto 14px; }
-.ax-back {
-  display: inline-flex; align-items: center; gap: 6px; margin-bottom: 10px;
-  font-size: 12.5px; text-decoration: none; color: var(--text2);
-}
-.ax-back:hover { color: var(--brand-2); }
-.ax-head h1 { font-size: 20px; font-weight: 900; }
-.ax-head p { margin-top: 5px; font-size: 12.5px; line-height: 1.9; color: var(--text2); }
-
 .ax-err {
-  display: flex; align-items: center; gap: 7px; max-width: 980px; margin: 0 auto 12px;
+  display: flex; align-items: center; gap: 7px; max-width: var(--page-w); margin: 0 auto 12px;
   padding: 10px 13px; border-radius: 12px; font-size: 12.5px;
   color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
 }
-.ax-empty { max-width: 980px; margin: 0 auto; padding: 26px; text-align: center; color: var(--text3); font-size: 13px; }
+.ax-empty { max-width: var(--page-w); margin: 0 auto; padding: 26px; text-align: center; color: var(--text3); font-size: 13px; }
 
 /* ذره‌بینِ سطح */
 .ax-lens {
-  display: flex; gap: 6px; overflow-x: auto; max-width: 980px; margin: 0 auto 8px;
+  display: flex; gap: 6px; overflow-x: auto; max-width: var(--page-w); margin: 0 auto 8px;
   padding-bottom: 3px; scrollbar-width: thin;
 }
 .ax-lens button {
@@ -37,11 +29,32 @@
   color: #fff; border-color: transparent;
   background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
 }
-.ax-lenshint { max-width: 980px; margin: 0 auto 12px; font-size: 12px; color: var(--text3); }
+.ax-lenshint { max-width: var(--page-w); margin: 0 auto 12px; font-size: 12px; color: var(--text3); }
 .ax-lenshint b { color: var(--brand-2); }
 
-.ax-group { max-width: 980px; margin: 0 auto 18px; }
+.ax-group { max-width: var(--page-w); margin: 0 auto 18px; }
 .ax-group h2 { font-size: 14px; font-weight: 800; margin-bottom: 4px; }
+/* گروهِ تاشو — سرتیتر خودش دکمه است (بازبینیِ UX ۱۴۰۵/۰۷: صفحه ۲۱ هزار پیکسل بود). */
+.ax-gtoggle {
+  width: 100%; display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 4px;
+  font: inherit; font-size: 14px; font-weight: 800; color: var(--text1); text-align: start;
+  background: none; border: 0; border-bottom: 1px solid rgba(var(--brand-soft-rgb), .18); cursor: pointer;
+}
+.ax-gtoggle small { font-size: 11.5px; font-weight: 600; color: var(--text3); }
+.ax-gtoggle .ax-caret { margin-inline-start: auto; color: var(--text3); transition: transform .2s; }
+.ax-gtoggle[aria-expanded="true"] .ax-caret { transform: rotate(180deg); }
+.ax-gtoggle:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 8px; }
+.ax-group > div[id] { padding-top: 8px; }
+@media (prefers-reduced-motion: reduce) { .ax-gtoggle .ax-caret { transition: none; } }
+
+/* جستجو */
+.ax-search {
+  display: flex; align-items: center; gap: 8px; max-width: var(--page-w); margin: 0 auto 10px; padding: 0 12px;
+  min-height: 44px; border-radius: 13px; color: var(--text3);
+  background: var(--field-bg); border: 1px solid rgba(var(--veil-rgb), .14);
+}
+.ax-search:focus-within { border-color: rgba(var(--brand-2-rgb), .6); }
+.ax-search input { flex: 1 1 auto; min-width: 0; height: 42px; border: 0; background: none; color: var(--text1); font: inherit; font-size: 14px; outline: none; }
 .ax-ghint { font-size: 11.5px; line-height: 1.9; color: var(--text3); margin-bottom: 9px; }
 .ax-rows { display: grid; gap: 8px; }
 
@@ -50,6 +63,12 @@
   background: rgba(var(--veil-rgb), .045); border: 1px solid rgba(var(--brand-soft-rgb), .16);
   grid-template-columns: 1fr auto auto; align-items: center;
 }
+/* جای صریحِ هر بخش — «روشن/خاموش» بعد از نقش‌ها در DOM است ولی کنارِ سطح‌ها می‌نشیند
+   (پیش‌تر به ردیفِ سوم می‌افتاد و تمام‌عرض می‌شد). */
+.ax-name { grid-column: 1; grid-row: 1; }
+.ax-cells { grid-column: 2; grid-row: 1; }
+.ax-acts { grid-column: 3; grid-row: 1; }
+.ax-roles { grid-row: 2; }
 .ax-row.locked { border-style: dashed; opacity: .8; }
 /* «کم‌رنگ» یعنی این سطح به آن نمی‌رسد — نه اینکه غیرفعال باشد. */
 .ax-row.dim { opacity: .38; }
@@ -58,10 +77,23 @@
 .ax-name b { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .ax-name b svg { color: var(--text3); }
 .ax-name small { display: block; margin-top: 3px; font-size: 11px; line-height: 1.8; color: var(--text3); }
-.ax-key { display: block; margin-top: 3px; font-size: 10px; font-style: normal; color: rgba(var(--veil-rgb), .28); }
+/* «کاشی‌های تحتِ این کلید» — نامِ کاشی‌ها همان‌طور که در لانچر دیده می‌شوند. */
+.ax-name small.ax-tiles { color: var(--text2); }
+
+/* کاشی‌هایی که کلیدِ ماژولِ خودشان را ندارند — فقط خواندنی، زیرِ گروهِ ماژول‌ها. */
+.ax-keyless {
+  margin-top: 10px; padding: 11px 13px; border-radius: 15px;
+  background: rgba(var(--veil-rgb), .03); border: 1px dashed rgba(var(--brand-soft-rgb), .3);
+}
+.ax-keyless > b { display: block; font-size: 12.5px; font-weight: 800; }
+.ax-keyless > small { display: block; margin-top: 3px; font-size: 11px; line-height: 1.8; color: var(--text3); }
+.ax-keyless ul { list-style: none; display: grid; gap: 6px; margin-top: 8px; }
+.ax-keyless li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 12.5px; }
+.ax-keyless li span { font-weight: 700; }
+.ax-keyless li small { font-size: 11px; color: var(--text2); }
 .ax-tag {
   font-style: normal; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 99px;
-  color: #fcd34d; background: rgba(245, 158, 11, .14);
+  color: var(--amber-text); background: var(--amber-bg);
 }
 
 .ax-cells { display: flex; gap: 3px; }
@@ -71,9 +103,9 @@
   color: var(--text3); background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .1);
   transition: background .15s, color .15s, border-color .15s;
 }
-.ax-cell.on { color: #fff; background: rgba(var(--brand-rgb), .5); border-color: transparent; }
-/* پله — همان سطحی که در از آن‌جا باز می‌شود. */
-.ax-cell.edge { box-shadow: inset 0 0 0 1px var(--brand-2); }
+.ax-cell.on { color: var(--brand-text); background: rgba(var(--brand-rgb), .16); border-color: rgba(var(--brand-2-rgb), .45); }
+/* پله — همان سطحی که در از آن‌جا باز می‌شود: توپُر، تا آستانه در یک نگاه دیده شود. */
+.ax-cell.edge { color: #fff; background: var(--brand); border-color: var(--brand); }
 .ax-cell:disabled { cursor: not-allowed; opacity: .55; }
 
 .ax-acts { display: flex; flex-direction: column; gap: 5px; }
@@ -82,25 +114,36 @@
   display: inline-flex; align-items: center; gap: 4px; justify-content: center;
   color: var(--text3); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .12);
 }
-.ax-sw.on { color: #6ee7b7; border-color: rgba(52, 211, 153, .32); background: rgba(52, 211, 153, .1); }
-.ax-reset { color: #fcd34d; border-color: rgba(245, 158, 11, .3); background: rgba(245, 158, 11, .1); }
+.ax-sw.on { color: var(--green); border-color: color-mix(in srgb, var(--green) 45%, transparent); background: var(--green-bg); }
+.ax-reset { color: var(--amber-text); border-color: color-mix(in srgb, var(--amber) 45%, transparent); background: var(--amber-bg); }
 .ax-sw:disabled, .ax-reset:disabled { opacity: .5; cursor: not-allowed; }
 
 .ax-toast {
   position: fixed; inset-block-end: 18px; inset-inline-start: 50%; transform: translateX(50%) translateY(20px);
   padding: 10px 16px; border-radius: 12px; font-size: 12.5px; pointer-events: none;
-  color: #fff; background: rgba(var(--surface-rgb), .96); border: 1px solid rgba(var(--brand-soft-rgb), .35);
+  color: var(--toast-ink); background: var(--toast-bg); border: 1px solid var(--toast-edge);
   opacity: 0; transition: opacity .2s, transform .2s;
 }
 .ax-toast.on { opacity: 1; transform: translateX(50%) translateY(0); }
 
+.ax-cell:focus-visible, .ax-role:focus-visible, .ax-sw:focus-visible, .ax-reset:focus-visible, .ax-lens button:focus-visible {
+  outline: 2px solid var(--cyan); outline-offset: 2px;
+}
+
 @media (max-width: 620px) {
-  .ax { padding: 12px 10px 40px; }
-  /* در موبایل سه‌ستونه نمی‌شود: نام بالا، ستون‌ها و کلیدها زیرش. */
-  .ax-row { grid-template-columns: 1fr auto; }
-  .ax-name { grid-column: 1 / -1; }
-  .ax-cells { justify-content: flex-start; }
-  .ax-acts { flex-direction: row; }
+  .ax { padding: 20px 10px 40px; }
+  /* در موبایل: نام بالا، سطح‌ها تمام‌عرض (هر خانه ≥۴۴ پیکسل)، بعد روشن/خاموش و نقش‌ها. */
+  .ax-row { grid-template-columns: 1fr; }
+  .ax-name, .ax-cells, .ax-acts, .ax-roles { grid-column: 1; grid-row: auto; }
+  .ax-cells { justify-content: stretch; }
+  .ax-cells .ax-cell { flex: 1 1 0; }
+  .ax-acts { flex-direction: row; flex-wrap: wrap; }
+}
+/* هدفِ لمسی دست‌کم ۴۴ پیکسل (بازبینیِ UX ۱۴۰۵/۰۷ — خانه‌های سطح ۳۰ پیکسل بودند). */
+@media (pointer: coarse), (max-width: 620px) {
+  .ax-cell { min-width: 44px; height: 44px; font-size: 13px; }
+  .ax-role, .ax-sw, .ax-reset, .ax-lens button { min-height: 44px; }
+  .ax-sw, .ax-reset { padding-inline: 14px; }
 }
 
 /* ── نقش‌های مجاز — شرطِ دومِ در (AND با سطح) ───────────────────────── */
@@ -119,7 +162,7 @@
   transition: color .15s, background .15s, border-color .15s;
 }
 .ax-role.on {
-  color: #fff; background: rgba(var(--brand-soft-rgb), .22);
-  border-color: rgba(var(--brand-soft-rgb), .55);
+  color: var(--brand-text); background: rgba(var(--brand-rgb), .14);
+  border-color: rgba(var(--brand-2-rgb), .55);
 }
 .ax-role:disabled { opacity: .5; cursor: default; }

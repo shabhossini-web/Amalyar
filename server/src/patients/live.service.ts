@@ -163,6 +163,8 @@ export class LiveService {
           id: true, seq: true, kind: true, service: true, opDate: true, opStatus: true, createdAt: true,
           nextVisitDate: true, followOfVisitId: true, surgeonName: true, hospitalName: true,
           pricingModel: true, globalAmount: true,
+          /* گامِ «تعیینِ کارشناس»ِ مسیرِ شرکت (`companyStage`) — فقط نام. */
+          techId: true, tech: { select: { person: { select: { firstName: true, lastName: true } } } },
           charges: { select: { amount: true } },
           payments: { select: { amount: true } },
         },
@@ -229,10 +231,26 @@ export class LiveService {
 
     /* کارهای باز از همان لایهٔ کار می‌آید، نه کوئریِ محلی: مالک، موعد، و
        «عقب‌افتاده» آن‌جا حساب می‌شوند و دو نسخه‌شان یعنی دو حقیقت. */
+    /* `settle`: کاری که رویدادِ واقعی‌اش همین حالا رخ داد (وضعیتِ عمل، گزارشِ آمده) همین حالا
+       از کارتِ «کارِ بعدی» برود — همان قاعدهٔ «امروز» و «کارهای من». */
+    if (workVisible) await this.work.settle();
     const work = workVisible ? await this.work.list(user, { scope: 'patient', patientId, limit: 20 }) : [];
 
     const billing = this.billing(visits);
-    const cycle = visits[0] ?? null;
+    /* ⚠️ **مسیرِ شرکت مسیرِ مطب نیست** (بازبینیِ UX، company-08): نوبت، نتیجه‌های بالینی و
+       پیگیری مالِ مطب‌اند و گامِ اصلیِ شرکت — گزارشِ خدمت و فاکتور — در شش گامِ مطب نبود؛
+       پرونده بالای صفحه «همه‌چیزِ این دوره بسته شده» می‌گفت و زیرش کارِ «گزارشِ خدمت هنوز
+       بارگذاری نشده» بود. پس نوعِ نصب همین‌جا خوانده می‌شود و شرکت نوارِ خودش را می‌گیرد. */
+    const company = (await this.prisma.setting.findUnique({ where: { key: 'vertical' } }).catch(() => null))?.value !== 'clinic';
+    /* دورهٔ شرکت = عملِ **باز** اگر هست: عملِ «موکول، بی‌تاریخ» در ترتیبِ تاریخ آخر می‌نشیند و
+       نوار پشتِ عملِ انجام‌شدهٔ قبلی می‌گفت همه‌چیز بسته است. مطب همان قاعدهٔ قبلی. */
+    const cycle = (company ? visits.find((v) => v.opStatus === 'pending') : null) ?? visits[0] ?? null;
+    const [reportDoc, invoiceDoc] = company && cycle
+      ? await Promise.all([
+        this.prisma.document.findFirst({ where: { visitId: cycle.id, category: 'report', deletedAt: null }, orderBy: { id: 'asc' }, select: { createdAt: true } }),
+        this.prisma.invoiceDocument.findFirst({ where: { visitId: cycle.id, supersededAt: null }, orderBy: { id: 'desc' }, select: { createdAt: true } }),
+      ])
+      : [null, null];
     const upcoming = appointmentsC
       .filter((a) => a.date >= today && ['held', 'confirmed', 'arrived'].includes(a.status))
       .sort((a, b) => a.date.getTime() - b.date.getTime() || (a.startMin ?? 0) - (b.startMin ?? 0));
@@ -244,7 +262,9 @@ export class LiveService {
       clinicalVisible: clinical,
       /* «خالی» را از «اجازه نداری» جدا می‌کند — وگرنه منشی فکر می‌کند سفارشی نیست. */
       ordersVisible, apptVisible, workVisible,
-      stage: this.stage({ patient, visits, cycle, appointments: appointmentsC, upcoming, orders: ordersC, openOrders, billing, kindTitle, today, ordersVisible, apptVisible }),
+      stage: company
+        ? this.companyStage({ patient, cycle, billing, kindTitle, today, reportDoc, invoiceDoc })
+        : this.stage({ patient, visits, cycle, appointments: appointmentsC, upcoming, orders: ordersC, openOrders, billing, kindTitle, today, ordersVisible, apptVisible }),
       /* «کارِ بعدی» = بالاترین کارِ باز. بقیه هم می‌آیند تا کارت بتواند بگوید
          «۳ کارِ دیگر» بی‌آنکه درخواستِ دوم بزند. */
       nextWork: work[0] ?? null,
@@ -360,6 +380,73 @@ export class LiveService {
     if (firstOpen && firstOpen.state === 'todo') firstOpen.state = 'current';
     for (const s of steps) if (s !== firstOpen && s.state === 'current') s.state = 'todo';
 
+    return {
+      key: firstOpen?.key ?? null,
+      title: firstOpen ? firstOpen.title : 'همه‌چیزِ این دوره بسته شده',
+      detail: firstOpen?.detail ?? null,
+      steps,
+    };
+  }
+
+  /**
+   * نوارِ «الان کجاییم»ِ **شرکت** — از کارِ خودِ شرکت (بازبینیِ UX، company-08):
+   * ثبت‌نام ← تعیینِ کارشناس ← خدمت (انجام/موکول) ← گزارشِ خدمت ← فاکتور ← تسویه.
+   *
+   * گام‌های مطب (نوبت، نتیجه‌ها، پیگیری) این‌جا **نیستند** — نه «ردشده»: شرکت نوبت نمی‌دهد و
+   * نتیجهٔ بالینی نمی‌گیرد، و گامِ خاکستریِ «ردشده» در هر پرونده یعنی نواری که همیشه نصفش
+   * بی‌معناست. همان قاعدهٔ «دقیقاً یک گامِ جاری» (پایینِ `stage`).
+   *
+   * ⚠️ واژهٔ حوزه جای خالی است (`{visit}`، `{tech}`) و کلاینت با `useTerms()` پرش می‌کند:
+   * «کارشناس» در ایمپلنت «نمایندهٔ فنی» است (قانونِ ۲۴).
+   */
+  private companyStage(x: any): { key: string | null; title: string; detail: string | null; steps: Step[] } {
+    const { patient, cycle, billing, kindTitle, today, reportDoc, invoiceDoc } = x;
+    const steps: Step[] = [];
+    const cycleTitle = cycle ? visitTitleOf(cycle, kindTitle[cycle.kind ?? '']) : null;
+    const add = (key: string, title: string, state: Step['state'], detail: string | null, at: Date | null = null, kind: string | null = null) =>
+      steps.push({ key, title, state, detail, at, ...(kind ? { kind, kindFa: cycleTitle ?? kindTitle[kind] ?? null } : {}) });
+
+    add('intake', 'ثبت‌نام', 'done', 'پرونده ساخته شد', patient.createdAt);
+
+    const done = cycle?.opStatus === 'done';
+    const cancelled = cycle?.opStatus === 'cancelled';
+    const techName = [cycle?.tech?.person?.firstName, cycle?.tech?.person?.lastName].filter(Boolean).join(' ').trim();
+    if (!cycle) add('tech', 'تعیینِ {tech}', 'todo', null);
+    else if (cycle.techId) add('tech', 'تعیینِ {tech}', 'done', techName || null);
+    else if (cancelled) add('tech', 'تعیینِ {tech}', 'skipped', 'لازم نشد');
+    else if (done) add('tech', 'تعیینِ {tech}', 'skipped', 'بی‌{tech} ثبت شد');
+    else add('tech', 'تعیینِ {tech}', 'current', 'هنوز تعیین نشده');
+
+    /* خدمت: انجام / موکول / لغو — همان سه پاسخِ پنلِ کارشناس و کارِ «وضعیتِ عمل». */
+    if (!cycle) add('visit', V, 'todo', `هنوز ${V}ای ثبت نشده`);
+    else if (done) add('visit', V, 'done', 'انجام شد', cycle.opDate ?? cycle.createdAt, cycle.kind ?? null);
+    else if (cancelled) add('visit', V, 'skipped', `آخرین ${V} لغو شد`, cycle.opDate ?? cycle.createdAt, cycle.kind ?? null);
+    else if (!cycle.opDate) add('visit', V, 'current', 'موکول شد — هنوز تاریخ ندارد', null, cycle.kind ?? null);
+    else if (cycle.opDate < today) add('visit', V, 'current', 'وضعیت ثبت نشده — انجام شد یا موکول؟', cycle.opDate, cycle.kind ?? null);
+    else add('visit', V, 'current', `${cycleTitle ?? V} در انتظار`, cycle.opDate, cycle.kind ?? null);
+
+    /* گزارشِ خدمت — سندِ `report` روی همین دوره (همان شرطِ آشکارسازِ «گزارش نیامده»). */
+    if (!cycle) add('report', 'گزارشِ خدمت', 'todo', null);
+    else if (cancelled) add('report', 'گزارشِ خدمت', 'skipped', 'لازم نیست');
+    else if (reportDoc) add('report', 'گزارشِ خدمت', 'done', 'بارگذاری شد', reportDoc.createdAt);
+    else if (done) add('report', 'گزارشِ خدمت', 'current', 'هنوز بارگذاری نشده');
+    else add('report', 'گزارشِ خدمت', 'todo', 'پس از خدمت');
+
+    /* فاکتور — نسخهٔ جاریِ صادرشده برای همین دوره. */
+    if (!cycle) add('invoice', 'فاکتور', 'todo', null);
+    else if (cancelled) add('invoice', 'فاکتور', 'skipped', 'لازم نیست');
+    else if (invoiceDoc) add('invoice', 'فاکتور', 'done', 'صادر شد', invoiceDoc.createdAt);
+    else if (done) add('invoice', 'فاکتور', 'current', 'هنوز صادر نشده');
+    else add('invoice', 'فاکتور', 'todo', 'پس از خدمت');
+
+    /* تسویه — همان قاعدهٔ مطب؛ مبلغ متن نمی‌شود (قانونِ ۱۳، کارت از `billing.due` می‌خواند). */
+    if (!billing.total) add('billing', 'تسویه', cycle && !cancelled ? 'todo' : 'skipped', 'صورت‌حسابی ثبت نشده');
+    else if (billing.due <= 0) add('billing', 'تسویه', 'done', 'تسویه شد');
+    else add('billing', 'تسویه', 'todo', 'صورت‌حساب تسویه نشده');
+
+    const firstOpen = steps.find((s) => s.state === 'current') ?? steps.find((s) => s.state === 'todo');
+    if (firstOpen && firstOpen.state === 'todo') firstOpen.state = 'current';
+    for (const s of steps) if (s !== firstOpen && s.state === 'current') s.state = 'todo';
     return {
       key: firstOpen?.key ?? null,
       title: firstOpen ? firstOpen.title : 'همه‌چیزِ این دوره بسته شده',

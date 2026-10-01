@@ -20,8 +20,6 @@ import './visit-subforms.css';
  * «درخواست/انحصاری»شان از `/config` (`labels.ts`) می‌آیند.
  */
 
-const faNum = (n) => Number(n || 0).toLocaleString('fa-IR');
-
 /**
  * کاتالوگِ زیرفرم‌ها — هر بار که فرم باز می‌شود از نو: فرم‌ساز ممکن است همین حالا عوضش کرده باشد.
  * `enabled`: میزِ اتاقِ عمل فقط وقتی پنجرهٔ الصاق باز شد می‌خوانَدش، نه با هر بازشدنِ کارت.
@@ -49,6 +47,9 @@ export const attachableOn = (item, kind) => !!item && item.active !== false && !
  * ⚠️ اسلاتِ پر روی فرمی که این‌جا الصاق‌شدنی نیست (درخواست در فرمِ عمل، یا خاموش در
  * فرم‌ساز) غیرفعال است با توضیح — پنهان‌کردنش جای اسلات‌ها را جابه‌جا می‌کرد. در فرمِ عمل منتخب
  * به تبِ فعال الصاق می‌شود (`pinPhase`).
+ * اسلاتِ **خالی** دیده نمی‌شود (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-22): سه دکمهٔ خط‌چینِ «+ فرمِ منتخب ۱/۲/۳»
+ * دقیقاً همان کارِ «الصاقِ فرم» را می‌کردند، در موبایل یک ردیفِ کامل می‌گرفتند و نمی‌گفتند «منتخب» چیست. تا
+ * ستاره‌ای نخورده یک خطِ راهنما جایشان است؛ منتخب‌ها همان‌جا که ستاره خوردند سرِ جای خودشان می‌نشینند.
  */
 export function VisitHeadBar({ title, color, topic, pins, byKey, kind, attached, pinPhase, onAttach, onPin, disabled, showAttach }) {
   return (
@@ -65,15 +66,11 @@ export function VisitHeadBar({ title, color, topic, pins, byKey, kind, attached,
           </button>
           {pins.map((key, i) => {
             const it = key ? byKey.get(key) : null;
-            if (!it) {
-              return (
-                <button key={`slot-${i}`} type="button" className="vf-pin" onClick={onAttach} disabled={disabled} data-pin-slot={i}>
-                  <Plus width="13" height="13" aria-hidden="true" />فرمِ منتخب {faNum(i + 1)}
-                </button>
-              );
-            }
+            if (!it) return null;
             const usable = attachableOn(it, kind);
             const on = attached.has(key);
+            /* مرحلهٔ مقصدِ هر ستاره می‌تواند فرق کند (زبانهٔ «مشخصات»ِ فرمِ عمل: مرحلهٔ خودِ فرم) — تابع یا متن. */
+            const ph = typeof pinPhase === 'function' ? pinPhase(it) : pinPhase;
             return (
               <button
                 key={`slot-${i}`} type="button" data-pin-slot={i} data-pin={key}
@@ -81,12 +78,15 @@ export function VisitHeadBar({ title, color, topic, pins, byKey, kind, attached,
                 onClick={() => onPin(it)} disabled={disabled || !usable}
                 title={!usable ? `«${it.title}» در این فرم در دسترس نیست`
                   : on ? `«${it.title}» الصاق شده — برو به آن`
-                    : pinPhase ? `الصاقِ «${it.title}» به «${pinPhase}»` : `الصاقِ «${it.title}»`}
+                    : ph ? `الصاقِ «${it.title}» به «${ph}»` : `الصاقِ «${it.title}»`}
               >
                 <Star width="13" height="13" aria-hidden="true" />{it.short}
               </button>
             );
           })}
+          {!pins.some((key) => key && byKey.get(key)) && (
+            <small className="vf-pin-hint" data-pin-hint>فرم‌هایی را که در فهرستِ الصاق ستاره بزنید این‌جا یک‌لمسی می‌شوند</small>
+          )}
         </div>
       )}
     </div>
@@ -138,8 +138,10 @@ export function PhaseAttach({ phase, label, onClick, disabled }) {
  *
  * فرمِ عمل: بالای فهرست «الصاق به: قبل / حین / بعد از عمل» (`phases`) — پیش‌فرض همان تبی که
  * کاربر در آن است؛ «الصاق شده» هم به‌ازای همان مرحله است (`attached` را والد می‌سازد).
+ * فرمی که مالِ یک مرحلهٔ خاص است (`boundOf`) کنارِ ردیفش «معمولاً: حین عمل» دارد و اگر کاربر خودش مرحلهٔ
+ * دیگری زده (`explicit`) همان‌جا یک خطِ هشدار می‌گیرد (surgery-11) — والد تصمیم می‌گیرد کجا الصاق شود.
  */
-export function AttachPicker({ open, onClose, visitWord, groups, items, attached, pins, onPin, onAttach, canBuild, phases, phase, onPhase, loading = false, title }) {
+export function AttachPicker({ open, onClose, visitWord, groups, items, attached, pins, onPin, onAttach, canBuild, phases, phase, onPhase, loading = false, title, boundOf = null, explicit = false }) {
   const [q, setQ] = useState('');
   useEffect(() => { if (!open) setQ(''); }, [open]);
   const needle = q.trim();
@@ -148,6 +150,7 @@ export function AttachPicker({ open, onClose, visitWord, groups, items, attached
     [items, needle],
   );
   const pinned = new Set((pins ?? []).filter(Boolean));
+  const phaseFa = (k) => phases?.find((p) => p.key === k)?.label ?? k;
   return createPortal(
     <AnimatePresence>
       {open && (
@@ -184,11 +187,18 @@ export function AttachPicker({ open, onClose, visitWord, groups, items, attached
                   {rows.map((it) => {
                     const done = attached.has(it.key);
                     const star = pinned.has(it.key);
+                    const bound = phases && boundOf ? boundOf(it) : null;
+                    const off = !!bound && explicit && bound !== phase;
                     return (
                       <div key={it.key} className={`vf-pick-row${done ? ' is-done' : ''}`} data-subform-item={it.key}>
                         <div>
                           <b>{it.title}</b>
                           {it.hint && <small>{it.hint}</small>}
+                          {bound && (
+                            <small className={`vf-pick-usual${off ? ' is-off' : ''}`} data-usual-phase={bound} role={off ? 'note' : undefined}>
+                              {off ? `معمولاً «${phaseFa(bound)}» است — این‌جا به «${phaseFa(phase)}» الصاق می‌شود` : `معمولاً: ${phaseFa(bound)}`}
+                            </small>
+                          )}
                         </div>
                         {/* ستارهٔ «منتخب» فقط جایی که منتخب معنا دارد (فرمِ مراجعه) — میزِ اتاقِ عمل
                             `onPin` نمی‌دهد و دکمهٔ بی‌اثر هم نمی‌گیرد. */}

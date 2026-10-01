@@ -85,7 +85,7 @@ export default function VisitDocs({ patientId, visitId, phase = null, phaseFa = 
         },
       });
       setLink(EMPTY_LINK);
-      onToast?.('لینک ثبت شد ✓');
+      onToast?.('لینک ثبت شد');
       load();
     } catch (e) { onToast?.(e.message, true); } finally { setSaving(false); }
   };
@@ -159,7 +159,8 @@ export default function VisitDocs({ patientId, visitId, phase = null, phaseFa = 
             label="عکس یا PDF — انتخاب یا رهاکردن"
             hint={`با دستهٔ «${catFa[cat]}» ${where} ثبت می‌شود`}
             onUpload={(file) => upload(file)}
-            onAllDone={() => { onToast?.('مدرک ثبت شد ✓'); load(); }}
+            /* «ثبت شد» فقط وقتی همه رفتند (R2)؛ فایلِ خطادار با «تلاشِ دوباره» در همین کادر می‌ماند. */
+            onAllDone={({ ok = 0, failed = 0 } = {}) => { if (!ok) return; load(); if (!failed) onToast?.('مدرک ثبت شد'); }}
           />
           <div className="vd-linkrow">
             <input type="url" dir="ltr" placeholder="لینک — پکس، درایو یا سایتِ آزمایشگاه" value={link.url}
@@ -180,7 +181,7 @@ export default function VisitDocs({ patientId, visitId, phase = null, phaseFa = 
             disabled={off}
             onSave={async (file) => {
               await upload(file, `توضیحِ صوتی — ${phase ? phaseFa : catFa[cat]}`);
-              onToast?.('توضیحِ صوتی ثبت شد ✓');
+              onToast?.('توضیحِ صوتی ثبت شد');
               load();
             }}
           />

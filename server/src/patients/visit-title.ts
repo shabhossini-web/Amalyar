@@ -1,5 +1,5 @@
 import { SERVICES, isServiceKey } from '../config/tenant-profile';
-import { COMPANY_MULTI_SERVICE_TITLE, OPERATION_FORM_TITLE } from './form-presets';
+import { CLINIC_PRESET_VISIT_TITLES, COMPANY_MULTI_SERVICE_TITLE, OPERATION_FORM_TITLE } from './form-presets';
 
 /**
  * **نامِ مراجعهٔ شرکت = نامِ خدمتش** — «نورومانیتورینگ»، نه «فرمِ عمل».
@@ -33,6 +33,16 @@ export const isAutoCompanyFormTitle = (title: string | null | undefined) =>
   !title || title === OPERATION_FORM_TITLE || title === COMPANY_MULTI_SERVICE_TITLE || SERVICE_LABELS.has(title);
 
 /**
+ * **واژهٔ حوزهٔ مطب برای هر نوعِ هسته‌ای** — همان `TERMS.clinic.visit/surgery` در `src/lib/terms.js`.
+ *
+ * ⚠️ نوعِ مراجعه «ویزیت» یا «عمل» است، نه نامِ فرمش («فرمِ ویزیت»/«فرمِ جراحی»): تا پیش از این کارت،
+ * فیلتر، پرونده، نوارِ «الان کجاییم» و ردیف‌های «چه شده» همه نامِ فرم را جای نوع می‌نوشتند، در حالی که
+ * میزِ پزشک همان‌ها را «ویزیت/عمل» می‌نامید (بازبینیِ UX، clinic-daily-04).
+ */
+const CLINIC_KIND_TERM: Record<string, string> = { clinic: 'ویزیت', surgery: 'عمل', followup: 'پیگیری', consult: 'مشاوره' };
+const CLINIC_PRESET_TITLES = new Set<string>(CLINIC_PRESET_VISIT_TITLES);
+
+/**
  * **نامِ نمایشیِ یک مراجعه** — همهٔ نماها از همین (غنی‌سازی، پرونده، خطِ زمان و «الان کجاییم»،
  * پرتالِ بیمار، خلاصه).
  *
@@ -46,5 +56,9 @@ export function visitTitleOf(
   formTitle: string | null | undefined,
 ): string | null {
   const service = serviceTitleOf(v);
-  return service && isAutoCompanyFormTitle(formTitle) ? service : (formTitle ?? null);
+  if (service && isAutoCompanyFormTitle(formTitle)) return service;
+  /* مطب: نامِ قالبیِ فرم (خودِ سامانه گذاشته) جای نوع را نمی‌گیرد — واژهٔ حوزه می‌نشیند. */
+  const term = v?.kind ? CLINIC_KIND_TERM[v.kind] : undefined;
+  if (term && formTitle && CLINIC_PRESET_TITLES.has(formTitle)) return term;
+  return formTitle ?? null;
 }

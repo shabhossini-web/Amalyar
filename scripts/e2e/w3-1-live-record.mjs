@@ -36,6 +36,10 @@ const send = (p, m, b) => fetch(API + p, { method: m, headers: A, body: b ? JSON
   .then(async (r) => ({ status: r.status, json: await r.json().catch(() => null) }));
 
 const tag = 'lv' + randomBytes(3).toString('hex');
+const vertical0 = sql(`SELECT coalesce((SELECT value FROM settings WHERE key='vertical'), '')`);
+const setVertical = (v) => (v
+  ? sql(`INSERT INTO settings (key, value) VALUES ('vertical', '${v}') ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`)
+  : sql(`DELETE FROM settings WHERE key='vertical'`));
 let made = null, tl = null;   // حسابِ آزمایشیِ سطح‌۲ + توکنش — بخشِ ۸ هم لازمش دارد
 const trash = { visits: [], forms: [], accounts: [] };
 let pid = -1;
@@ -89,6 +93,11 @@ try {
   /* یک کارِ باز و عقب‌افتاده روی همین بیمار */
   const wk = num(`INSERT INTO work_items(type, state, title, patient_id, visit_id, owner_role, due_at, idempotency_key, blocked_reason, created_at, updated_at) VALUES ('review_result', 'blocked', 'بررسیِ نتیجهٔ MRI', ${pid}, ${v1.id}, 'doctor', now()-interval '2 days', '${tag}-w1', 'نتیجه ناخواناست', now(), now()) RETURNING id`);
 
+  /* ⚠️ این سوییت نوارِ «الان کجاییم»ِ **مطب** را می‌سنجد (نوبت، نتیجه‌ها، پیگیری). شرکت از بازبینیِ
+     UX (company-08) نوارِ خودش را دارد — ثبت‌نام ← کارشناس ← خدمت ← گزارش ← فاکتور ← تسویه، با سنجه در
+     `company-service-flow` — پس حوزه برای بخش‌های API صریحاً مطب است و پیش از بخشِ رابط برمی‌گردد.
+     ردیفِ تنظیمات مستقیم، نه `PATCH /config/vertical`: ماژول‌ها نباید دست بخورند. */
+  setVertical('clinic');
   console.log('۱) الان کجاییم');
   const live = (await send(`/patients/${pid}/live`, 'GET')).json;
   ok(live?.patient?.code, `پاسخ آمد (${live?.patient?.code})`);
@@ -252,6 +261,7 @@ try {
   ok(netted.paidPct < 100,
     `**نباید بیفتد:** کارت هم‌زمان «مانده دارد» و «۱۰۰٪ پرداخت شده» بگوید (٪${netted.paidPct} با ماندهٔ ${netted.due})`);
 
+  setVertical(vertical0);
   console.log('\n۶) روی صفحه');
 
   const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: ['--no-sandbox'] });
@@ -267,10 +277,12 @@ try {
 
     ok(await page.locator('.rc-step.is-current').count() === 1, 'روی صفحه هم دقیقاً یک گام روشن است');
     const body = await page.locator('.df').innerText();
-    ok(!body.includes('{visit}'),
-      '**نباید بیفتد:** جای خالیِ واژه (`{visit}`) خام روی صفحه دیده شود');
-    ok(/مراجع/.test(await page.locator('.rc-stage').innerText()),
-      'واژهٔ حوزه از `useTerms()` پُر شد (حوزهٔ پیش‌فرض: مراجعه)');
+    ok(!body.includes('{visit}') && !body.includes('{tech}'),
+      '**نباید بیفتد:** جای خالیِ واژه (`{visit}`، `{tech}`) خام روی صفحه دیده شود');
+    /* نوارِ شرکت از بازبینیِ UX (company-08) گام‌های خودش را دارد — «تعیینِ {tech}»، نه «{visit}»ِ
+       مطب — پس واژهٔ پرشده یا «مراجعه» است یا «کارشناس»؛ جای خالیِ خام را بندِ قبلی می‌گیرد. */
+    ok(/مراجع|کارشناس/.test(await page.locator('.rc-stage').innerText()),
+      'واژهٔ حوزه از `useTerms()` پُر شد (مراجعه/کارشناس)');
     ok(await page.locator('.rc-id').count() === 1 && await page.locator('.rc-id input, .rc-id select').count() === 0,
       '**نباید بیفتد:** کارتِ هویت فیلدِ ویرایش داشته باشد (هویت فقط‌خواندنی است)');
     ok(await page.locator('.rc-next-main').count() === 1 && /بررسیِ نتیجهٔ MRI/.test(await page.locator('.rc-next-main').innerText()),
@@ -412,6 +424,7 @@ try {
   sql(`UPDATE features SET enabled=true WHERE key IN ('calendar','work')`);
   sql(`UPDATE features SET min_level=4 WHERE key='calendar'`);
   sql(`UPDATE features SET min_level=2 WHERE key='work'`);
+  setVertical(vertical0);
   if (pid > 0) {
     sql(`DELETE FROM work_items WHERE patient_id=${pid}`);
     sql(`DELETE FROM reminders WHERE patient_id=${pid}`);

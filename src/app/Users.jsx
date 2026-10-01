@@ -14,10 +14,16 @@ import { faDate } from '../lib/jalali.js';
 import './definitions.css';
 import './launcher.css';
 import './users.css';
-import { Back, Check, Close, User } from '../ui/icons.jsx';
+import { Caret, Check, Close, Lock, Plus, Search, User } from '../ui/icons.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
+import { useConfirm } from '../ui/Confirm.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import { useStagger } from '../ui/stagger.js';
+import Toast, { useToast } from '../ui/Toast.jsx';
+import { useConfig } from './config.jsx';
+import { roleShown } from '../lib/terms.js';
+import { PENDING_CHANGED } from './usePending.js';
 
 
 /**
@@ -89,9 +95,11 @@ function ProfileSheet({ id, onClose, onSaved, onError }) {
       <div className="df-sheet-body">
         {!form ? <p className="us-empty">در حال بارگذاری…</p> : (
           <>
+            {/* نادرست بود (بستهٔ PS، PS5): شبا و کدِ ملیِ جراح/رانندهٔ صاحبِ حساب از «تعاریف» هم عوض می‌شد. حالا نام،
+                موبایل، عکس و شبای صاحبِ حساب فقط از همین‌جا عوض می‌شوند؛ کدِ ملی از «تعاریف» هم (با ممیزی). */}
             <p className="us-hint" style={{ marginTop: 0 }}>
-              نام، موبایل و عکس هنگامِ ثبت‌نام توسطِ خودِ کارشناس پر شده‌اند.
-              کد ملی، شبا و دستمزد فقط از این‌جا تکمیل می‌شوند.
+              نام، موبایل و عکس را خودِ شخص هنگامِ ثبت‌نام پر کرده است. نام، موبایل و شبا فقط از همین‌جا عوض
+              می‌شوند (نه از «تعاریف»)؛ کد ملی و دستمزد هم این‌جا تکمیل می‌شوند.
             </p>
             <PersonFields value={form} onChange={setForm} errors={errors} disabled={busy} />
             <label className="pf-field">
@@ -118,13 +126,15 @@ function ProfileSheet({ id, onClose, onSaved, onError }) {
 }
 
 function TemporaryAccountSheet({ onClose, onSaved, testingEnabled }) {
+  const { vertical } = useConfig();
   const [form, setForm] = useState({ firstName: '', lastName: '', phone: '' });
   const [testAccount, setTestAccount] = useState(false), [username, setUsername] = useState('');
   const [level, setLevel] = useState(2), [jobRole, setRole] = useState('technician');
   const [busy, setBusy] = useState(false), [errors, setErrors] = useState({}), [message, setMessage] = useState(''), [result, setResult] = useState(null);
   const save = async () => {
     const next = personErrors(form); if (!form.phone) next.phone = 'شماره همراه لازم است'; if (testAccount && !/^(?=.*[a-zA-Z])[a-zA-Z0-9_.-]{3,40}$/.test(username)) next.username = '۳ تا ۴۰ کاراکتر، شامل حرف لاتین؛ مثل test-doctor';
-    else if (username && !/^[a-zA-Z0-9_.-]{3,40}$/.test(username)) next.username = 'نام کاربری ۳ تا ۴۰ حرف لاتین یا عدد باشد';
+    /* دست‌کم یک حرفِ لاتین (بستهٔ PS، PS9) — تمام‌رقم با شمارهٔ موبایلِ کسِ دیگری اشتباه می‌شد. */
+    else if (username && !/^(?=.*[a-zA-Z])[a-zA-Z0-9_.-]{3,40}$/.test(username)) next.username = 'نام کاربری ۳ تا ۴۰ حرف لاتین یا عدد و دست‌کم یک حرفِ لاتین باشد';
     setErrors(next);
     if (Object.keys(next).length || busy) return;
     setBusy(true); setMessage('');
@@ -144,7 +154,7 @@ function TemporaryAccountSheet({ onClose, onSaved, testingEnabled }) {
         <p>حساب بلافاصله قابل ورود است. صاحب شماره هفت روز برای تأیید پیامکی و تکمیل پروفایل فرصت دارد. مشخصات افراد موجود در تعاریف پایه حفظ می‌شود.</p>
         <PersonFields value={form} onChange={setForm} errors={errors} disabled={busy} />
         <label className="pf-field"><span>سطح دسترسی</span><select value={level} onChange={e => setLevel(+e.target.value)} disabled={busy}>{LEVELS.map(l => <option key={l.v} value={l.v}>{l.l}</option>)}</select></label>
-        <label className="pf-field"><span>نقش شغلی</span><select value={jobRole} onChange={e => setRole(e.target.value)} disabled={busy}>{JOB_ROLES.map(r => <option key={r.v} value={r.v}>{r.l}</option>)}</select></label>
+        <label className="pf-field"><span>نقش شغلی</span><select value={jobRole} onChange={e => setRole(e.target.value)} disabled={busy}>{JOB_ROLES.filter(r => roleShown(vertical, r.v)).map(r => <option key={r.v} value={r.v}>{r.l}</option>)}</select></label>
         {['driver', 'courier'].includes(jobRole) && <p>حساب به نیروی حمل‌ونقل متصل می‌شود و مسیرها و ابلاغ‌ها در پرتال حمل‌ونقل قابل مشاهده خواهند بود.</p>}
         {jobRole === 'doctor' && <p>در شرکت‌های نورومانیتورینگ و ایمپلنت، حساب پزشک به جراح در تعاریف پایه و پرتال او متصل می‌شود.</p>}
       </>}
@@ -156,22 +166,19 @@ function TemporaryAccountSheet({ onClose, onSaved, testingEnabled }) {
 export default function Users() {
   const stagger = useStagger();
   const { user } = useAuth();
-  const [tab, setTab] = useState('pending'); // pending | all | perm
+  const { vertical } = useConfig();
+  const [tab, setTab] = useState('pending'); // pending | all
+  const [q, setQ] = useState('');
+  const [confirmNode, confirm] = useConfirm();
   const [pending, setPending] = useState(null);
   const [all, setAll] = useState(null);
   const [levelSel, setLevelSel] = useState({}); // id → سطحِ انتخابی
   const [busyId, setBusyId] = useState(0);
-  const [toast, setToast] = useState('');
+  const { msg: toast, show: setToast } = useToast(1800);
   const [profileId, setProfileId] = useState(0);
   const [creating, setCreating] = useState(false);
   const [testingEnabled, setTestingEnabled] = useState(false), [modeBusy, setModeBusy] = useState(false);
 
-  useEffect(() => { document.title = 'عمل‌یار — مدیریت کاربران'; }, []);
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(''), 1800);
-    return () => clearTimeout(t);
-  }, [toast]);
 
   const load = useCallback(async () => {
     try {
@@ -184,6 +191,12 @@ export default function Users() {
     }
   }, []);
   useEffect(() => { load(); }, [load]);
+
+  /* جستجو در «همهٔ کاربران» — نام، نامِ کاربری، موبایل (ارقامِ فارسی هم). */
+  const needle = toEnDigits(q.trim()).toLowerCase();
+  const shownAll = all && (needle
+    ? all.filter((r) => [r.displayName, r.username, r.phone].some((v) => toEnDigits(String(v ?? '')).toLowerCase().includes(needle)))
+    : all);
 
   if (user && user.level < 6) return <Navigate to="/app" replace />;
 
@@ -200,6 +213,7 @@ export default function Users() {
     try {
       await api(`/accounts/${row.id}/approve`, { method: 'POST', body: { level } });
       setToast(`«${row.displayName}» تأیید شد — ${LEVELS.find((x) => x.v === level)?.l}`);
+      window.dispatchEvent(new Event(PENDING_CHANGED));
       await load();
     } catch (e) {
       setToast(e.message);
@@ -209,10 +223,19 @@ export default function Users() {
   };
 
   const reject = async (row) => {
+    /* «رد» بی‌پرسش انجام می‌شد (بازبینیِ UX ۱۴۰۵/۰۷) — حالا با نامِ فرد و اثرش. */
+    const ok = await confirm({
+      title: `درخواستِ «${row.displayName}» رد شود؟`,
+      body: 'این حساب وارد سامانه نمی‌شود و از فهرستِ «در انتظارِ تأیید» بیرون می‌رود؛ در «همهٔ کاربران» با وضعیتِ «ردشده» می‌ماند.',
+      ok: 'رد کن',
+      danger: true,
+    });
+    if (!ok) return;
     setBusyId(row.id);
     try {
       await api(`/accounts/${row.id}/reject`, { method: 'POST' });
       setToast(`درخواستِ «${row.displayName}» رد شد`);
+      window.dispatchEvent(new Event(PENDING_CHANGED));
       await load();
     } catch (e) {
       setToast(e.message);
@@ -225,7 +248,7 @@ export default function Users() {
     setBusyId(row.id);
     try {
       await api(`/accounts/${row.id}/job-role`, { method: 'POST', body: { jobRole } });
-      setToast(jobRole ? 'نقشِ شغلی ثبت شد ✓' : 'نقشِ شغلی برداشته شد ✓');
+      setToast(jobRole ? 'نقشِ شغلی ثبت شد' : 'نقشِ شغلی برداشته شد');
       await load();
     } catch (e) { setToast(e.message); } finally { setBusyId(0); }
   };
@@ -257,25 +280,30 @@ export default function Users() {
       <div className="lx-grid" aria-hidden="true" />
 
       <div className="lx-shell us-shell">
-        <header className="us-head">
-          <Link to="/app" className="lx-back" aria-label="بازگشت به صفحهٔ امروز"><Back width="15" height="15" /> سامانه</Link>
-          <h1>مدیریت کاربران</h1>
-        </header>
+        {/* نامِ صفحه همان نامِ کاشی است («کاربران») — قانونِ ۲۴؛ کاتالوگ تنها منبعِ نام است. */}
+        <PageHeader tool="users">
+          {/* «دسترسی‌ها» تبی بود که فقط یک لینک داشت — حالا خودِ لینک کنارِ عنوان است. */}
+          <Link to="/app/access" className="us-headlink"><Lock width="14" height="14" aria-hidden="true" /> سطوحِ دسترسی</Link>
+        </PageHeader>
 
-        {!user?.isTestAccount && <section className="glass us-card"><b>تست نقش‌ها با یک شماره</b><p>حالت آزمایشی را روشن کنید، سپس در «ساخت حساب موقت» گزینهٔ شماره مشترک و نام کاربری مستقل را انتخاب کنید. از منوی حساب، «افزودن حساب» و جابه‌جایی بین نقش‌ها استفاده کنید.</p><p>پایان تست همهٔ حساب‌های آزمایشی و نشست‌هایشان را غیرفعال می‌کند؛ اطلاعات ثبت‌شده حذف نمی‌شود. روشن‌کردن دوباره، حساب‌های قبلی را خودکار فعال نمی‌کند.</p><button className="us-btn" disabled={modeBusy} onClick={toggleTesting}>{modeBusy ? 'در حال ثبت…' : testingEnabled ? 'پایان تست و غیرفعال‌کردن حساب‌های آزمایشی' : 'فعال‌کردن ساخت حساب آزمایشی'}</button></section>}
-        <button className="us-btn ok" onClick={() => setCreating(true)}>+ ساخت حساب موقت</button>
-        <Tabs
-          variant="inset"
-          className="us-tabs"
-          label="بخش‌های کاربران"
-          value={tab}
-          onChange={setTab}
-          items={[
-            { key: 'pending', label: 'در انتظار تأیید', badge: pending?.length || null },
-            { key: 'all', label: 'همهٔ کاربران' },
-            { key: 'perm', label: 'دسترسی‌ها' },
-          ]}
-        />
+        {/* کارِ اصلیِ صفحه — تأییدِ کارکنان و فهرستِ همه — بالا؛ ساختِ حساب یک دکمهٔ عادی کنارِ آن،
+            نه پررنگ‌ترین دکمهٔ صفحه، و ابزارِ آزمایشیِ نقش‌ها تاشو پایینِ صفحه (بازبینیِ UX ۱۴۰۵/۰۷). */}
+        <div className="us-bar">
+          <Tabs
+            variant="inset"
+            className="us-tabs"
+            label="بخش‌های کاربران"
+            value={tab}
+            onChange={setTab}
+            items={[
+              { key: 'pending', label: 'در انتظار تأیید', badge: pending?.length || null },
+              { key: 'all', label: 'همهٔ کاربران' },
+            ]}
+          />
+          <button type="button" className="us-btn us-new" onClick={() => setCreating(true)}>
+            <Plus width="15" height="15" aria-hidden="true" /> ساختِ حسابِ موقت
+          </button>
+        </div>
 
         {/* ── در انتظار تأیید ── */}
         {tab === 'pending' && (
@@ -318,8 +346,14 @@ export default function Users() {
         {/* ── همهٔ کاربران ── */}
         {tab === 'all' && (
           <div className="us-list">
+            <label className="us-search">
+              <Search width="16" height="16" aria-hidden="true" />
+              <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="نام، نامِ کاربری یا موبایل…"
+                aria-label="جستجو در کاربران" autoComplete="off" />
+            </label>
             {all === null && <p className="us-empty">در حال بارگذاری…</p>}
-            {all?.map((row, i) => (
+            {all && shownAll.length === 0 && <p className="us-empty">کاربری با «{q.trim()}» پیدا نشد.</p>}
+            {shownAll?.map((row, i) => (
               <motion.div key={row.id} {...stagger(i)} className="glass us-card slim">
                 <div className="us-row">
                   <Avatar row={row} />
@@ -356,7 +390,8 @@ export default function Users() {
                       onChange={(e) => setJobRole(row, e.target.value || null)}
                     >
                       <option value="">— بدونِ نقش —</option>
-                      {JOB_ROLES.map((r) => <option key={r.v} value={r.v}>{r.l}</option>)}
+                      {/* نقشِ بی‌ربط به حوزه پنهان است، مگر همین حساب از قبل آن را دارد. */}
+                      {JOB_ROLES.filter((r) => roleShown(vertical, r.v) || r.v === row.jobRole).map((r) => <option key={r.v} value={r.v}>{r.l}</option>)}
                     </select>
                   </label>
                   <button type="button" className="us-btn" onClick={() => setProfileId(row.id)}>پروفایل</button>
@@ -365,18 +400,13 @@ export default function Users() {
             ))}
           </div>
         )}
-        {/* ── دسترسی‌ها ──
-            ⚠️ ماتریسِ کامل (ماژول‌ها + مجوزهای عملیاتی) صفحهٔ خودش را دارد.
-            این‌جا فقط یک در است: تنظیمِ دسترسی تا امروز داخلِ همین تب قایم
-            بود و مدیر پیدایش نمی‌کرد — قابلیتی که پیدا نشود وجود ندارد. */}
-        {tab === 'perm' && (
-          <div className="us-list">
-            <p className="us-hint">
-              سطحِ لازم برای هر بخش و هر مجوزِ عملیاتی در صفحهٔ «سطوحِ دسترسی» تعیین
-              می‌شود — همان‌جا هم می‌شود دید که یک سطحِ مشخص به چه چیزهایی می‌رسد.
-            </p>
-            <Link className="us-btn ok us-acclink" to="/app/access">رفتن به سطوحِ دسترسی</Link>
-          </div>
+        {!user?.isTestAccount && (
+          <details className="glass us-card us-testing">
+            <summary>تست نقش‌ها با یک شماره (حسابِ آزمایشی) <Caret className="us-caret" width="15" height="15" aria-hidden="true" /></summary>
+            <p>حالت آزمایشی را روشن کنید، سپس در «ساختِ حسابِ موقت» گزینهٔ شماره مشترک و نام کاربری مستقل را انتخاب کنید. از منوی حساب، «افزودن حساب» و جابه‌جایی بین نقش‌ها استفاده کنید.</p>
+            <p>پایان تست همهٔ حساب‌های آزمایشی و نشست‌هایشان را غیرفعال می‌کند؛ اطلاعات ثبت‌شده حذف نمی‌شود. روشن‌کردن دوباره، حساب‌های قبلی را خودکار فعال نمی‌کند.</p>
+            <button className="us-btn" disabled={modeBusy} onClick={toggleTesting}>{modeBusy ? 'در حال ثبت…' : testingEnabled ? 'پایان تست و غیرفعال‌کردن حساب‌های آزمایشی' : 'فعال‌کردن ساخت حساب آزمایشی'}</button>
+          </details>
         )}
       </div>
 
@@ -386,13 +416,14 @@ export default function Users() {
           <ProfileSheet
             id={profileId}
             onClose={() => setProfileId(0)}
-            onSaved={async () => { setProfileId(0); setToast('پروفایل ذخیره شد ✓'); await load(); }}
+            onSaved={async () => { setProfileId(0); setToast('پروفایل ذخیره شد'); await load(); }}
             onError={setToast}
           />
         )}
       </AnimatePresence>
 
-      <div className={`lx-toast${toast ? ' on' : ''}`}>{toast}</div>
+      {confirmNode}
+      <Toast msg={toast} />
     </div>
   );
 }

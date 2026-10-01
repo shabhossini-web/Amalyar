@@ -10,6 +10,8 @@
 .cal {
   min-height: 100vh; background: var(--bg); color: var(--text1);
   padding: 20px 16px 64px; position: relative; overflow-x: hidden;
+  /* گریدِ ماه پهن‌ترین عرضِ استاندارد را می‌گیرد (shell-15) — هم‌عرضِ نوارِ پوسته؛ سربرگ و گرید از همین. */
+  --page-w: var(--maxw);
 }
 .cal * { box-sizing: border-box; }
 .cal-bg {
@@ -20,17 +22,7 @@
 }
 .cal > *:not(.cal-bg) { position: relative; }
 
-.cal-head { display: flex; align-items: flex-start; gap: 14px; max-width: 940px; margin: 0 auto 18px; }
-.cal-back {
-  display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
-  color: var(--text1); text-decoration: none; font-size: 12px;
-  padding: 9px 13px; border-radius: 11px;
-  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .24);
-}
-.cal-head h1 { font-size: clamp(21px, 4vw, 28px); margin: 0 0 5px; }
-.cal-head p { margin: 0; font-size: 12px; color: var(--text3); line-height: 1.9; }
-
-.cal-list { display: grid; gap: 9px; max-width: 940px; margin: 0 auto; }
+.cal-list { display: grid; gap: 9px; max-width: var(--page-w); margin: 0 auto; }
 .cal-empty {
   padding: 26px 16px; text-align: center; font-size: 12.5px; color: var(--text3);
   border-radius: 15px; background: rgba(var(--surface-rgb), .55); border: 1px dashed rgba(var(--brand-soft-rgb), .2);
@@ -42,7 +34,7 @@
 .cal-row.zero { opacity: .55; }
 .cal-row.exp { border-color: rgba(251, 113, 133, .32); }
 
-.cal-err { max-width: 940px; margin: 0 auto 14px; padding: 12px; border-radius: 13px; font-size: 12.5px; color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .28); }
+.cal-err { max-width: var(--page-w); margin: 0 auto 14px; padding: 12px; border-radius: 13px; font-size: 12.5px; color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .28); }
 
 /* خلاصهٔ داخلِ سلولِ روز */
 .cal-dots { display: flex; gap: 3px; }
@@ -63,8 +55,21 @@
 .cal-names .more { color: rgba(var(--veil-rgb), .4); }
 @media (max-width: 640px) { .cal-names { display: none; } }
 
+/* راهنمای رنگ‌های خانه‌ها (clinic-daily-14) — همان سه رنگِ `.cal-dots` و نشانِ نوبت. */
+.cal-legend {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; list-style: none;
+  max-width: var(--page-w); margin: 10px auto 0; padding: 0; font-size: 11.5px; color: var(--text2);
+}
+.cal-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.cal-legend i { width: 14px; height: 10px; border-radius: 4px; }
+/* سواچ دقیقاً ظاهرِ همان چیپ را دارد (زمینه + رنگِ عدد)، نه رنگِ تقریبی — وگرنه راهنما دروغ می‌گوید. */
+.cal-legend i.p { background: rgba(251, 191, 36, .16); box-shadow: inset 0 0 0 1.5px var(--amber-text); }
+.cal-legend i.d { background: rgba(52, 211, 153, .16); box-shadow: inset 0 0 0 1.5px var(--green-text); }
+.cal-legend i.c { background: rgba(248, 113, 113, .16); box-shadow: inset 0 0 0 1.5px var(--red-text); }
+.cal-legend li.appt { color: var(--cyan); }
+
 /* جزئیاتِ روزِ انتخاب‌شده */
-.cal-day { max-width: 940px; margin: 18px auto 0; }
+.cal-day { max-width: var(--page-w); margin: 18px auto 0; }
 .cal-day > b { display: block; font-size: 14px; margin-block-end: 10px; }
 .cal-row {
   display: flex; align-items: center; gap: 12px; padding: 12px 14px; margin-block-end: 8px;
@@ -75,17 +80,49 @@
 .cal-row.s-cancelled { border-inline-start-color: rgba(248, 113, 113, .7); opacity: .6; }
 .cal-time { min-width: 62px; text-align: center; }
 .cal-time b { display: block; font-size: 14px; }
-.cal-time b.none { color: rgba(var(--veil-rgb), .3); }
+/* «ساعت؟» — کم‌رنگ ولی خوانا (`--text3`)، نه خطِ درشتِ کم‌آلفا (company-22). */
+.cal-time b.none { font-size: 12px; font-weight: 600; color: var(--text3); }
+.cal-notime {
+  min-height: 32px; padding: 3px 8px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600; color: var(--text3);
+  background: none; border: 1px dashed rgba(var(--veil-rgb), .22); border-radius: 8px;
+}
+.cal-notime:hover { color: var(--text2); border-color: rgba(var(--brand-2-rgb), .5); }
+.cal-notime:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+@media (max-width: 640px) { .cal-notime { min-height: 44px; } }
 .cal-time small { font-size: 10px; color: rgba(var(--veil-rgb), .45); }
 .cal-main { flex: 1; min-width: 0; }
 .cal-main b { display: block; font-size: 13.5px; }
 .cal-main small { display: block; font-size: 11px; color: rgba(var(--veil-rgb), .55); line-height: 1.9; }
-.cal-tech { color: #a5b4fc !important; }
-.cal-kind { margin-inline-start: 7px; padding: 1px 7px; border-radius: 7px; font-style: normal; font-size: 9.5px; color: var(--cyan); background: rgba(34, 211, 238, .12); }
+/* رنگِ خامِ #a5b4fc در تمِ روشن محو می‌شد — توکنِ متنِ برند در هر دو تم خوانا است (clinic-daily-14). */
+.cal-tech { color: var(--brand-text) !important; }
+/* `inline-block` + `nowrap`: نامِ دوکلمه‌ایِ خدمت («ایمپلنت و تجهیزات») وسطِ چیپ نشکند و نیمه‌اش زیرِ خطِ بعد نرود. */
+.cal-kind { display: inline-block; white-space: nowrap; margin-inline-start: 7px; padding: 1px 7px; border-radius: 7px; font-style: normal; font-size: 9.5px; color: var(--cyan); background: rgba(34, 211, 238, .12); }
+/* دکمهٔ بازکردنِ مراجعه — «بازکردن» + کد. ⚠️ تا بازبینیِ UX (clinic-daily-14) متنش #c4b5fdِ خام بود:
+   در تمِ روشن بنفشِ کم‌رنگ روی بنفش، کنتراستِ ۱٫۳ به ۱، روی تنها راهِ بازکردنِ آن مراجعه. */
 .cal-open {
-  flex-shrink: 0; padding: 7px 10px; border-radius: 10px; font-size: 10.5px; text-decoration: none;
-  color: #c4b5fd; background: rgba(var(--brand-rgb), .12); border: 1px solid rgba(var(--brand-rgb), .3);
+  flex-shrink: 0; display: grid; justify-items: center; gap: 1px; min-width: 88px; min-height: 44px;
+  padding: 6px 10px; border-radius: 10px; text-decoration: none; font-family: inherit; cursor: pointer;
+  color: var(--brand-text); background: rgba(var(--brand-rgb), .1); border: 1px solid rgba(var(--brand-rgb), .38);
+  transition: background .15s, border-color .15s;
 }
+.cal-open-v { font-size: 11.5px; font-weight: 800; }
+.cal-open [dir="ltr"] { font-size: 10px; color: var(--text2); }
+.cal-open:hover { background: rgba(var(--brand-rgb), .18); border-color: rgba(var(--brand-rgb), .55); }
+.cal-open:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { .cal-open { transition: none; } }
+/* کدِ مراجعه برای کسی که بازکردنِ فرم برایش مجاز نیست — فقط خواندنی، نه دکمهٔ مرده. */
+.cal-code { flex-shrink: 0; font-size: 10.5px; color: var(--text3); }
+
+/* پیامِ کوتاهِ پایینِ صفحه (ذخیرهٔ فرم، شروعِ ویزیت) — خطا قرمز است و تا بسته نشود می‌ماند. */
+.cal-toast {
+  position: fixed; inset-inline: 16px; bottom: 18px; z-index: 60; margin: auto;
+  width: fit-content; max-width: calc(100% - 32px);
+  padding: 12px 18px; border-radius: 13px; font: inherit; font-size: 13px; cursor: pointer;
+  color: var(--text1); background: rgba(var(--surface-rgb), .97); border: 1px solid rgba(var(--brand-soft-rgb), .4);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .35);
+}
+.cal-toast.bad { color: var(--red-text); border-color: rgba(248, 113, 113, .55); }
+.cal-toast:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
 /* ── میزِ پذیرش — نوبت‌های روز (`docs/BOOKING.md` مرحلهٔ ۵) ── */
 .cal-appt-dot { font-size: 9.5px; color: var(--cyan); }
@@ -101,6 +138,8 @@
 .cal-appt-st {
   margin-inline-start: 6px; font-style: normal; font-size: 9.5px; font-weight: 700;
   padding: 2px 7px; border-radius: 99px; vertical-align: 1px;
+  /* برچسبِ وضعیت یک تکه است — «در مطب» هرگز دو خط نمی‌شود (clinic-daily-03). */
+  display: inline-block; white-space: nowrap;
   color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .14);
 }
 .cal-appt-st.st-held { color: var(--amber-text); background: rgba(251,191,36,.1); border-color: rgba(251,191,36,.3); }
@@ -131,3 +170,18 @@
   border: 1px dashed rgba(var(--veil-rgb), .22); padding: 6px 10px;
 }
 .cal-appt-go.is-off:hover { color: var(--text2); border-color: rgba(var(--veil-rgb), .34); }
+
+/* ── موبایل: ردیفِ نوبت دو طبقه (بازبینیِ UX، clinic-daily-03) ──
+   بالا ساعت/شماره + نام + وضعیت، پایین دکمه‌ها در یک ردیفِ تمام‌عرض — همان چیدمانِ کارتِ
+   میزِ پذیرش. ⚠️ تا پیش از این دکمه‌ها کنارِ نام می‌ماندند و برای نام و مشخصات ۹ تا ۵۰ پیکسل
+   جا می‌ماند: هر کلمه یک خط، ردیفِ ۲۴۰ پیکسلی، و منشی نمی‌توانست نوبت‌ها را مرور کند. */
+@media (max-width: 640px) {
+  .cal-appt {
+    display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center;
+    grid-template-areas: 'time main' 'acts acts'; gap: 8px 10px;
+  }
+  .cal-appt > .cal-time { grid-area: time; min-width: 36px; }
+  .cal-appt > .cal-main { grid-area: main; }
+  .cal-appt-acts { grid-area: acts; margin-inline-start: 0; justify-content: stretch; gap: 6px; }
+  .cal-appt-acts > button { flex: 1 1 auto; min-height: 44px; font-size: 12px; }
+}

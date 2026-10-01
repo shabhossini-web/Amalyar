@@ -249,7 +249,7 @@ try {
   ok('«بیمارانِ من»: ویزیت و عملِ خودش، نه بیمارانِ دیگران', (await page.locator('.sp-list .sp-card').count()) === 2 && (await page.locator(`.sp-card[data-visit-id="${v3.id}"]`).count()) === 1 && (await page.locator(`.sp-card[data-visit-id="${v2.id}"]`).count()) === 0, String(await page.locator('.sp-list .sp-card').count()));
   await page.locator(`.sp-card[data-visit-id="${v3.id}"] .sp-open`).click();
   await page.locator('.db-sheet').waitFor({ timeout: 10000 });
-  ok('نامِ بیمار در کارت فرمِ عمل را باز می‌کند (با سه تبِ قبل / حین / بعد)', (await page.locator('.db-sheet .db-postop .ui-tabs button').count()) === 3);
+  ok('نامِ بیمار در کارت فرمِ عمل را باز می‌کند (با زبانه‌های مشخصات / قبل / حین / بعد)', (await page.locator('.db-sheet .db-phasetabs button').count()) === 4);
   await page.locator('.db-sheet .db-x').first().click();
   await page.locator('.db-sheet').waitFor({ state: 'detached', timeout: 8000 });
 
@@ -273,7 +273,7 @@ try {
   await page.locator('.db-sheet').waitFor({ timeout: 10000 });
   await page.waitForFunction(() => /تاریخِ (ویزیت|عمل)/.test(document.querySelector('.db-sheet')?.innerText ?? ''), null, { timeout: 10000 }).catch(() => {});
   const sheetTxt = await page.locator('.db-sheet').innerText();
-  ok('**«مراجعهٔ جدید» در مطب با نوعِ ویزیت باز می‌شود، نه عمل** (برچسبِ «تاریخِ ویزیت»، بدونِ تب‌های عمل)', /تاریخِ ویزیت/.test(sheetTxt) && !/تاریخِ عمل/.test(sheetTxt) && (await page.locator('.db-sheet .db-postop .ui-tabs').count()) === 0, sheetTxt.replace(/\s+/g, ' ').slice(0, 140));
+  ok('**«مراجعهٔ جدید» در مطب با نوعِ ویزیت باز می‌شود، نه عمل** (برچسبِ «تاریخِ ویزیت»، بدونِ تب‌های عمل)', /تاریخِ ویزیت/.test(sheetTxt) && !/تاریخِ عمل/.test(sheetTxt) && (await page.locator('.db-sheet .db-phasetabs').count()) === 0, sheetTxt.replace(/\s+/g, ' ').slice(0, 140));
   await page.locator('.db-sheet .db-x').first().click();
   await page.locator('.db-sheet').waitFor({ state: 'detached', timeout: 8000 });
 

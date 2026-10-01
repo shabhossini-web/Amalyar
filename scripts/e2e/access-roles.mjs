@@ -73,8 +73,10 @@ try {
 
   console.log('\n۲) سوپرادمین همه‌چیز را می‌بیند');
   const fAdmin = (await send(A, '/features', 'GET')).json;
-  ok(fAdmin.every((f) => f.allowed === true),
-    `همهٔ کاشی‌ها برای سوپرادمین باز (${fAdmin.filter((f) => f.allowed).length}/${fAdmin.length})`);
+  /* shell-06: سطح و نقش برای سوپرادمین سنجیده نمی‌شوند، ولی روشن/خاموشِ ماژول (اهرمِ پلن) چرا —
+     ماژولِ خاموش حتی برای او کاشی ندارد، با دلیلِ فارسی. */
+  ok(fAdmin.every((f) => f.allowed === f.enabled) && fAdmin.filter((f) => !f.enabled).every((f) => /غیرفعال|مطب نیست|این شرکت نیست/.test(f.reason ?? '')),
+    `همهٔ کاشی‌های روشن برای سوپرادمین باز و خاموش‌ها بسته (${fAdmin.filter((f) => f.allowed).length}/${fAdmin.length})`);
   const acc = await send(A, '/ledger/summary', 'GET');
   ok(acc.status !== 403, 'قیدِ نقش روی سوپرادمین اثر ندارد');
   const techAgenda = await send(A, '/tech/agenda?scope=upcoming', 'GET');

@@ -88,12 +88,12 @@ export const ACCESS_GROUPS: AccessGroup[] = [
 export const FEATURES: AccessDef[] = [
   { key: 'surgeon', label: 'پرتال جراح', group: 'modules', defaultLevel: LEVEL.TECH, hint: 'مراجعات و دستورهای جراح مرتبط با حساب در شرکت‌های نورو و ایمپلنت.' },
   {
-    key: 'dashboard', label: 'داشبورد مدیریت', group: 'modules',
+    key: 'dashboard', label: 'بیماران', group: 'modules',
     hint: 'ثبت و پیگیریِ مراجعات، مالیِ پایه و گزارش‌ها.',
     defaultLevel: LEVEL.ADMIN,
   },
   {
-    key: 'formgen', label: 'فرم‌ساز', group: 'modules',
+    key: 'formgen', label: 'ثبت‌نام‌های آنلاین', group: 'modules',
     defaultLevel: LEVEL.ADMIN,
   },
   {
@@ -106,7 +106,7 @@ export const FEATURES: AccessDef[] = [
     defaultLevel: LEVEL.ADMIN,
   },
   {
-    key: 'calendar', label: 'تقویمِ عمل‌ها', group: 'modules',
+    key: 'calendar', label: 'تقویم عمل‌ها', group: 'modules',
     defaultLevel: LEVEL.SUPERVISOR,
   },
   {
@@ -152,12 +152,12 @@ export const FEATURES: AccessDef[] = [
     defaultLevel: LEVEL.ADMIN,
   },
   {
-    key: 'site', label: 'سایتِ معرفیِ شرکت', group: 'modules',
+    key: 'site', label: 'سایتِ معرفی', group: 'modules',
     hint: 'صفحهٔ عمومیِ روی دامنهٔ خودِ شرکت — چیزی که مراجعه‌کننده پیش از هر ورودی می‌بیند. خاموش که باشد، ریشهٔ دامنه مثلِ قبل به فرمِ ورود می‌رود.',
     defaultLevel: LEVEL.ADMIN,
   },
   {
-    key: 'tech', label: 'پنلِ کارشناسی', group: 'modules',
+    key: 'tech', label: 'پنل کارشناسی', group: 'modules',
     hint: 'دفترِ کارِ خودِ کارشناس. عمداً سطحِ پایینی دارد: کارشناس نباید برای دیدنِ کارِ فردایش به داشبوردِ مدیریت دسترسی بگیرد.',
     defaultLevel: LEVEL.TECH,
   },
@@ -166,12 +166,12 @@ export const FEATURES: AccessDef[] = [
     defaultLevel: LEVEL.TECH_ADMIN,
   },
   {
-    key: 'users', label: 'مدیریتِ کاربران', group: 'modules',
+    key: 'users', label: 'کاربران', group: 'modules',
     hint: 'تأیید، رد و تعیینِ سطحِ کاربران. قفل است — دلیلش در ستونِ کناری.',
     defaultLevel: LEVEL.SUPER_ADMIN, locked: true,
   },
   {
-    key: 'transport', label: 'پرتالِ حمل‌ونقل', group: 'modules',
+    key: 'transport', label: 'حمل‌ونقل', group: 'modules',
     hint: 'راننده و پیک مسیرِ خودشان را می‌بینند و تحویل را ثبت می‌کنند. هیچ اطلاعاتی از بیمار در آن نیست.',
     defaultLevel: LEVEL.TECH,
   },

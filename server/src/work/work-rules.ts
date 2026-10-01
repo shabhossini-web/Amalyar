@@ -120,6 +120,14 @@ const none: RuleOutcome = { upserts: [], closes: [] };
 /**
  * جدولِ قواعد. `ownerAccountId` وقتی رویداد شخصِ مشخصی دارد (`payload.techId`،
  * `payload.doctorId`) پر می‌شود؛ وگرنه کار در **صفِ نقش** می‌ماند تا کسی بردارد.
+ *
+ * ⚠️ **`reopen` روی کارهای آشکارساز** (`work-detectors.ts`: عملِ بی‌وضعیت، گزارشِ
+ * نیامده، مصرفِ تأییدنشده، فرمِ بی‌پاسخ، گامِ عقب‌افتادهٔ مسیر). آشکارساز فقط وقتی
+ * دوباره رویداد می‌دهد که **خودِ مشکل هنوز هست** (هفته‌ای یک‌بار به‌ازای هر ref)؛
+ * پس کاری که با «بستن بدونِ اقدام» بسته شده — یا عملی که «موکول» شد و تاریخِ تازه‌اش
+ * هم گذشت — باید دوباره باز شود. بی‌این، همان کار برای همیشه «انجام‌شده» می‌ماند و
+ * یادآوری دیگر هرگز نمی‌آمد (بازبینیِ UX، company-01). بازپخشِ رویدادِ قدیمی همچنان
+ * بازش نمی‌کند (`upsertWork` شناسهٔ رویداد را می‌سنجد).
  */
 export const RULES: Record<string, Rule> = {
   /* ── سفارش‌های بالینی (D02) ── */
@@ -157,6 +165,7 @@ export const RULES: Record<string, Rule> = {
     ownerRole: 'secretary',
     dueAt: e.at ?? new Date(),
     priority: 2,
+    reopen: true,
   }),
 
   /* ── مسیرِ درمان (W4.2) ──
@@ -170,6 +179,7 @@ export const RULES: Record<string, Rule> = {
     ownerRole: (e.payload?.ownerRole as string) ?? null,
     dueAt: e.at ?? new Date(),
     priority: 2,
+    reopen: true,
   }),
   /* گامی که بالاخره بسته شد، کارِ پیگیری‌اش را هم می‌بندد. */
   'pathway.step_closed': (_e, ref) => close(ref, 'pathway_step'),
@@ -232,6 +242,7 @@ export const RULES: Record<string, Rule> = {
     ownerAccountId: e.payload?.techId ?? null,
     dueAt: e.at ?? new Date(),
     priority: 2,
+    reopen: true,
   }),
   'visit.done': (_e, ref) => close(ref, 'confirm_surgery_done'),
   /* «موکول شد» (پنلِ کارشناسی، ۱۴۰۵/۰۷/۰۵) هم جوابِ همین پرسش است — عمل دیگر «بی‌وضعیت» نیست؛
@@ -247,6 +258,7 @@ export const RULES: Record<string, Rule> = {
     ownerRole: e.payload?.clinic ? 'doctor' : 'technician',
     ownerAccountId: (e.payload?.clinic ? e.payload?.doctorId : e.payload?.techId) ?? null,
     dueAt: inDays(1, e.at),
+    reopen: true,
   }),
   'report.uploaded': (_e, ref) => close(ref, 'complete_report'),
   'usage.unconfirmed': (e, ref) => upsert({
@@ -255,6 +267,7 @@ export const RULES: Record<string, Rule> = {
     ownerRole: 'technician',
     ownerAccountId: e.payload?.techId ?? null,
     dueAt: inDays(1, e.at),
+    reopen: true,
   }),
   'usage.confirmed': (_e, ref) => close(ref, 'confirm_usage'),
 

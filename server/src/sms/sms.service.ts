@@ -109,11 +109,27 @@ export class SmsService {
     return text.replace(/\s*لغو\s*[0-9۰-۹]+\s*$/u, '').replace(/\s+$/, '') + `\n${LAGHO}`;
   }
 
-  async sendOtp(phone: string, code: string, webOtpHost?: string | null) {
+  /**
+   * @param purpose `'password-reset'` ← متنِ بازیابیِ رمز (بستهٔ PF، PF10): کدِ بازیابی کلیدِ کلِ حساب است و
+   *   مهندسیِ اجتماعی («از پشتیبانی تماس می‌گیریم، کد را بخوانید») رایج‌ترین راهِ دزدیدنش؛ پیامک باید بگوید
+   *   این کدِ چیست و به هیچ‌کس داده نشود. بقیهٔ هدف‌ها همان متنِ کوتاهِ قبلی.
+   */
+  async sendOtp(phone: string, code: string, webOtpHost?: string | null, purpose?: string) {
     // خطِ آخر = فرمتِ origin-bound WebOTP. میزبان باید میزبانِ همان صفحه باشد،
     // وگرنه مرورگر بی‌صدا اتوفیل نمی‌کند (sanitizeWebOtpHost تک‌منبعِ اعتبارسنجی است).
     const validHost = sanitizeWebOtpHost(webOtpHost) ?? 'amalyar.com';
-    const text = `عمل‌یار: کد تأیید شما ${code}\n${LAGHO}\n@${validHost} #${code}`;
+    /* «به هیچ‌کس، حتی پشتیبانی، ندهید» برای هر کدی که حسابی را تحویل می‌دهد یا فرمِ پزشکیِ بیمار را باز می‌کند —
+       بازیابی (PF10)، و ثبت‌نام/تصاحب/تأییدِ شماره و «ادامهٔ ثبت‌نامِ» بیمار (بستهٔ PS، PS8): کلاه‌بردارِ تلفنی
+       همین کد را «برای تأییدِ شماره» می‌خواهد. کدِ بی‌هدف (ورودِ پلتفرم) همان متنِ کوتاهِ قبلی. */
+    const warn = 'این کد را به هیچ‌کس، حتی پشتیبانی، ندهید. اگر درخواست نکرده‌اید نادیده بگیرید.';
+    const head = purpose === 'password-reset'
+      ? `کدِ بازیابیِ رمزِ عمل‌یار: ${code}\n${warn}`
+      : purpose === 'signup' || purpose?.startsWith('test-account:')
+        ? `کدِ تأییدِ شماره در عمل‌یار: ${code}\n${warn}`
+        : purpose?.startsWith('intake-resume:')
+          ? `کدِ ادامهٔ ثبت‌نام: ${code}\n${warn}`
+          : `عمل‌یار: کد تأیید شما ${code}`;
+    const text = `${head}\n${LAGHO}\n@${validHost} #${code}`;
     return this.send(phone, text, { skipLagho: true });
   }
 

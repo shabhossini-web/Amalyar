@@ -40,7 +40,8 @@ export default function TimePick({
   onChange,                 // هر کلید — متنِ خام (فقط ارقام لاتین‌شده)
   onCommit,                 // خروج از فیلد / انتخاب از فهرست — مقدارِ نرمال‌شده
   step = 15,
-  placeholder = '۰۸:۳۰',
+  /* قالب، نه مقدار: «۰۸:۳۰» در کادرِ خالیِ عملِ بی‌ساعت شبیهِ ساعتِ ثبت‌شده بود (بازبینیِ UX ۱۴۰۵/۰۷). */
+  placeholder = 'ساعت : دقیقه',
   className = 'db-field',
   disabled,
   hint,
@@ -156,7 +157,7 @@ function ClockPick({ value, step, title, onPick, onClose }) {
 
       <footer className="tp-foot">
         <button type="button" className="tp-ghost" onClick={() => onPick('')}>پاک‌کردن</button>
-        <button type="button" className="tp-ghost" onClick={() => onPick(now())}>اکنون</button>
+        <button type="button" className="tp-ghost tp-now-ghost" onClick={() => onPick(now())}>اکنون</button>
         <button type="button" className="tp-ok" onClick={() => onPick(`${two(h)}:${two(m)}`)}>تأیید</button>
       </footer>
     </Overlay>,

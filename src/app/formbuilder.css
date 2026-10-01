@@ -20,7 +20,7 @@
 /* نشانِ صفحه روی ردیفِ فیلد — فقط در فرمِ چندصفحه‌ای دیده می‌شود. */
 .fb-page {
   font-size: 9.5px; font-weight: 800; font-style: normal; padding: 1px 7px; border-radius: 99px;
-  color: #c4b5fd; background: rgba(167, 139, 250, .12); border: 1px solid rgba(167, 139, 250, .3);
+  color: var(--brand-text); background: rgba(167, 139, 250, .12); border: 1px solid rgba(167, 139, 250, .3);
 }
 
 /* ── نقشِ فرم در پیگیریِ پس از عمل (فقط فرمِ زیرپرونده) ─────────────────── */
@@ -58,6 +58,16 @@
   box-shadow: inset 0 0 0 1px rgba(var(--veil-rgb), .12);
 }
 .fb-color.auto.on { color: var(--text1); border-color: var(--text1); }
+/* کلیدِ «رنگِ کارت» فقط در موبایل پالت را باز/بسته می‌کند (surgery-18)؛ این‌جا نامرئی است و قاب
+   (`display: contents`) در چیدمانِ `.fb-meta` هیچ اثری ندارد — پالت مثلِ قبل همیشه دیده می‌شود. */
+.fb-colorpick { display: contents; }
+.fb-colortoggle {
+  display: none; align-items: center; gap: 7px; min-height: 44px; padding: 0 12px; cursor: pointer;
+  font: inherit; font-size: 12px; font-weight: 700; color: var(--text2); border-radius: 999px;
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .16);
+}
+.fb-colortoggle i { width: 14px; height: 14px; border-radius: 5px; background: var(--sw, rgba(var(--veil-rgb), .3)); }
+.fb-colortoggle:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
 /* حرکت اختیاری است، نه بخشی از معنی — کاربری که کاهشِ حرکت خواسته، نباید
    برای فهمیدنِ رنگِ انتخاب‌شده به بزرگ‌شدنِ سوآچ تکیه کند. */
@@ -73,14 +83,28 @@
 /* خاموش کم‌رنگ می‌شود ولی خوانا می‌ماند — کاربر باید بتواند دوباره روشنش کند. */
 .fb-row.off { opacity: .5; }
 
-.fb-order { display: flex; flex-direction: column; gap: 2px; flex: 0 0 auto; }
+.fb-order { display: flex; flex-direction: column; gap: 3px; flex: 0 0 auto; }
+/* ۲۲×۱۸ بود — روی دسکتاپ هم نشانه‌گرفتنش سخت بود (surgery-18). موبایل پایین‌تر ۴۴ است. */
 .fb-order button {
-  width: 22px; height: 18px; display: grid; place-items: center; cursor: pointer;
+  width: 30px; height: 24px; display: grid; place-items: center; cursor: pointer;
   color: var(--text3); background: rgba(var(--veil-rgb), .05);
   border: 1px solid rgba(var(--veil-rgb), .1); border-radius: 6px;
 }
 .fb-order button:hover:not(:disabled) { color: var(--text1); background: rgba(var(--veil-rgb), .1); }
 .fb-order button:disabled { opacity: .3; cursor: default; }
+.fb-order button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+/* کلیدِ «جابه‌جاییِ ترتیب» — فقط موبایل (پایین‌تر)؛ دسکتاپ پیکان‌ها را همیشه در ردیف دارد. */
+.fb-listbar { display: none; }
+.fb-reorder {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 44px; padding: 0 14px; cursor: pointer;
+  font: inherit; font-size: 12.5px; font-weight: 800; color: var(--text2); border-radius: 999px;
+  background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .16);
+}
+.fb-reorder-ic { display: inline-flex; flex-direction: column; line-height: 0; }
+.fb-reorder-ic svg + svg { margin-top: -3px; }
+.fb-reorder.on { color: var(--brand-text); background: rgba(var(--brand-rgb), .12); border-color: rgba(var(--brand-rgb), .45); }
+.fb-reorder:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 
 .fb-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .fb-main b { font-size: 13.5px; font-weight: 800; display: flex; align-items: center; gap: 4px; }
@@ -88,13 +112,13 @@
 
 /* ستاره‌ی قرمز — همان نشانی که کاربرِ فرم هم می‌بیند، تا فرم‌ساز و فرم یک زبان
    داشته باشند. */
-.fb-star { color: #f87171; font-style: normal; font-weight: 900; }
+.fb-star { color: var(--red-text); font-style: normal; font-weight: 900; }
 
 .fb-tag {
   font-size: 9.5px; font-weight: 800; font-style: normal; padding: 1px 7px; border-radius: 99px;
   color: var(--text2); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .1);
 }
-.fb-tag.core { color: #7dd3fc; background: rgba(56, 189, 248, .1); border-color: rgba(56, 189, 248, .3); }
+.fb-tag.core { font-size: 11px; color: var(--cyan); background: rgba(var(--veil-rgb), .06); border-color: color-mix(in srgb, var(--cyan) 45%, transparent); }
 /* بخشِ ثابتِ استاندارد (بستهٔ ۶) — رنگ از توکنِ برند تا در هر دو تم خوانا بماند. */
 .fb-tag.std { color: var(--brand-2); background: rgba(var(--veil-rgb), .06); border-color: var(--brand-2); }
 .fb-locked { opacity: .55; cursor: default; display: inline-grid; place-items: center; }
@@ -141,15 +165,15 @@
 }
 .fb-reset:hover { color: var(--red-text); border-color: rgba(248, 113, 113, .4); }
 
-.fb-warn { font-size: 13px; line-height: 2; color: #fcd34d; margin: 0; }
+.fb-warn { font-size: 13px; line-height: 2; color: var(--amber-text); margin: 0; }
 .fb-warn b { color: #fff; }
 
 .fb-note {
-  font-size: 12px; line-height: 1.9; color: #7dd3fc; margin: 0 0 4px;
+  font-size: 12px; line-height: 1.9; color: rgb(var(--kind-sky)); margin: 0 0 4px;
   background: rgba(56, 189, 248, .08); border: 1px solid rgba(56, 189, 248, .22);
   border-radius: 10px; padding: 9px 11px;
 }
-.fb-note b { color: #bae6fd; }
+.fb-note b { color: rgb(var(--kind-sky)); }
 
 .fb-check {
   display: flex; align-items: center; gap: 9px; cursor: pointer;
@@ -167,7 +191,7 @@
      صفحه به ۳۲۸۴px می‌رسید؛ برای دیدنِ فیلدِ آخر باید هشت بار اسکرول می‌شد.
      حالا برچسبِ «اجباری» جمع می‌شود و فقط ستاره می‌ماند (معنی در aria/title)،
      و فهرستِ گزینه‌ها به پنلِ کناری می‌رود که جایش همان‌جاست. */
-  .fb-row { gap: 7px; padding: 7px 10px; }
+  .fb-row { gap: 7px; padding: 5px 10px; }
   .fb-main { gap: 2px; }
   .fb-main b { font-size: 12.5px; line-height: 1.3; }
   .fb-main > span { font-size: 9.5px; line-height: 1.4; gap: 3px; }
@@ -176,11 +200,21 @@
      می‌گوید (فیلدِ هسته‌ای سطل ندارد)، و بودنش خطِ مشخصات را به دو خط
      می‌برد — یعنی پانزده خطِ اضافه در کلِ فهرست. */
   .fb-tag.custom { display: none; }
+  /* «هسته‌ای» هم به همان دلیل: نبودِ سطل همین را می‌گوید، و با کلیدهای ۴۴ پیکسلی خطِ مشخصاتِ فیلدهای
+     هسته را به دو خط می‌برد. */
+  .fb-tag.core { display: none; }
   .fb-opts { display: none; }
+  .fb-colortoggle { display: inline-flex; margin-inline-start: auto; }
+  .fb-colorpick:not(.open) .fb-colors { display: none; }
+  .fb-colorpick.open .fb-colors { flex-basis: 100%; }
   .fb-req { padding: 6px 8px; }
   .fb-req em { display: none; }
-  .fb-acts { gap: 3px; }
-  .fb-acts .df-act { width: 30px; height: 30px; }
+  .fb-acts { gap: 4px; }
+  /* جابه‌جایی یک حالت است (surgery-18): پیکانِ ۴۴ پیکسلی کنارِ چهار کلیدِ ۴۴ پیکسلی برای نامِ فیلد جا
+     نمی‌گذاشت. عادی = کلیدهای ردیف؛ «جابه‌جاییِ ترتیب» = فقط پیکان‌ها. */
+  .fb-listbar { display: flex; margin: 0 0 8px; }
+  .fb-list:not(.is-reorder) .fb-order { display: none; }
+  .fb-list.is-reorder .fb-acts { display: none; }
   /* ⚠️ فلش‌ها در موبایل **کنارِ هم** می‌نشینند، نه روی هم. `press.css` کفِ
      تاچ‌تارگت را ۲۶px گذاشته (قاعدهٔ درستی است و با آن نمی‌جنگیم)، پس ستونی
      یعنی ۵۴px — بلندترین جزءِ ردیف، در حالی که خودِ مشخصات ۳۶px است. افقی
@@ -188,6 +222,21 @@
   .fb-order { flex-direction: row; }
   .fb-count { margin-inline-start: 0; }
   .fb-matrix-scroll, .fb-preview > .pf { padding-inline: 10px; }
+}
+
+/* ── کفِ لمسیِ ۴۴px (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-18) ─────────────────────────────
+   پیکان‌ها ۳۰×۲۶، کلیدِ اجباری ۲۴×۳۴ و خانه‌های رنگ ۲۶×۲۶ بودند. `press.css` کفِ عمومیِ کمتری
+   می‌گذارد و آخر لود می‌شود، پس این‌جا وزنِ انتخاب‌گر بیشتر است نه ترتیبِ فایل. */
+@media (max-width: 640px), (pointer: coarse) {
+  .fb-row .fb-order { flex-direction: row; gap: 4px; }
+  .fb-row .fb-order button { width: 44px; height: 44px; border-radius: 12px; }
+  .fb-acts .df-act { width: 44px; height: 44px; padding: 0; margin: 0; border-radius: 12px; }
+  .fb-acts .fb-req { min-width: 44px; min-height: 44px; justify-content: center; }
+  /* خانهٔ رنگ ۳۲ پیکسل دیده می‌شود و ۴۴ لمس می‌شود — فاصلهٔ ۱۲ یعنی ناحیه‌های لمس روی هم نمی‌افتند. */
+  .fb-colors { gap: 12px; }
+  .fb-colors .fb-color { position: relative; width: 32px; height: 32px; }
+  .fb-colors .fb-color.auto { width: auto; height: 32px; min-height: 32px; padding: 0 11px; }
+  .fb-colors .fb-color::after { content: ''; position: absolute; inset: -8px; }
 }
 
 /* ⚠️ `.df-ghost` فقط پوستهٔ دکمهٔ شبح است؛ اندازه‌اش را `.df-sheet-foot`ِ تعریف‌ها می‌داد.
@@ -220,7 +269,7 @@
 /* بخشِ نقشِ فیلد — «هر کس قسمتِ خودش را پر کند».
    ⚠️ روی ردیف فقط **نشانِ خواندنی** است؛ تیک‌زدن کارِ ماتریسِ یک‌جای بالاست
    (§۴.۷). چک‌باکس‌های تکرارشده در هر ردیف ردیف را سه‌طبقه می‌کردند. */
-.fb-tag.role { color: #67e8f9; background: rgba(103, 232, 249, .08); border-color: rgba(103, 232, 249, .3); }
+.fb-tag.role { color: var(--cyan); background: rgba(103, 232, 249, .08); border-color: rgba(103, 232, 249, .3); }
 
 /* ── بخش‌های تاشو: ماتریسِ نقش و پیش‌نمایش ──────────────────────────────── */
 .fb-fold {
@@ -285,4 +334,60 @@
   }
   .fb-side .df-sheet-body { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
   .fb-side .df-sheet-head, .fb-side .df-sheet-foot { flex: 0 0 auto; }
+}
+
+/* ── چیدمان: موبایل یک ستون، دسکتاپِ پهن سه ستون (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-25) ─────────────
+   قاب‌ها در موبایل همان ستونِ فلکسیِ `.lx-shell` را ادامه می‌دهند تا فاصله‌ها و کشیدگیِ بچه‌ها مثلِ
+   قبل بماند. `min-width: 0` تا نوارِ اسکرولیِ فرم‌ها ظرفش را پهن نکند. */
+.fb-work, .fb-nav, .fb-body { display: flex; flex-direction: column; min-width: 0; }
+.fb-newform-t { display: none; }
+
+/* زیرِ ۱۱۰۰ پیکسل ستونِ «فرم»ِ استاندارد (shell-15؛ تا آن روز ستونِ ۴۶۸ پیکسلیِ لانچر بود) — ۴۰ پیکسل
+   حاشیهٔ دوطرفهٔ `.lx-shell`. بالای آن ویرایشگرِ سه‌ستونیِ تمام‌عرض، مثلِ تقویم و اتاقِ عمل. */
+.fb .lx-shell { --page-w: var(--maxw-form); max-width: calc(var(--page-w) + 40px); }
+/* ریشه هم `.df` است و `.lx-shell` حاشیهٔ بالای خودش را دارد؛ بی‌این دو حاشیه روی هم می‌افتاد و سربرگ
+   ۲۰ پیکسل پایین‌تر از همهٔ صفحه‌ها می‌نشست. */
+.fb.df { padding-top: 0; }
+@media (min-width: 1100px) {
+  /* ستونِ ۴۶۸ پیکسلیِ لانچر برای فرم‌ساز تنگ بود: فرمِ ۹ فیلدی دو صفحه اسکرول می‌خورد. */
+  .fb .lx-shell { --page-w: none; max-width: 1320px; }
+  /* `overflow: hidden`ِ `.lx`/`.df` ظرفِ اسکرول می‌سازد و ستون‌های چسبان را از کار می‌اندازد؛ `clip`
+     همان برش را دارد بی‌آنکه ظرفِ اسکرول بسازد. */
+  .fb.lx.df { overflow: clip; }
+  .fb-work {
+    display: grid; grid-template-columns: 220px minmax(0, 1fr) minmax(340px, 400px);
+    gap: 22px; align-items: start;
+  }
+  /* فهرستِ فرم‌ها و پیش‌نمایش با اسکرولِ فیلدها همراه می‌مانند؛ زیرِ نوارِ بالای پوسته (~۶۲px). */
+  .fb-nav, .fb-live { position: sticky; top: 76px; max-height: calc(100dvh - 92px); overflow-y: auto; }
+  /* جا برای حلقهٔ فوکوس و سایهٔ قرص — ظرفِ اسکرولی لبه‌هایش را می‌بُرد. */
+  .fb-nav { padding: 4px; }
+  .fb-body .fb-meta { margin-top: 0; }
+
+  /* فرم‌ها = فهرستِ کناری: همان Tabs (نقش‌های ARIA و قرصِ لغزان) عمودی چیده می‌شود. */
+  .fb-tabrow { flex-direction: column; align-items: stretch; gap: 10px; }
+  .fb-tabrow > :first-child { flex: 0 0 auto; }
+  .fb-tabrow .ui-tabs {
+    flex-direction: column; gap: 4px; margin: 0; padding: 0; max-width: none; overflow: visible;
+    -webkit-mask-image: none; mask-image: none;
+  }
+  .fb-tabrow .ui-tabs button { padding: 10px 14px; border-radius: 12px; text-align: start; }
+  .fb-tabrow .ui-tabs .ui-tab-in { white-space: normal; justify-content: flex-start; text-align: start; }
+  .fb-tabrow .ui-tab-pill { border-radius: 12px; }
+  .fb-newform { width: 100%; height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    font: inherit; font-size: 13px; font-weight: 800; }
+  .fb-newform-t { display: inline; }
+
+  /* دسته‌بندی قابِ خودش را دارد (inset) و تا عرضِ محتوایش — فیلتر است نه خودِ فرم. */
+  .fb-scope.ui-tabs { margin: 0 0 16px; margin-inline-end: auto; max-width: 760px; }
+
+  /* پیش‌نمایشِ همیشه‌باز — سطحِ کار، مات (قانونِ شیشهٔ منضبط). */
+  .fb-live {
+    padding: 14px; border-radius: 16px;
+    background: var(--row-bg); border: 1px solid rgba(var(--brand-soft-rgb), .16);
+  }
+  .fb-live-head { display: grid; gap: 3px; margin-bottom: 12px; }
+  .fb-live-head b { font-size: 13.5px; font-weight: 900; color: var(--text1); }
+  .fb-live-head small { font-size: 11.5px; line-height: 1.8; color: var(--text3); }
+  .fb-live .ui-tabs { margin: 0 0 12px; }
 }

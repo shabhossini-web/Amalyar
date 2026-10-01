@@ -1,36 +1,51 @@
-/* خلاصهٔ ویزیت — سندِ چاپی. عمداً روشن: سند روی کاغذِ سفید زندگی می‌کند. */
+/* خلاصهٔ ویزیت — سندِ چاپی. عمداً روشن: سند روی کاغذِ سفید زندگی می‌کند.
+   ⚠️ **رنگِ سند از تم نمی‌آید** (بازبینیِ UX، بندِ ۹۱): کاغذ در هر دو تم سفید است، پس
+   متنِ رویش هم باید در هر دو تم تیره بماند. تا دیروز متن `var(--bg3)` بود — در تمِ
+   تیره بنفشِ سیاه (درست) ولی در تمِ روشن `#eceaf4`، یعنی سفید روی سفید (کنتراستِ ۱٫۱)؛
+   منشی‌ای که خلاصه را از داخلِ سامانه (پیش‌فرضِ مطب: روشن) چاپ می‌کرد برگهٔ تقریباً
+   خالی به بیمار می‌داد. برچسب‌ها هم `var(--text3)` بودند که در تمِ تیره روی کاغذِ سفید
+   ۳٫۲ می‌داد. سه رنگِ ثابتِ کاغذ این‌جا تعریف می‌شوند و هیچ‌جای سند توکنِ تم نمی‌خوانَد. */
 .vs {
-  min-height: 100dvh; background: #eceaf3; color: var(--bg3);
+  --paper-ink: #16132b;   /* متنِ اصلی — ۱۶:۱ روی سفید */
+  --paper-label: #4a4470; /* برچسب، تلفن، کد، نشانی — ۹:۱ روی سفید */
+  --paper-rule: #16132b;  /* خطِ زیرِ سربرگ */
+  min-height: 100dvh; background: #eceaf3; color: var(--paper-ink);
   display: flex; flex-direction: column; align-items: center;
-  padding: 18px 10px 90px; font-size: 14px;
+  padding: 18px 10px 110px; font-size: 15px; line-height: 1.7;
 }
 .vs-err {
   min-height: 100dvh; display: grid; place-items: center; background: #eceaf3;
   color: #b91c1c; font-size: 14px; padding: 20px; text-align: center;
 }
-.vs-err.quiet { color: var(--text3); }
+.vs-err.quiet { color: #4a4470; }
 
 .vs-page {
   width: min(760px, 100%); background: #fff; border-radius: 14px;
-  box-shadow: 0 10px 40px rgba(var(--surface-rgb), .12);
+  box-shadow: 0 10px 40px rgba(22, 19, 43, .12);
   padding: 26px 26px 20px;
 }
 
 .vs-head {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
-  padding-bottom: 14px; border-bottom: 2px solid var(--bg3);
+  padding-bottom: 14px; border-bottom: 2px solid var(--paper-rule);
 }
 .vs-head h1 { font-size: 19px; font-weight: 900; }
-.vs-head small { color: var(--text3); }
+.vs-head small { color: var(--paper-label); }
+/* نشان + نامِ مطب؛ تلفن لمس‌شدنی (`tel:`) ولی روی کاغذ همان متنِ ساده (بازبینیِ UX، بندِ ۱۱۲). */
+.vs-brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.vs-logo { width: 44px; height: 44px; border-radius: 12px; font-size: 22px; box-shadow: none; }
+/* ناحیهٔ لمس ۴۴ پیکسل بی‌تغییرِ ظاهرِ سند: padding با margin منفی خنثی می‌شود (بازبینیِ UX، بندِ ۱۱۴). */
+.vs-tel { display: inline-block; margin-top: 2px; padding-block: 9px; margin-block: -7px -9px; color: var(--paper-label); text-decoration: none; font-variant-numeric: tabular-nums; }
+.vs-tel:focus-visible { outline: 2px solid var(--paper-ink); outline-offset: 2px; border-radius: 4px; }
 .vs-doc { text-align: left; }
-.vs-doc b { display: block; font-size: 13px; }
-.vs-doc small { color: var(--text3); font-size: 11px; }
+.vs-doc b { display: block; font-size: 14px; }
+.vs-doc small { color: var(--paper-label); font-size: 12.5px; }
 
 .vs-patient {
   display: flex; align-items: baseline; gap: 10px; padding: 12px 0 4px;
 }
 .vs-patient b { font-size: 16px; }
-.vs-patient small { color: var(--text3); }
+.vs-patient small { color: var(--paper-label); }
 
 .vs-facts {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
@@ -38,33 +53,40 @@
   background: #f6f5fa; border-radius: 10px;
 }
 .vs-facts div { display: flex; gap: 7px; align-items: baseline; }
-.vs-facts dt { color: var(--text3); font-size: 12px; flex: 0 0 auto; }
+.vs-facts dt { color: var(--paper-label); font-size: 13.5px; flex: 0 0 auto; }
 .vs-facts dt::after { content: ':'; }
-.vs-facts dd { font-weight: 700; font-size: 13px; }
+.vs-facts dd { font-weight: 700; font-size: 14.5px; }
 
 .vs-block { padding: 8px 0; border-bottom: 1px solid #eeecf4; }
-.vs-block h2 { font-size: 13px; color: #4b3f78; margin-bottom: 4px; }
-.vs-block p { font-size: 13.5px; line-height: 1.9; white-space: pre-wrap; }
+.vs-block h2 { font-size: 14.5px; color: #4b3f78; margin-bottom: 4px; }
+.vs-block p { font-size: 15px; line-height: 1.8; white-space: pre-wrap; }
 
 .vs-next {
   margin-top: 14px; padding: 12px 14px; border-radius: 10px;
   background: #eefaf4; border: 1px solid #b7e7cf;
 }
-.vs-next b { display: block; color: #047857; font-size: 14px; }
-.vs-next small { color: #059669; font-size: 12px; }
+.vs-next b { display: block; color: #047857; font-size: 15px; }
+.vs-next small { color: #047857; font-size: 13px; }
 
 .vs-foot { margin-top: 18px; padding-top: 10px; border-top: 1px solid #eeecf4; text-align: center; }
-.vs-foot small { color: var(--text3); font-size: 11px; }
+.vs-foot small { color: var(--paper-label); font-size: 12.5px; }
 
 .vs-actions {
-  position: fixed; inset-inline: 0; bottom: 0; display: flex; justify-content: center;
+  position: fixed; inset-inline: 0; bottom: 0; display: flex; justify-content: center; flex-wrap: wrap; gap: 10px;
   padding: 12px; background: linear-gradient(transparent, rgba(236, 234, 243, .96) 40%);
 }
+/* کنشِ اصلی رنگِ برندِ مطب را دارد؛ «بازگشت» ثانویه و روشن — هر دو روی میزِ کاغذیِ ثابت. */
 .vs-actions button {
-  cursor: pointer; font: inherit; font-weight: 800; font-size: 14px;
-  padding: 12px 30px; border-radius: 99px; color: #fff; border: 0;
-  background: #4b3f78; box-shadow: 0 8px 24px rgba(75, 63, 120, .35);
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 46px; cursor: pointer; font: inherit; font-weight: 800; font-size: 15px;
+  padding: 11px 24px; border-radius: 99px; text-decoration: none;
 }
+.vs-actions .vs-print {
+  color: #fff; border: 0;
+  background: var(--brand-dark); box-shadow: 0 8px 24px rgba(var(--brand-dark-rgb), .35);
+}
+.vs-actions .vs-back { color: var(--paper-ink); background: #fff; border: 1px solid rgba(22, 19, 43, .18); }
+.vs-actions button:focus-visible { outline: 2px solid var(--paper-ink); outline-offset: 3px; }
 
 /* ── چاپ: خودِ سند، تمام‌صفحه، بدونِ دکمه — Safari هم صفحهٔ دومِ سفید نسازد ── */
 @media print {

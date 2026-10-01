@@ -52,3 +52,22 @@ export function normalizeIban(value?: string | null): string | null {
   if (!raw) return null;
   return raw.startsWith('IR') ? raw : `IR${raw}`;
 }
+
+/** موبایلِ معتبر (۱۱ رقمِ لاتین، با ۰۹) یا null. */
+export function mobileOf(value: unknown): string | null {
+  const d = toEnDigits(String(value ?? '')).replace(/[^0-9]/g, '');
+  return /^09\d{9}$/.test(d) ? d : null;
+}
+
+/**
+ * شماره‌ای که پیامک‌های **یک ثبت‌نامِ عمومی** (لینکِ ادامه، برگشت/رد، یادآوریِ نوبتی که همان ثبت‌نام گرفته) به آن
+ * می‌روند: شمارهٔ پرونده؛ و فقط اگر پرونده **هیچ** شماره‌ای ندارد، شماره‌ای که ثبت‌نام‌کننده در خودِ همان ثبت‌نام
+ * نوشته (بستهٔ PS، PS12). فرمِ عمومی دیگر شماره را روی پروندهٔ موجود نمی‌نشاند — آن کار با تأییدِ کارکنان است —
+ * ولی ثبت‌نام‌کننده باید کارِ خودش را ادامه دهد.
+ *
+ * هشدار: فقط برای پیامِ همان ثبت‌نام. پرتال و پیام‌های خودِ پرونده هرگز به شمارهٔ یک ثبت‌نام نمی‌روند — آن
+ * شماره را هر کسی که کدِ ملی و نامِ خانوادگی را داشت می‌توانست بنویسد.
+ */
+export function submissionPhone(recordPhone: unknown, submissionData: unknown): string | null {
+  return mobileOf(recordPhone) ?? (String(recordPhone ?? '').trim() ? null : mobileOf((submissionData as any)?.phone));
+}

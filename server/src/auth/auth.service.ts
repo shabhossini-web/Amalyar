@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, ServiceUnavailableException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { createHash, randomBytes, randomInt } from 'crypto';
@@ -11,8 +11,12 @@ import { jobRoleLabel } from '../common/job-roles';
 import { LEVEL, levelName } from '../common/levels';
 import { RateLimitService } from '../common/rate-limit.service';
 import { TenantContext } from '../tenant/tenant-context';
+import { AuditService } from '../audit/audit.service';
+import { toEnDigits } from '../common/identity';
+import { otpHash } from '../common/otp-hash';
+import { takePublicSms } from '../common/public-sms';
 import type { Request, Response } from 'express';
-import { expireProvisional, expireProvisionalInTransaction, isProvisional } from '../accounts/provisional';
+import { expireProvisional, expireProvisionalInTransaction, isProvisional, isSoleActiveSuperAdmin, isVerificationOverdue, provisionalLapsed } from '../accounts/provisional';
 import { isTestAccount, testAccountsEnabled } from '../accounts/test-accounts';
 import { MAX_SET, SESSION_SET_COOKIE, SESSION_TTL_DAYS, SetEntry, cookieBase, readCookie } from './session-cookie';
 
@@ -22,6 +26,11 @@ const OTP_RESEND_MS = 60_000;
 const OTP_MAX_ATTEMPTS = 5;
 
 const sha256 = (s: string) => createHash('sha256').update(s).digest('hex');
+
+/** هدفِ کدهای بازیابیِ رمز در `otpCode` — جدا از ثبت‌نام، تا کدِ یکی در دیگری مصرف نشود. */
+const RESET_PURPOSE = 'password-reset';
+/** یک پیام برای **همهٔ** شکست‌های تأییدِ کدِ بازیابی — تفکیکش می‌گفت این شماره حساب دارد یا نه. */
+const RESET_BAD = 'کدِ تأیید درست نیست یا منقضی شده است؛ دوباره کد بگیرید';
 
 /** هویت در Person است و اعتبارنامه در Account؛ هر جا کاربر برگردانده می‌شود هر دو لازم‌اند. */
 type AccountWithPerson = Account & { person: Person };
@@ -42,25 +51,53 @@ const WITH_PERSON = { person: true } as const;
 export const isUnclaimedAccount = (a: { passwordHash?: string | null } | null | undefined): boolean =>
   !!a && !a.passwordHash;
 
+/**
+ * «سامانه هنوز هیچ حسابی ندارد» — **تنها** شرطِ «اولین حساب = سوپرادمین» (بستهٔ PS، PS2).
+ *
+ * هشدار: `completeSignup` تا دیروز «سوپرادمینِ فعالی نیست» را می‌سنجید، نه «حسابی نیست» (که `setupStatus`
+ * درست می‌شمرد). سوپرادمینِ تنها که شماره‌اش را عوض می‌کرد و هفت روز تأیید نمی‌کرد غیرفعال می‌شد و اولین
+ * ثبت‌نامِ عمومی **سوپرادمینِ فعال** می‌شد. حالا هر دو از همین می‌خوانند؛ حسابِ سیستمی (ربات) شمرده نمی‌شود.
+ */
+const hasNoAccounts = async (db: any): Promise<boolean> => (await db.account.count({ where: { systemKey: null } })) === 0;
+
+/**
+ * نامِ کاربریِ **تازه** دست‌کم یک حرفِ لاتین دارد (بستهٔ PS، PS9) — نامِ کاربریِ تمام‌رقم («۰۹۱۲…») با شمارهٔ موبایلِ
+ * کسِ دیگری اشتباه می‌شد. حساب‌های موجود دست نمی‌خورند؛ شناسهٔ موبایل‌شکل اول با شماره پیدا می‌شود.
+ */
+export const USERNAME_NEEDS_LETTER = 'نام کاربری باید دست‌کم یک حرفِ لاتین داشته باشد — نامِ کاربریِ تمام‌رقم با شمارهٔ موبایل اشتباه می‌شود';
+export const usernameHasLetter = (u: string) => /[a-zA-Z]/.test(u);
+
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private prisma: PrismaService,
     private jwt: JwtService,
     private sms: SmsService,
     private rateLimit: RateLimitService,
     private tenantContext: TenantContext,
+    // ⚠️ آخرین پارامتر: `scripts/e2e/test-accounts.mjs` سرویس را با پنج پارامترِ اول می‌سازد.
+    private audit?: AuditService,
   ) {}
 
+  /**
+   * شرکتِ همین درخواست در کلیدِ سطلِ سقفِ نرخ (بستهٔ PF، PF2). `RateLimitService` یک نمونه برای **همهٔ**
+   * شرکت‌هاست؛ بی‌این پیشوند هشت ورودِ غلط با «admin» در شرکتِ الف، «admin»ِ همهٔ شرکت‌ها را قفل می‌کرد.
+   */
+  private get tid() {
+    /* `current?.()`: آزمون‌های درونِ فرایند (company-operations، test-accounts) زمینهٔ شرکتِ نیمه‌ساختگی می‌دهند. */
+    return this.tenantContext.current?.()?.tenantId ?? '-';
+  }
+
   async setupStatus() {
-    const count = await this.prisma.account.count();
-    return { needsSetup: count === 0 };
+    return { needsSetup: await hasNoAccounts(this.prisma) };
   }
 
   // ── ثبت‌نام: مرحلهٔ ۱ — ارسالِ کدِ یکبارمصرف ────────────────
   async requestSignupOtp(phone: string, ip = 'unknown') {
-    this.rateLimit.hit(`otp:ip:${ip}`, 10, 15 * 60_000);
-    this.rateLimit.hit(`otp:phone:${phone}`, 3, 15 * 60_000);
+    this.rateLimit.hit(`otp:${this.tid}:ip:${ip}`, 10, 15 * 60_000);
+    this.rateLimit.hit(`otp:${this.tid}:phone:${phone}`, 3, 15 * 60_000);
     /**
      * ⚠️ «شماره تکراری است» فقط وقتی درست است که آن شخص **حساب** داشته باشد.
      *
@@ -80,23 +117,25 @@ export class AuthService {
       throw new BadRequestException('این شماره قبلاً ثبت شده است');
     }
 
-    return this.sendPhoneOtp(phone, 'signup');
+    return this.sendPhoneOtp(phone, 'signup', { publicBucket: true });
   }
 
-  private async sendPhoneOtp(phone: string, purpose: string) {
+  private async sendPhoneOtp(phone: string, purpose: string, opts: { publicBucket?: boolean } = {}) {
     const recent = await this.prisma.otpCode.findFirst({
       where: { phone, purpose, createdAt: { gt: new Date(Date.now() - OTP_RESEND_MS) } },
     });
     if (recent) throw new BadRequestException('کمی صبر کنید و دوباره تلاش کنید');
+    /* سطلِ مشترکِ پیامکِ عمومی به این شماره (بستهٔ PS، PS7) — بی‌صدا: همان پاسخ، بی‌پیامک و بی‌کد. */
+    if (opts.publicBucket && !takePublicSms(this.rateLimit, this.tid, phone)) return { ok: true, ttl: OTP_TTL_MS / 1000 };
 
     const code = String(randomInt(100000, 1000000)); // ۶ رقمی
     const otp = await this.prisma.otpCode.create({
-      data: { phone, codeHash: sha256(code), purpose, expiresAt: new Date(Date.now() + OTP_TTL_MS) },
+      data: { phone, codeHash: otpHash(purpose, phone, code), purpose, expiresAt: new Date(Date.now() + OTP_TTL_MS) },
     });
     try {
       // هاستِ WebOTP باید میزبانِ همان شرکت باشد، وگرنه مرورگر کد را اتوفیل نمی‌کند
       // (WebOTP به origin گره خورده است).
-      const res = await this.sms.sendOtp(phone, code, this.tenantContext.current()?.hostname);
+      const res = await this.sms.sendOtp(phone, code, this.tenantContext.current()?.hostname, purpose);
       if (!res.sent && process.env.NODE_ENV === 'production') {
         throw new ServiceUnavailableException('سرویس پیامک موقتاً در دسترس نیست');
       }
@@ -121,20 +160,22 @@ export class AuthService {
   }
 
   private async consumePhoneOtp(dto: { phone: string; code: string }, purpose: string, ip: string) {
-    this.rateLimit.hit(`otp-verify:ip:${ip}`, 20, 15 * 60_000);
-    this.rateLimit.hit(`otp-verify:phone:${dto.phone}`, 8, 15 * 60_000);
+    this.rateLimit.hit(`otp-verify:${this.tid}:ip:${ip}`, 20, 15 * 60_000);
+    this.rateLimit.hit(`otp-verify:${this.tid}:phone:${dto.phone}`, 8, 15 * 60_000);
     const otp = await this.prisma.otpCode.findFirst({
       where: { phone: dto.phone, purpose, consumedAt: null },
       orderBy: { createdAt: 'desc' },
     });
     if (!otp) throw new BadRequestException('برای این شماره کدی صادر نشده است');
     if (otp.expiresAt < new Date()) throw new BadRequestException('کد منقضی شده؛ دوباره درخواست دهید');
-    if (otp.attempts >= OTP_MAX_ATTEMPTS) throw new BadRequestException('تعداد تلاش زیاد است؛ کد جدید بگیرید');
+    /* شمارشِ تلاش پیش از مقایسه و اتمی — همان قاعدهٔ بازیابیِ رمز (بستهٔ PF، PF4): سنجش و افزایشِ جدا یعنی
+       حدس‌های هم‌زمان همه «۰ تلاش» را می‌خواندند و سقفِ پنج‌تایی دور زده می‌شد. */
+    const slot = await this.prisma.otpCode.updateMany({
+      where: { id: otp.id, consumedAt: null, attempts: { lt: OTP_MAX_ATTEMPTS } }, data: { attempts: { increment: 1 } },
+    });
+    if (!slot.count) throw new BadRequestException('تعداد تلاش زیاد است؛ کد جدید بگیرید');
 
-    if (sha256(dto.code) !== otp.codeHash) {
-      await this.prisma.otpCode.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } });
-      throw new BadRequestException('کد تأیید اشتباه است');
-    }
+    if (otpHash(purpose, dto.phone, dto.code) !== otp.codeHash) throw new BadRequestException('کد تأیید اشتباه است');
     const consumed = await this.prisma.otpCode.updateMany({ where: { id: otp.id, consumedAt: null, expiresAt: { gt: new Date() } }, data: { consumedAt: new Date() } });
     if (!consumed.count) throw new BadRequestException('کد قبلاً استفاده شده یا منقضی است');
 
@@ -143,8 +184,8 @@ export class AuthService {
   async requestPhoneVerification(user: any, ip: string) {
     if (!isProvisional(user)) throw new BadRequestException('حساب نیازی به تأیید موقت ندارد');
     if (isTestAccount(user)) {
-      this.rateLimit.hit(`otp:ip:${ip}`, 10, 15 * 60_000);
-      this.rateLimit.hit(`otp:phone:${user.person.phone}`, 3, 15 * 60_000);
+      this.rateLimit.hit(`otp:${this.tid}:ip:${ip}`, 10, 15 * 60_000);
+      this.rateLimit.hit(`otp:${this.tid}:phone:${user.person.phone}`, 3, 15 * 60_000);
       return this.sendPhoneOtp(user.person.phone, `test-account:${user.id}`);
     }
     return this.requestSignupOtp(user.person.phone, ip);
@@ -154,7 +195,9 @@ export class AuthService {
     if (!isProvisional(user) || dto.phone !== user.person.phone) throw new BadRequestException('شماره باید با شماره حساب شما یکسان باشد');
     if (isTestAccount(user)) await this.consumePhoneOtp(dto, `test-account:${user.id}`, ip);
     else await this.verifySignupOtp(dto, ip);
-    const changed = await this.prisma.account.updateMany({ where: { id: user.id, status: 'active', phoneVerifiedAt: null, verificationDueAt: { gt: new Date() }, person: { phone: dto.phone } }, data: { phoneVerifiedAt: new Date() } });
+    /* آخرین سوپرادمینِ فعال پس از مهلت هم بسته نمی‌شود (PS2) — پس باید بتواند همان موقع شماره را تأیید کند. */
+    const late = isVerificationOverdue(user) && await isSoleActiveSuperAdmin(this.prisma, user.id);
+    const changed = await this.prisma.account.updateMany({ where: { id: user.id, status: 'active', phoneVerifiedAt: null, ...(late ? {} : { verificationDueAt: { gt: new Date() } }), person: { phone: dto.phone } }, data: { phoneVerifiedAt: new Date() } });
     if (!changed.count) { await expireProvisional(this.prisma, user.id); throw new BadRequestException('مهلت تأیید تمام شده یا مشخصات حساب تغییر کرده است'); }
     return this.publicUser(await this.prisma.account.findUniqueOrThrow({ where: { id: user.id }, include: WITH_PERSON }));
   }
@@ -171,6 +214,7 @@ export class AuthService {
       throw new BadRequestException('توکنِ ثبت‌نام نامعتبر است');
     }
     const phone: string = payload.phone;
+    if (!usernameHasLetter(dto.username ?? '')) throw new BadRequestException(USERNAME_NEEDS_LETTER);
 
     const passwordHash = await bcrypt.hash(dto.password, 12);
     const result = await this.prisma.$transaction(async (tx) => {
@@ -185,10 +229,17 @@ export class AuthService {
       // هویت وصل می‌شود، نه یک Personِ دومِ هم‌شماره.
       const known = await tx.person.findUnique({
         where: { phone_phoneScope: { phone, phoneScope: 'primary' } },
-        include: { account: { select: { id: true, passwordHash: true, verificationDueAt: true, phoneVerifiedAt: true } } },
+        include: { account: { select: { id: true, passwordHash: true, verificationDueAt: true, phoneVerifiedAt: true, level: true } } },
       });
       if (known?.account && !isUnclaimedAccount(known.account) && !isProvisional(known.account)) {
         throw new BadRequestException('این شماره قبلاً ثبت شده است');
+      }
+      /* هشدار — **حسابِ سوپرادمین با کدِ پیامکی تحویل داده نمی‌شود** (بستهٔ PS، PS2؛ همان قاعدهٔ بازیابیِ PF1).
+         سوپرادمینی که شماره‌اش را عوض کرده «موقت» است و این مسیر رمز و نامِ کاربری‌اش را به صاحبِ آن شماره
+         می‌داد — شماره‌ای که شاید اشتباه تایپ شده. حالا که آخرین سوپرادمین پس از مهلت هم فعال می‌ماند، این در
+         بی‌این قفل برای همیشه باز می‌ماند. پیام فقط به دارندهٔ همان شماره می‌رسد (کدِ پیامکی را داده است). */
+      if (known?.account && known.account.level >= LEVEL.SUPER_ADMIN) {
+        throw new BadRequestException('این شماره قبلاً ثبت شده است؛ حسابِ مدیرِ کل با کدِ پیامکی تحویل داده نمی‌شود — با رمزِ همان حساب وارد شوید.');
       }
 
       /**
@@ -213,18 +264,24 @@ export class AuthService {
           },
           include: WITH_PERSON,
         });
+        /* هشدار — تصاحب یعنی **اعتبارنامهٔ تازه** (بستهٔ PS، PS3): رمز عوض شد، پس نشست‌های رمزِ موقت و
+           پس‌کی‌هایی که با آن ثبت شده بودند هم می‌روند — کسی که رمزِ موقت را داشت (مثلاً از پیامی که به جای
+           دیگری رفت) نباید پس از تحویلِ حساب به صاحبِ شماره داخل بماند. نشستِ خودِ تصاحب پس از تراکنش ساخته می‌شود. */
+        await tx.session.updateMany({ where: { accountId: claimed.id, revokedAt: null }, data: { revokedAt: new Date() } });
+        const passkeysRemoved = (await tx.webauthnCredential.deleteMany({ where: { accountId: claimed.id } })).count;
         await tx.auditEvent.create({
           data: {
             actorId: claimed.id, action: 'account.claim', entityType: 'account',
             entityId: String(claimed.id),
-            afterJson: { username: claimed.username, level: claimed.level },
+            afterJson: { username: claimed.username, level: claimed.level, passkeysRemoved },
           },
         });
         return { account: claimed, bootstrap: false, claimed: true };
       }
 
-      const bootstrap =
-        (await tx.account.count({ where: { level: LEVEL.SUPER_ADMIN, status: 'active' } })) === 0;
+      /* فقط وقتی **هیچ** حسابی نیست (PS2) — نه «سوپرادمینِ فعالی نیست». سامانه‌ای که همهٔ سوپرادمین‌هایش غیرفعال
+         شده‌اند با پشتیبانی بازیابی می‌شود، نه با اولین کسی که فرمِ ثبت‌نام را پر کند. */
+      const bootstrap = await hasNoAccounts(tx);
       // هویت و نقش با هم ساخته می‌شوند؛ nested create یعنی اگر یکی شکست بخورد
       // دیگری هم ثبت نمی‌شود و Personِ بی‌نقش جا نمی‌مانَد.
       const account = await tx.account.create({
@@ -273,19 +330,27 @@ export class AuthService {
     return { pending: true, user: this.publicUser(result.account) };
   }
 
+  /**
+   * «نامِ کاربری یا موبایل» ← حساب، **با ترتیبِ روشن** (بستهٔ PS، PS9). تا دیروز یک `findFirst` روی `OR` بود که
+   * ترتیب نداشت: حسابی با نامِ کاربریِ تمام‌رقمِ «۰۹۱۲…» می‌توانست ورود و بازیابیِ صاحبِ آن شماره را بگیرد.
+   * موبایل‌شکل ← اول شماره، بعد نامِ کاربری (حسابِ قدیمیِ تمام‌رقم هنوز با نامش وارد می‌شود)؛ بقیه برعکس.
+   */
+  private async accountByIdentifier(id: string) {
+    const byPhone = () => this.prisma.account.findFirst({ where: { person: { phone: id, phoneScope: 'primary' } }, include: WITH_PERSON });
+    const byUsername = () => this.prisma.account.findFirst({ where: { username: id }, include: WITH_PERSON });
+    return /^09\d{9}$/.test(id) ? (await byPhone()) ?? (await byUsername()) : (await byUsername()) ?? (await byPhone());
+  }
+
   // ── ورود ───────────────────────────────────────────────────
   async login(dto: LoginDto, meta: { ua?: string; ip?: string }) {
-    this.rateLimit.hit(`login:ip:${meta.ip ?? 'unknown'}`, 12, 15 * 60_000);
-    this.rateLimit.hit(`login:id:${dto.identifier.trim().toLowerCase()}`, 8, 15 * 60_000);
-    const id = dto.identifier.trim();
-    // ورود با نام کاربری (روی Account) یا موبایل (روی Person).
-    const account = await this.prisma.account.findFirst({
-      where: { OR: [{ username: id }, { person: { phone: id, phoneScope: 'primary' } }] },
-      include: WITH_PERSON,
-    });
+    this.rateLimit.hit(`login:${this.tid}:ip:${meta.ip ?? 'unknown'}`, 12, 15 * 60_000);
+    this.rateLimit.hit(`login:${this.tid}:id:${dto.identifier.trim().toLowerCase()}`, 8, 15 * 60_000);
+    const id = toEnDigits(dto.identifier).trim();
+    // ورود با نام کاربری (روی Account) یا موبایل (روی Person) — موبایل‌شکل اول با شماره (PS9).
+    const account = await this.accountByIdentifier(id);
     if (!account) throw new UnauthorizedException('نام کاربری یا رمز عبور اشتباه است');
     if (isTestAccount(account) && !await testAccountsEnabled(this.prisma)) throw new UnauthorizedException('حالت آزمایشی خاموش است');
-    if (isProvisional(account) && account.verificationDueAt! <= new Date()) { await expireProvisional(this.prisma, account.id); throw new UnauthorizedException('مهلت هفت‌روزه تأیید شماره تمام شده؛ حساب غیرفعال است'); }
+    if (await provisionalLapsed(this.prisma, account)) throw new UnauthorizedException('مهلت هفت‌روزه تأیید شماره تمام شده؛ حساب غیرفعال است');
     /* ⚠️ حسابِ تصاحب‌نشده رمزِ معتبر ندارد و نباید داشته باشد. `bcrypt.compare`
        با هشِ خالی هم false می‌دهد، ولی شرطِ صریح این را از یک جزئیاتِ
        کتابخانه به یک **قاعدهٔ اعلام‌شده** تبدیل می‌کند. */
@@ -304,7 +369,7 @@ export class AuthService {
 
   async issue(account: AccountWithPerson, meta: { ua?: string; ip?: string }) {
     if (isTestAccount(account) && !await testAccountsEnabled(this.prisma)) throw new UnauthorizedException('حالت آزمایشی خاموش است');
-    if (isProvisional(account) && account.verificationDueAt! <= new Date()) { await expireProvisional(this.prisma, account.id); throw new UnauthorizedException('مهلت تأیید شماره تمام شده؛ حساب غیرفعال است'); }
+    if (await provisionalLapsed(this.prisma, account)) throw new UnauthorizedException('مهلت تأیید شماره تمام شده؛ حساب غیرفعال است');
     const active = await this.prisma.session.findMany({
       where: { accountId: account.id, revokedAt: null, expiresAt: { gt: new Date() } },
       orderBy: { createdAt: 'asc' },
@@ -343,7 +408,7 @@ export class AuthService {
     if (!session || session.revokedAt || session.expiresAt < new Date()) return null;
     if (isTestAccount(session.account) && !await testAccountsEnabled(this.prisma)) return null;
     if (session.accountId !== sub || session.account.status !== 'active') return null;
-    if (isProvisional(session.account) && session.account.verificationDueAt! <= new Date()) { await expireProvisional(this.prisma, sub); return null; }
+    if (await provisionalLapsed(this.prisma, session.account)) return null;
     /* جراحِ فعالِ متصل به شخصِ همین حساب — یک‌بار این‌جا، تا object-authz (`ownVisitWhere`)
        پزشکِ مطب را «خودش» بشمارد بی‌آنکه هر سرویس دوباره بپرسد. */
     const surgeon = session.account.personId
@@ -419,22 +484,156 @@ export class AuthService {
     return { subformPins: three(o.subformPins), todayPins: three(o.todayPins) };
   }
 
+  // ── بازیابیِ رمز با کدِ پیامکی (بازبینیِ UX، بندِ ۱۹) ─────────
+  //
+  // تا دیروز کارکنی که رمزش را فراموش می‌کرد هیچ راهی جز سوپرادمین نداشت و مالک هیچ راهی جز
+  // پایگاه‌داده. همان کدِ ۶رقمیِ ثبت‌نام به موبایلِ **خودِ حساب** می‌رود.
+  //
+  // ⚠️ **شمارش‌ناپذیر:** پاسخِ درخواست برای حسابِ موجود و ناموجود یکی است (بی‌خطای «ثبت نشده»،
+  // بی‌خطای «کمی صبر کنید» که فقط برای حسابِ موجود پیش می‌آمد)، ارسالِ پیامک منتظرِ درگاه نمی‌ماند
+  // (زمانِ پاسخ نشان ندهد پیامکی رفته یا نه)، و همهٔ شکست‌های تأیید یک پیام دارند. سقفِ نرخ روی IP و
+  // شناسه برای هر دو حالت یکسان می‌خورد.
+
+  /** حسابی که بازیابی برایش مجاز است: فعال، تصاحب‌شده، نه موقت یا آزمایشی، با موبایلِ اصلی. */
+  private async resetTarget(identifier: string) {
+    const id = toEnDigits(identifier).trim();
+    if (!id) return null;
+    const account = await this.accountByIdentifier(id);
+    /* تصاحب‌نشده راهِ خودش را دارد (ثبت‌نام + کد)؛ حسابِ موقت شماره‌اش هنوز تأیید نشده — کدِ بازیابی
+       به شماره‌ای که مالکیتش ثابت نشده یعنی تحویلِ حساب به هر کسی که آن شماره دستش است. */
+    if (!account || account.status !== 'active' || isUnclaimedAccount(account) || isProvisional(account) || isTestAccount(account)) return null;
+    /* **سوپرادمین بازیابیِ فقط‌پیامکی ندارد** (بازبینیِ امنیتیِ بستهٔ P، PF1) — همان پاسخِ بی‌صدا.
+       کدِ پیامکی فقط ثابت می‌کند «این سیم‌کارت دستِ من است»، و شمارهٔ `Person` را کسانی جز خودِ صاحبِ حساب
+       هم نوشته‌اند: تا دیروز `definitions.manage` (سطح ۵) تلفنِ جراحِ متصل به بنیان‌گذارِ مطب را عوض می‌کرد.
+       آن در بسته شد (`definitions.service.ts`، `refuseAccountIdentity`)، ولی مدلِ داده «شمارهٔ تأییدشده» را
+       جدا از «شمارهٔ فعلی» نگه نمی‌دارد: `phoneVerifiedAt` زمانِ تأیید است نه خودِ شماره، و حساب‌های پیش از
+       migrationِ `provisional_accounts` اصلاً مقدار ندارند. پس نمی‌شود ثابت کرد شمارهٔ امروزِ Person همانی است
+       که صاحبِ حساب تأیید کرده بود. برای پرارزش‌ترین حساب — کسی که بقیه را می‌سازد و سطح می‌دهد — ریسکِ
+       همین شکاف پذیرفته نیست؛ مدیرِ کل از راهِ پشتیبانی بازیابی می‌کند (صفحهٔ ورود همین را می‌گوید). بقیهٔ
+       سطح‌ها بازیابی را دارند: بدترین حالتشان تصاحبِ حسابی است که سوپرادمین می‌تواند ببندد. */
+    if (account.level >= LEVEL.SUPER_ADMIN) return null;
+    const phone = account.person?.phoneScope === 'primary' ? account.person.phone : null;
+    return phone ? { account, phone } : null;
+  }
+
+  async requestPasswordReset(identifier: string, ip = 'unknown') {
+    const key = toEnDigits(identifier).trim().toLowerCase();
+    this.rateLimit.hit(`pwreset:${this.tid}:ip:${ip}`, 10, 15 * 60_000);
+    this.rateLimit.hit(`pwreset:${this.tid}:id:${key}`, 3, 15 * 60_000);
+    const same = { ok: true, ttl: OTP_TTL_MS / 1000 };
+    /* فقط محیطِ آزمون با پیامکِ ساختگی کد را برمی‌گرداند (همان قراردادِ ثبت‌نام، برای e2e) — آن‌جا منتظرِ کار می‌مانیم. */
+    if (process.env.NODE_ENV === 'test') {
+      const devCode = await this.issueResetCode(identifier);
+      return devCode ? { ...same, devCode } : same;
+    }
+    /* هشدار — **پاسخ منتظرِ هیچ‌چیز نمی‌ماند** (بستهٔ PF، PF5). پیامک از قبل بی‌انتظار بود، ولی برای حسابِ
+       موجود هنوز یک SELECT و یک INSERTِ اضافه پیش از پاسخ می‌رفت؛ همین چند میلی‌ثانیه، با تکرار، می‌گفت این
+       شناسه حساب دارد. یافتنِ حساب، ساختنِ کد و پیامک همه پس از پاسخ‌اند (زمینهٔ شرکت با AsyncLocalStorage
+       همراهِ کار می‌رود). */
+    setImmediate(() => {
+      /* فقط نامِ خطا: پیامِ خطای Prisma آرگومان‌ها (شماره) را هم چاپ می‌کند — قاعدهٔ لاگ (PF10). */
+      this.issueResetCode(identifier).catch((e) => this.logger.warn(`password reset code could not be issued (${e?.name ?? 'Error'})`));
+    });
+    return same;
+  }
+
+  /**
+   * کدِ بازیابی برای حسابی که `resetTarget` مجاز می‌داند. خروجی خودِ کد است فقط وقتی درگاه stub بود (محیطِ
+   * آزمون)؛ وگرنه `null`. کدِ همین دقیقه هنوز معتبر است — بی‌صدا، نه «کمی صبر کنید» (آن پیام فقط برای حسابِ
+   * موجود بود). پیامکِ نرفته کدش را پاک می‌کند تا کدِ بعدی پشتِ پنجرهٔ ارسالِ دوباره گیر نکند.
+   */
+  private async issueResetCode(identifier: string): Promise<string | null> {
+    const target = await this.resetTarget(identifier);
+    if (!target) return null;
+    const recent = await this.prisma.otpCode.findFirst({
+      where: { phone: target.phone, purpose: RESET_PURPOSE, createdAt: { gt: new Date(Date.now() - OTP_RESEND_MS) } },
+    });
+    if (recent) return null;
+    /* سطلِ مشترکِ پیامکِ عمومی به این شماره (PS7) — بی‌صدا، مثلِ بقیهٔ این مسیر. */
+    if (!takePublicSms(this.rateLimit, this.tid, target.phone)) return null;
+    const code = String(randomInt(100000, 1000000));
+    const otp = await this.prisma.otpCode.create({
+      data: { phone: target.phone, codeHash: otpHash(RESET_PURPOSE, target.phone, code), purpose: RESET_PURPOSE, expiresAt: new Date(Date.now() + OTP_TTL_MS) },
+    });
+    const res = await this.sms.sendOtp(target.phone, code, this.tenantContext.current()?.hostname, RESET_PURPOSE).catch((e) => {
+      /* فقط نامِ خطا (بستهٔ PS، PS11؛ قاعدهٔ لاگِ PF10): پیامِ خطا ممکن است شماره یا متنِ پیامک را داشته باشد. */
+      this.logger.warn(`password reset sms failed for account ${target.account.id} (${e?.name ?? 'Error'})`);
+      return null;
+    });
+    if (!res || (!res.sent && !res.stub)) {
+      await this.prisma.otpCode.deleteMany({ where: { id: otp.id, consumedAt: null } }).catch(() => undefined);
+      return null;
+    }
+    return res.stub ? code : null;
+  }
+
+  async resetPassword(dto: { identifier: string; code: string; password: string }, meta: { ua?: string; ip?: string }) {
+    const key = toEnDigits(dto.identifier).trim().toLowerCase();
+    this.rateLimit.hit(`pwreset-verify:${this.tid}:ip:${meta.ip ?? 'unknown'}`, 20, 15 * 60_000);
+    this.rateLimit.hit(`pwreset-verify:${this.tid}:id:${key}`, 8, 15 * 60_000);
+    const target = await this.resetTarget(dto.identifier);
+    if (!target) throw new BadRequestException(RESET_BAD);
+    const otp = await this.prisma.otpCode.findFirst({
+      where: { phone: target.phone, purpose: RESET_PURPOSE, consumedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!otp || otp.expiresAt < new Date()) throw new BadRequestException(RESET_BAD);
+    /* **بودجهٔ حدس مالِ حساب است، نه متنِ تایپ‌شده** (بستهٔ PF، PF4): نامِ کاربری و موبایلِ یک حساب تا دیروز
+       دو سطلِ جدا بودند (۸ + ۸ حدس)، و سقفِ روزانه هم نبود. سرریزِ این دو سطل همان خطای عام است نه ۴۲۹ —
+       ۴۲۹ می‌گفت «این نامِ کاربری و این موبایل مالِ یک حساب‌اند».
+       هشدار — و **فقط وقتی کدِ زنده‌ای هست** می‌سوزد (بستهٔ PS، PS4): پیش از یافتنِ کد، بیست حدس روی حسابی که
+       اصلاً کدی نداشت صاحبش را بی‌آنکه پیامکی دیده باشد ۲۴ ساعت از بازیابی بیرون می‌کرد. کدِ زنده یعنی پیامکی
+       که صاحبِ حساب دیده؛ بی‌کد، حدس چیزی را باز نمی‌کند و سطل‌های IP و شناسه (بالا) برای جلوی سیل بس‌اند. */
+    try {
+      this.rateLimit.hit(`pwreset-verify:${this.tid}:acct:${target.account.id}`, 8, 15 * 60_000);
+      this.rateLimit.hit(`pwreset-verify:${this.tid}:acct-day:${target.account.id}`, 20, 24 * 3600_000);
+    } catch {
+      throw new BadRequestException(RESET_BAD);
+    }
+    /* هشدار — **شمارشِ تلاش پیش از مقایسه و اتمی** (PF4): سنجش و افزایش جدا بودند، پس حدس‌های هم‌زمان همه
+       «۰ تلاش» را می‌خواندند و هر کدام مقایسه می‌شد — کدِ پنج‌تلاشی با ده درخواستِ هم‌زمان ده حدس می‌خورد.
+       حالا هر حدس اول یک خانه از پنج خانه را می‌گیرد؛ خانه نماند ← همان خطای عام. */
+    const slot = await this.prisma.otpCode.updateMany({
+      where: { id: otp.id, consumedAt: null, attempts: { lt: OTP_MAX_ATTEMPTS } }, data: { attempts: { increment: 1 } },
+    });
+    if (!slot.count) throw new BadRequestException(RESET_BAD);
+    if (otpHash(RESET_PURPOSE, target.phone, toEnDigits(dto.code).trim()) !== otp.codeHash) throw new BadRequestException(RESET_BAD);
+    const passwordHash = await bcrypt.hash(dto.password, 12);
+    const passkeysRemoved = await this.prisma.$transaction(async (tx) => {
+      const consumed = await tx.otpCode.updateMany({
+        where: { id: otp.id, consumedAt: null, expiresAt: { gt: new Date() } }, data: { consumedAt: new Date() },
+      });
+      if (!consumed.count) throw new BadRequestException(RESET_BAD);
+      await tx.account.update({ where: { id: target.account.id }, data: { passwordHash } });
+      /* مثلِ تغییرِ رمز: همهٔ نشست‌ها باطل — کسی که رمز را داشت (شاید همان که باعثِ بازیابی شد) بیرون می‌افتد. */
+      await tx.session.updateMany({ where: { accountId: target.account.id, revokedAt: null }, data: { revokedAt: new Date() } });
+      /* **پس‌کی‌ها هم** (بستهٔ PF، PF6): کسی که رمز را داشت می‌توانست اثر انگشتِ دستگاهِ خودش را ثبت کند؛ با
+         ماندنش، بازیابیِ رمز او را بیرون نمی‌کرد — فردا با همان پس‌کی برمی‌گشت. صاحبِ حساب پس از ورود دوباره
+         ثبتش می‌کند (صفحهٔ ورود همین را می‌گوید). */
+      const passkeys = await tx.webauthnCredential.deleteMany({ where: { accountId: target.account.id } });
+      await this.audit?.record({
+        actorId: target.account.id, action: 'auth.password.reset', entityType: 'account', entityId: target.account.id,
+        ip: meta.ip, userAgent: meta.ua?.slice(0, 255), after: { passkeysRemoved: passkeys.count },
+      }, tx);
+      return passkeys.count;
+    });
+    return { ok: true, sessionsRevoked: true, passkeysRemoved };
+  }
+
   async changePassword(id: number, current: string, next: string) {
     const account = await this.prisma.account.findUnique({ where: { id } });
     if (!account) throw new UnauthorizedException();
     const ok = await bcrypt.compare(current, account.passwordHash);
     if (!ok) throw new BadRequestException('رمزِ فعلی اشتباه است');
-    await this.prisma.$transaction([
-      this.prisma.account.update({
-        where: { id },
-        data: { passwordHash: await bcrypt.hash(next, 12) },
-      }),
-      this.prisma.session.updateMany({
-        where: { accountId: id, revokedAt: null },
-        data: { revokedAt: new Date() },
-      }),
-    ]);
-    return { ok: true, sessionsRevoked: true };
+    const passwordHash = await bcrypt.hash(next, 12);
+    /* هشدار — پس‌کی‌ها هم در همان تراکنش (بستهٔ PS، PS3؛ همان قاعدهٔ بازیابیِ PF6): کسی که رمز را دزدیده بود
+       ممکن است اثر انگشتِ خودش را هم ثبت کرده باشد؛ بی‌این، عوض‌کردنِ رمز او را بیرون نمی‌کرد. */
+    const passkeysRemoved = await this.prisma.$transaction(async (tx) => {
+      await tx.account.update({ where: { id }, data: { passwordHash } });
+      await tx.session.updateMany({ where: { accountId: id, revokedAt: null }, data: { revokedAt: new Date() } });
+      return (await tx.webauthnCredential.deleteMany({ where: { accountId: id } })).count;
+    });
+    return { ok: true, sessionsRevoked: true, passkeysRemoved };
   }
 
   async logout(sid: string) {
@@ -509,6 +708,8 @@ export class AuthService {
       isTestAccount: isTestAccount(a),
       phoneVerifiedAt: a.phoneVerifiedAt,
       verificationDueAt: a.verificationDueAt,
+      /* مهلتِ تأییدِ شماره گذشته ولی حساب باز است — فقط آخرین سوپرادمینِ فعال (PS2)؛ کلاینت هشدارِ جدا می‌دهد. */
+      verificationOverdue: isVerificationOverdue(a),
       personId: a.personId,
       firstName: p?.firstName ?? null,
       lastName: p?.lastName ?? null,

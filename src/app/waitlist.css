@@ -1,19 +1,11 @@
 /* فهرستِ انتظارِ عمل (بستهٔ ۹) — روی توکن‌ها، بی‌تاریِ تودرتو (ردیف سطحِ کار است نه قاب؛ قانونِ ۱۶). */
-.wl { position: relative; min-height: 100dvh; padding: 16px 16px 48px; color: var(--text1); }
+/* عرضِ محتوا = «فهرست/جدول»ِ استاندارد (shell-15)؛ سربرگ، نوارِ تب و ردیف‌ها از `--page-w` می‌خوانند. */
+.wl { position: relative; min-height: 100dvh; padding: 20px 16px 48px; color: var(--text1); --page-w: var(--maxw); }
 .wl-bg {
   position: fixed; inset: 0; z-index: -1;
   background: radial-gradient(900px 520px at 50% -10%, rgba(var(--brand-rgb), .15), transparent 60%), var(--bg);
 }
-.wl-head, .wl-kpis, .wl-tabs, .wl-list, .wl-empty, .wl-err, .wl-note { max-width: 920px; margin-inline: auto; }
-.wl-head { margin-bottom: 14px; }
-.wl-back {
-  display: inline-flex; align-items: center; gap: 6px; min-height: 36px; margin-bottom: 4px;
-  font-size: 12.5px; text-decoration: none; color: var(--text2);
-}
-.wl-back:hover, .wl-back:focus-visible { color: var(--brand-2); outline: none; }
-.wl-title { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.wl-title h1 { display: flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 900; }
-.wl-title p { margin-top: 4px; font-size: 12.5px; color: var(--text2); max-width: 560px; }
+.wl-kpis, .wl-tabs, .wl-list, .wl-empty, .wl-err, .wl-note { max-width: var(--page-w); margin-inline: auto; }
 .wl-who { display: flex; align-items: center; gap: 8px; min-width: 220px; }
 .wl-who-l { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text3); white-space: nowrap; }
 .wl-who .pk-btn { min-width: 170px; }
@@ -51,6 +43,9 @@
 .wl-row.st-awaiting { border-inline-start-color: var(--amber); }
 .wl-row.st-planned { border-inline-start-color: var(--brand-2); }
 .wl-row.st-booked { border-inline-start-color: var(--green); }
+/* «موعد گذشته — ثبت نشده» (surgery-16): کارِ باز، کهربایی و بالای فهرست. */
+.wl-row.st-overdue { border-inline-start-color: var(--amber); border-color: rgba(245, 158, 11, .45); }
+.wl-row.st-today { border-inline-start-color: var(--cyan); }
 .wl-row.st-closed { opacity: .85; }
 .wl-row-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .wl-name {
@@ -64,8 +59,15 @@
   color: var(--text2); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .14);
 }
 .wl-tag.s-awaiting { color: var(--amber-text); border-color: rgba(245, 158, 11, .45); }
-.wl-tag.s-planned { color: var(--brand-2); border-color: rgba(var(--brand-2-rgb), .45); }
+.wl-tag.s-planned { color: var(--brand-text); border-color: rgba(var(--brand-2-rgb), .45); }
 .wl-tag.s-booked { color: var(--green-text); border-color: rgba(52, 211, 153, .45); }
+.wl-tag.s-overdue { color: var(--amber-text); border-color: rgba(245, 158, 11, .6); background: rgba(245, 158, 11, .1); }
+.wl-tag.s-today { color: var(--text1); border-color: rgba(34, 211, 238, .55); }
+.wl-overdue {
+  display: flex; align-items: center; gap: 6px; margin: 8px 0 0;
+  font-size: 12.5px; font-weight: 700; line-height: 1.7; color: var(--amber-text);
+}
+.wl-overdue svg { flex-shrink: 0; }
 .wl-days {
   margin-inline-start: auto; display: inline-flex; align-items: baseline; gap: 4px; padding: 3px 10px; border-radius: 10px;
   font-size: 12px; color: var(--text2); background: rgba(var(--veil-rgb), .05);
@@ -79,7 +81,8 @@
 .wl-facts { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 6px; font-size: 12.5px; line-height: 1.8; color: var(--text1); }
 .wl-facts > span { min-width: 0; overflow-wrap: anywhere; }
 .wl-facts em { font-style: normal; color: var(--text3); margin-inline-end: 3px; }
-.wl-facts .wl-owner { color: var(--brand-2); }
+/* متن با `--brand-text` (بنفشِ تیره در تمِ روشن)؛ `--brand-2` فقط برای بوردر/پس‌زمینه — روی سفید ۳٫۶ به ۱ بود. */
+.wl-facts .wl-owner { color: var(--brand-text); }
 .wl-facts .wl-warn { color: var(--amber-text); }
 
 .wl-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
@@ -145,14 +148,14 @@
 
 .wl-toast {
   position: fixed; inset-inline: 0; bottom: 18px; margin-inline: auto; width: fit-content; max-width: 90vw;
-  padding: 10px 18px; border-radius: 99px; font-size: 12.5px; color: var(--text1);
-  background: rgba(var(--surface-rgb), .96); border: 1px solid var(--card-border);
+  padding: 10px 18px; border-radius: 99px; font-size: 12.5px; color: var(--toast-ink);
+  background: var(--toast-bg); border: 1px solid var(--toast-edge);
   opacity: 0; pointer-events: none; transition: opacity .2s; z-index: 70;
 }
 .wl-toast.on { opacity: 1; }
 
 @media (max-width: 620px) {
-  .wl { padding: 12px 12px 40px; }
+  .wl { padding: 20px 12px 40px; }
   .wl-kpis { gap: 8px; }
   .wl-kpi { flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 12px; }
   .wl-kpi b { font-size: 20px; }
@@ -167,3 +170,23 @@
   .wl-toast, .wl-act { transition: none; }
   .wl-skel i { animation: none; }
 }
+
+/* نصبی که این فهرست را ندارد (shell-06) — توضیحِ آرام، نه خطا: رنگِ برند و متنِ عادی، بی‌«دوباره». */
+.wl-absent {
+  max-width: 560px; margin: 28px auto 0; padding: 26px 22px; border-radius: 18px; text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 10px;
+  background: var(--row-bg); border: 1px solid rgba(var(--brand-soft-rgb), .2);
+}
+.wl-absent-ic {
+  width: 48px; height: 48px; display: grid; place-items: center; border-radius: 16px; color: var(--brand-text);
+  background: rgba(var(--brand-rgb), .12); border: 1px solid rgba(var(--brand-rgb), .3);
+}
+.wl-absent b { font-size: 15.5px; font-weight: 900; color: var(--text1); }
+.wl-absent p { margin: 0; font-size: 13px; line-height: 2; color: var(--text2); }
+.wl-absent-back {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin-top: 4px; padding: 0 16px;
+  border-radius: 12px; font-size: 13px; font-weight: 800; text-decoration: none;
+  color: var(--text1); background: var(--ghost-bg); border: 1px solid rgba(var(--veil-rgb), .16);
+}
+.wl-absent-back:hover { background: var(--ghost-bg-hover); }
+.wl-absent-back:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }

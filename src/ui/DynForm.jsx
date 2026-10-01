@@ -7,6 +7,7 @@ import TimePick from './TimePick.jsx';
 import Pick from './Pick.jsx';
 import './dynform.css';
 import { toEnDigits } from '../lib/identity.js';
+import { shrinkImage } from '../lib/image-shrink.js';
 import { Bank, Camera, Check, Copy, LinkIcon, Mic, Star, Trash } from './icons.jsx';
 
 /** مدتِ صدا — «۱:۰۵» با ارقامِ فارسی. */
@@ -90,6 +91,16 @@ export default function DynForm({
   onVoice,
   /** پخشِ صدای ثبت‌شده — `(ref) => Promise<blobUrl>`؛ فقط جایی که فایل خواندنی است. */
   voiceUrl,
+  /**
+   * کوچک‌کردنِ عکسِ کادرِ `image` پیش از آپلود (`shrinkImage`: ضلعِ بلند ۱۶۰۰ پیکسل، JPEG) — **پیش‌فرض خاموش**.
+   *
+   * هشدار (بستهٔ PF، PF9): فقط صفحه‌های عمومیِ بیمار روشنش می‌کنند (`src/pages/Intake.jsx`). بیمار با گوشی
+   * و اینترنتِ کند عکسِ کارتِ ملی می‌فرستد؛ ولی زیرفرم‌های کارکنان عکسِ **بالینی** می‌گیرند (زخم، تصویرِ حینِ
+   * عمل) و نباید بی‌خبر به JPEGِ ۱۶۰۰ پیکسلی تبدیل شود — آن‌جا سقفِ سرور ۲۵ مگابایت است نه ۸.
+   */
+  shrink = false,
+  /** سقفِ حجمِ هر عکس در مرورگر (مگابایت) — همان سقفِ مسیرِ آپلودِ والد؛ خالی = بی‌سنجش (سرور تصمیم می‌گیرد). */
+  maxMb = null,
 }) {
   const set = (key, v) => onChange({ ...values, [key]: v });
   /* «رزرو بدون تاریخ» (مالک، ۱۴۰۵/۰۷/۰۱): وقتی بیمار «بله» زده، کادرِ تاریخِ عمل
@@ -170,6 +181,8 @@ export default function DynForm({
             payment={payment}
             onVoice={onVoice}
             voiceUrl={voiceUrl}
+            shrink={shrink}
+            maxMb={maxMb}
           />
 
           {errors[f.key] && !parked
@@ -183,7 +196,7 @@ export default function DynForm({
   );
 }
 
-function Input({ assistance, field: f, value, set, disabled, lookups, onUpload, onRemove, payment, onVoice, voiceUrl }) {
+function Input({ assistance, field: f, value, set, disabled, lookups, onUpload, onRemove, payment, onVoice, voiceUrl, shrink, maxMb }) {
   const v = value ?? '';
   const common = { disabled, placeholder: f.placeholder || undefined };
 
@@ -239,7 +252,7 @@ function Input({ assistance, field: f, value, set, disabled, lookups, onUpload, 
       return <Rating value={Number(v) || 0} set={set} disabled={disabled} />;
 
     case 'image':
-      return <ImageBox field={f} value={value} set={set} disabled={disabled} onUpload={onUpload} onRemove={onRemove} />;
+      return <ImageBox field={f} value={value} set={set} disabled={disabled} onUpload={onUpload} onRemove={onRemove} shrink={shrink} maxMb={maxMb} />;
 
     case 'links':
       return <LinksBox field={f} value={value} set={set} disabled={disabled} onVoice={onVoice} voiceUrl={voiceUrl} />;
@@ -316,7 +329,7 @@ function Rating({ value, set, disabled }) {
           /* زدنِ دوباره‌ی همان امتیاز پاکش می‌کند — تنها راهِ «اشتباه زدم». */
           onClick={() => set(n === value ? 0 : n)}
         >
-          {/* ⚠️ SVG و نه نویسه‌ی `★`: نویسه روی اندروید و iOS با فونتِ متفاوت
+          {/* هشدار: SVG و نه نویسهٔ ستاره (U+2605): نویسه روی اندروید و iOS با فونتِ متفاوت
               رندر می‌شود و گاهی به‌شکلِ ایموجیِ رنگی درمی‌آید که با رنگِ تمِ
               برنامه نمی‌خواند. نگهبانِ CI همین را می‌گیرد. */}
           <Star width="24" height="24" />
@@ -334,7 +347,12 @@ function Rating({ value, set, disabled }) {
  * فهرستِ مراجعات همان چند مگابایت را هم می‌کشد. فایل جای خودش می‌رود و
  * فرم فقط نشانی‌اش را نگه می‌دارد.
  */
-function ImageBox({ field: f, value, set, disabled, onUpload, onRemove }) {
+/** پیامِ «عکس بزرگ است» — با عددِ سقف وقتی والد سقف داده (`maxMb`)، وگرنه کلی (۴۱۳ از سرور). */
+const tooBig = (mb) => (mb
+  ? `حجمِ عکس زیاد است (بیش از ${String(mb).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d])} مگابایت)؛ عکس را دوباره بگیرید یا کوچک‌تر بفرستید`
+  : 'حجمِ عکس از سقفِ مجاز بیشتر است؛ فایلِ کوچک‌تری بفرستید');
+
+function ImageBox({ field: f, value, set, disabled, onUpload, onRemove, shrink = false, maxMb = null }) {
   const input = useRef(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -360,13 +378,18 @@ function ImageBox({ field: f, value, set, disabled, onUpload, onRemove }) {
     setBusy(true);
     /* ترتیبی، نه موازی — و خطای یک فایل بقیه را زمین نمی‌زند. */
     const added = [];
-    for (const file of files) {
+    for (const raw of files) {
       if (list.length + added.length >= max) { setErr(`حداکثر ${max} فایل`); break; }
+      /* هشدار: اول کوچک، بعد سقف، بعد ارسال (بازبینیِ UX، بندِ ۹۹): عکسِ ۱۲ مگابایتیِ دوربین با ۱۶۰۰ پیکسل
+         زیرِ نیم مگابایت می‌شود و روی اینترنتِ کندِ بیمار چند ثانیه می‌رود نه چند دقیقه؛ فایلی که
+         کوچک نشد و هنوز از سقف بزرگ‌تر است اصلاً فرستاده نمی‌شود. هر دو فقط وقتی والد خواسته (PF9). */
+      const file = shrink ? await shrinkImage(raw) : raw;
+      if (maxMb && file.size > maxMb * 1024 * 1024) { setErr(tooBig(maxMb)); continue; }
       try {
         const r = await onUpload(file, f);
-        if (r?.id || r?.url) added.push({ id: r.id, url: r.url, name: r.name ?? file.name });
+        if (r?.id || r?.url) added.push({ id: r.id, url: r.url, name: r.name ?? raw.name });
       } catch (ex) {
-        setErr(ex?.message || 'آپلود انجام نشد');
+        setErr(ex?.status === 413 ? tooBig(maxMb) : ex?.message || 'آپلود انجام نشد');
       }
     }
     if (added.length) set([...list, ...added]);

@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from './auth.jsx';
 import WorkRow from './WorkRow.jsx';
 import { ThingPopups, useThings, workTarget } from './thing-popups.jsx';
 import { WORK_CHANGED } from './WorkBell.jsx';
-import { Back } from '../ui/icons.jsx';
+import { Bell } from '../ui/icons.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import './shell.css';
 import './work.css';
+import Toast, { useToast } from '../ui/Toast.jsx';
 
 const faNum = (n) => Number(n || 0).toLocaleString('fa-IR');
 const NONE = [];
@@ -35,7 +37,7 @@ export default function WorkList() {
   const [scope, setScope] = useState('inbox');
   const [rows, setRows] = useState(null);
   const [busy, setBusy] = useState(0);
-  const [toast, setToast] = useState('');
+  const { msg: toast, show: setToast } = useToast(1800);
   const [title, setTitle] = useState('');
   const [due, setDue] = useState('');
   const supervisor = (user?.level ?? 0) >= 4;
@@ -50,8 +52,6 @@ export default function WorkList() {
   const waiting = facetKey !== 'all' && meta === null;
   const req = useRef(0);
 
-  useEffect(() => { document.title = 'کارهای من — عمل‌یار'; }, []);
-  useEffect(() => { if (!toast) return; const t = setTimeout(() => setToast(''), 1800); return () => clearTimeout(t); }, [toast]);
 
   const loadMeta = useCallback(() => {
     api('/work/counts?owners=1').then(setMeta).catch(() => setMeta({ team: false }));
@@ -98,7 +98,7 @@ export default function WorkList() {
       setRows((r) => (r ?? []).filter((x) => x.id !== w.id));
       window.dispatchEvent(new Event(WORK_CHANGED));
       if (team) loadMeta();
-      setToast(action === 'done' ? 'انجام شد' : 'به فردا موکول شد');
+      setToast(action === 'done' ? (body.outcome?.dismissed ? 'یادآوری بسته شد' : 'انجام شد') : 'یادآوری به فردا افتاد');
     } catch (e) {
       setToast(e?.message || 'انجام نشد');
     } finally {
@@ -149,13 +149,11 @@ export default function WorkList() {
 
   return (
     <div className="wk-page">
-      <header className="wk-head">
-        <Link to="/app" className="wk-back"><Back width="15" height="15" /> سامانه</Link>
-        <h1>کارهای من</h1>
-      </header>
+      {/* صفحهٔ زنگِ کارها (کاشی نیست) — آیکونش همان زنگی است که به این‌جا می‌رساند. */}
+      <PageHeader title="کارهای من" icon={Bell} />
 
       <form className="wk-new" onSubmit={create}>
-        <input id="wk-new-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="یادداشتِ کاری برای خودم… (مثلاً تماس با بیمارِ فلان)" maxLength={160} />
+        <input id="wk-new-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="یادداشتِ کاری برای خودم… (مثلاً تماس با بیمارِ فلان)" aria-label="کارِ تازه برای خودم" maxLength={160} />
         <select id="wk-new-due" value={due} onChange={(e) => setDue(e.target.value)} aria-label="مهلت">
           <option value="">بدونِ مهلت</option>
           <option value="today">امروز</option>
@@ -198,7 +196,7 @@ export default function WorkList() {
         </>
       )}
       <ThingPopups things={things} />
-      {toast && <div className="sh-toast" role="status">{toast}</div>}
+      <Toast msg={toast} />
     </div>
   );
 }

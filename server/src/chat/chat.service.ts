@@ -61,6 +61,28 @@ export class ChatService {
     }));
   }
 
+  /**
+   * شمارِ پیام‌های نخوانده — برای نشانِ پیام‌رسان در نوارِ پوسته (بازبینیِ UX ۱۴۰۵/۰۷: پیامِ تازه
+   * هیچ‌جای پوسته دیده نمی‌شد). همان تعریفِ `channels()` (پس از `lastReadId`، نه از خودم)، ولی
+   * یک پرسشِ گروهی به‌جای فهرستِ کاملِ گفتگوها — این هر نیم‌دقیقه از هر صفحه خوانده می‌شود.
+   */
+  async unread(user: any) {
+    const memberships = await this.prisma.chatMember.findMany({
+      where: { accountId: user.id },
+      select: { channelId: true, lastReadId: true },
+    });
+    if (!memberships.length) return { total: 0, channels: 0 };
+    const rows = await this.prisma.chatMessage.groupBy({
+      by: ['channelId'],
+      where: {
+        authorId: { not: user.id },
+        OR: memberships.map((m) => ({ channelId: m.channelId, id: { gt: m.lastReadId } })),
+      },
+      _count: { _all: true },
+    });
+    return { total: rows.reduce((n, r) => n + r._count._all, 0), channels: rows.length };
+  }
+
   /** گفتگوهای من — با شمارِ نخوانده و پیشنمای آخرین پیام؛ تازه‌ترین اول. */
   async channels(user: any) {
     const memberships = await this.prisma.chatMember.findMany({

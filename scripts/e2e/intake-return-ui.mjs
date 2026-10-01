@@ -136,6 +136,8 @@ try {
   /* فهرستِ بیمارستان در این ماک باز نمی‌شود — پیامش باید کوچکِ زیرِ کادر باشد، نه متنِ بدنه.
      از ۱۴۰۵/۰۷/۰۴ فهرست فقط هنگامِ تایپ خوانده می‌شود (کادرِ جست‌وجو، نه دیوارِ چیپ)، پس اول
      چیزی تایپ می‌شود. */
+  /* در مرحلهٔ واریز فرمِ پرشده یک کارتِ خلاصه است (بازبینیِ UX، public-12)؛ کادرِ بیمارستان پشتِ «ویرایش» است. */
+  if (await p2.locator('.ik-sum-edit').count()) await p2.locator('.ik-sum-edit').click();
   await p2.locator('.hospital-lookup input').fill('امام');
   const lookupNote = p2.locator('.hospital-lookup > p');
   await lookupNote.waitFor();

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../lib/api.js';
 import { JOB_ROLES, fieldRoles } from '../lib/job-roles.js';
@@ -7,12 +6,13 @@ import { useConfig } from './config.jsx';
 import './definitions.css';
 import './formbuilder.css';
 import './launcher.css'; // شِلِ استانداردِ صفحه (lx-*) + glass
-import { ArrowDown, ArrowUp, Back, Close, Eye, EyeOff, Lock, Pencil, Plus, Trash } from '../ui/icons.jsx';
+import { ArrowDown, ArrowUp, Close, Eye, EyeOff, Lock, Pencil, Plus, Trash } from '../ui/icons.jsx';
 import { COLOR_KEYS, FORM_COLORS } from '../lib/formColor.js';
 import { toEnDigits } from '../lib/identity.js';
 import { toFa } from '../lib/utils.js';
 import Tabs from '../ui/Tabs.jsx';
-import Overlay from '../ui/Overlay.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
+import Overlay, { ConfirmDialog } from '../ui/Overlay.jsx';
 import DynForm from '../ui/DynForm.jsx';
 import { useStagger } from '../ui/stagger.js';
 
@@ -72,6 +72,25 @@ const SCOPE_FA = { visit: 'مراجعه', record: 'زیرپرونده', intake: 
 /** نامِ فارسیِ نقش‌های یک فیلد — خالی یعنی «عمومی» (همه پر می‌کنند). */
 const roleNamesOf = (field) => fieldRoles(field).map((v) => JOB_ROLES.find((r) => r.v === v)?.l ?? v);
 
+/**
+ * «دسکتاپِ پهن» (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-25): فرم‌ساز روی ۱۲۸۰ پیکسل یک ستونِ ۴۳۰ پیکسلی بود و
+ * پیش‌نمایشِ زنده بسته و بالای فهرست. از این پهنا به بعد سه ستون است — فهرستِ فرم‌ها | فیلدها |
+ * پیش‌نمایشِ همیشه‌باز. پیش‌نمایش در JSX است نه فقط CSS: `<details>`ِ بسته را CSS باز نمی‌کند.
+ */
+const WIDE = '(min-width: 1100px)';
+function useWide() {
+  const [wide, setWide] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.(WIDE).matches);
+  useEffect(() => {
+    const mq = window.matchMedia?.(WIDE);
+    if (!mq) return undefined;
+    const sync = () => setWide(mq.matches);
+    sync();
+    mq.addEventListener?.('change', sync);
+    return () => mq.removeEventListener?.('change', sync);
+  }, []);
+  return wide;
+}
+
 export default function FormBuilder() {
   const stagger = useStagger();
   const { verticalLabel } = useConfig();
@@ -82,6 +101,9 @@ export default function FormBuilder() {
   const [scopeFilter, setScopeFilter] = useState('all');
   const [editing, setEditing] = useState(null); // {formId, field} — field={} یعنی جدید
   const [resetting, setResetting] = useState(false);
+  /* حذفِ فیلد یا کلِ فرم اول می‌پرسد (بازبینیِ UX ۱۴۰۵/۰۷ — clinic-daily-15) — همان قاعدهٔ «بازگرداندن
+     به قالب»: نامِ مورد و پیامدش. `{kind:'field', field}` یا `{kind:'form', form}`. */
+  const [confirmDel, setConfirmDel] = useState(null);
   /* «+ ساختِ زیرفرمِ تازه» در پنجرهٔ الصاقِ فرمِ مراجعه این‌جا را با `?new=subform` باز می‌کند
      (۱۴۰۵/۰۷/۰۳) — برگهٔ ساخت همان لحظه با محدودهٔ «زیرفرم» باز می‌شود. */
   const [newForm, setNewForm] = useState(() => {
@@ -94,8 +116,11 @@ export default function FormBuilder() {
   /* مقادیرِ پیش‌نمایش — فقط در همین صفحه زندگی می‌کنند و هیچ‌جا ذخیره نمی‌شوند. */
   const [preview, setPreview] = useState({});
   const [previewPage, setPreviewPage] = useState(1);
+  /* حالتِ «جابه‌جایی» (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-18) — فقط موبایل از آن استفاده می‌کند: پیکان‌ها
+     ۴۴ پیکسلی‌اند و کنارِ چهار کلیدِ ۴۴ پیکسلیِ ردیف جا نمی‌شوند، پس یا این یا آن. دسکتاپ هر دو را با هم دارد. */
+  const [reorder, setReorder] = useState(false);
+  const wide = useWide();
 
-  useEffect(() => { document.title = 'عمل‌یار — فرم‌ساز'; }, []);
   useEffect(() => {
     if (!toast) return undefined;
     const t = setTimeout(() => setToast(''), 2400);
@@ -154,7 +179,17 @@ export default function FormBuilder() {
     );
 
   const removeField = (field) =>
-    apply(() => api(`/forms/fields/${field.id}`, { method: 'DELETE' }), 'حذف شد');
+    apply(() => api(`/forms/fields/${field.id}`, { method: 'DELETE' }), `«${field.label}» حذف شد`);
+
+  /** حذفِ کلِ فرم — پیام از خودِ پاسخ ساخته می‌شود، نه از حدس: سرور می‌داند حذف شد یا فقط خاموش. */
+  const removeForm = async (f) => {
+    setBusy(true);
+    const r = await api(`/forms/${f.id}`, { method: 'DELETE' }).catch((e) => ({ error: e.message }));
+    setBusy(false);
+    if (r.error) { setToast(r.error); return; }
+    setToast(r.deactivated ? `«${f.title}» به‌دلیلِ ${r.used} مراجعهٔ ثبت‌شده فقط خاموش شد` : `«${f.title}» حذف شد`);
+    load();
+  };
 
   /** بخشِ نقشِ فیلد — «این فیلد مالِ کیست». خالی = عمومی. */
   const setFieldRoles = (field, roles) => {
@@ -213,16 +248,48 @@ export default function FormBuilder() {
     } catch (e) { setToast(e.message); } finally { setBusy(false); }
   };
 
+  /* پیش‌نمایشِ زنده — یک بدنه، دو قاب: در دسکتاپِ پهن ستونِ همیشه‌بازِ کنارِ فیلدها، در موبایل همان
+     آکاردئونِ بسته (ارتفاعِ صفحه را برنمی‌گرداند). */
+  const previewBody = form && (
+    <>
+      {form.pages > 1 && (
+        <Tabs
+          variant="inset"
+          label="صفحهٔ پیش‌نمایش"
+          value={String(Math.min(previewPage, form.pages))}
+          onChange={(k) => setPreviewPage(Number(k))}
+          items={Array.from({ length: form.pages }, (_, i) => ({ key: String(i + 1), label: `صفحهٔ ${toFa(i + 1)}` }))}
+        />
+      )}
+      <DynForm
+        fields={form.fields.filter((f) => f.active !== false
+          && (form.pages > 1 ? (f.page ?? 1) === Math.min(previewPage, form.pages) : true))}
+        values={preview}
+        errors={{}}
+        onChange={setPreview}
+      />
+    </>
+  );
+  const shownForms = forms?.filter((f) => scopeFilter === 'all' || f.scope === scopeFilter) ?? [];
+  /* فهرستِ کناریِ دسکتاپ عمودی است: بالا/پایین هم فرم را عوض می‌کند (چپ/راستِ خودِ Tabs سرِ جایش). */
+  const onListKey = (e) => {
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    const i = shownForms.findIndex((f) => f.key === tab);
+    const j = e.key === 'ArrowDown' ? Math.min(shownForms.length - 1, i + 1) : Math.max(0, i - 1);
+    if (i < 0 || j === i) return;
+    e.preventDefault();
+    setTab(shownForms[j].key);
+    const box = e.currentTarget;
+    requestAnimationFrame(() => box?.querySelectorAll('[role="tab"]')[j]?.focus());
+  };
+
   return (
     <div className="lx df fb">
       <div className="lx-bg" aria-hidden="true" />
       <div className="lx-grid" aria-hidden="true" />
 
       <div className="lx-shell">
-        <header className="df-head">
-          <Link to="/app" className="lx-back" aria-label="بازگشت به صفحهٔ امروز"><Back width="15" height="15" /> سامانه</Link>
-          <h1>فرم‌ساز</h1>
-        </header>
+        <PageHeader tool="forms" />
 
         <p className="fb-lead">
           هر فرم را می‌توانید کامل بچینید: فیلدِ تازه اضافه کنید، ترتیب را عوض کنید،
@@ -244,29 +311,37 @@ export default function FormBuilder() {
                 setToast('فرم پیگیری آماده است؛ پس از بازبینی روشن کنید و روزهای ارسال را در نوع عمل تعریف کنید.');
               } catch (e) { setToast(e.message); } finally { setBusy(false); }
             }}>آماده‌سازی فرم پیگیری خودکار</button>
-            <Tabs label="کاربرد فرم" value={scopeFilter} onChange={scope => {
+            {/* دسته‌بندی «زبانه» است و فرم‌ها «فهرست» (surgery-25) — دو ردیفِ چیپِ هم‌شکل نمی‌گفتند کدام
+                فیلتر است و کدام خودِ فرم؛ در دسکتاپ دسته قابِ جدا می‌گیرد و فرم‌ها فهرستِ کناری‌اند. */}
+            <Tabs label="کاربرد فرم" variant={wide ? 'inset' : 'fill'} className="fb-scope" value={scopeFilter} onChange={scope => {
               setScopeFilter(scope);
               const candidates = forms.filter(f => scope === 'all' || f.scope === scope);
               setTab(cur => candidates.some(f => f.key === cur) ? cur : candidates[0]?.key ?? '');
             }} items={[{ key: 'all', label: 'همه' }, { key: 'intake', label: 'ثبت‌نام مراجع' }, { key: 'visit', label: 'مراجعه و درمان' }, { key: 'subform', label: 'زیرفرم‌های مراجعه' }, { key: 'record', label: 'پیگیری و زیرپرونده' }]} />
-            <div className="fb-tabrow">
-              <Tabs
-                variant="scroll"
-                label="فرم‌ها"
-                value={tab}
-                onChange={setTab}
-                items={forms.filter(f => scopeFilter === 'all' || f.scope === scopeFilter).map((f) => ({ key: f.key, label: f.title }))}
-              />
-              {/* ⚠️ ساختنِ فرم = ساختنِ یک **نوعِ تازه‌ی مراجعه**. مطبی که
-                  مسیرش «ویزیت → درمان → پیگیری» است، «درمان» را خودش
-                  می‌سازد؛ ما ترتیب را تحمیل نمی‌کنیم. */}
-              <button type="button" className="fb-newform" onClick={() => setNewForm(true)} title="فرمِ تازه">
-                <Plus width="15" height="15" />
-              </button>
-            </div>
+            {/* سه ستونِ دسکتاپ (surgery-25): fb-nav | fb-body | fb-live — در موبایل همه زیرِ هم. */}
+            <div className="fb-work">
+              <div className="fb-nav">
+                {/* بالا/پایین برای فهرستِ عمودیِ دسکتاپ؛ چپ/راست و Home/End را خودِ Tabs دارد. */}
+                <div className="fb-tabrow" onKeyDown={wide ? onListKey : undefined}>
+                  <Tabs
+                    variant="scroll"
+                    label="فرم‌ها"
+                    value={tab}
+                    onChange={setTab}
+                    items={shownForms.map((f) => ({ key: f.key, label: f.title }))}
+                  />
+                  {/* هشدار: ساختنِ فرم = ساختنِ یک **نوعِ تازه‌ی مراجعه**. مطبی که
+                      مسیرش «ویزیت → درمان → پیگیری» است، «درمان» را خودش
+                      می‌سازد؛ ما ترتیب را تحمیل نمی‌کنیم. */}
+                  <button type="button" className="fb-newform" onClick={() => setNewForm(true)} title="فرمِ تازه" aria-label="فرمِ تازه">
+                    <Plus width="15" height="15" aria-hidden="true" />
+                    <span className="fb-newform-t" aria-hidden="true">فرمِ تازه</span>
+                  </button>
+                </div>
+              </div>
 
             {form && (
-              <>
+              <div className="fb-body">
                 <div className="fb-meta">
                   {/* ⚠️ نامِ **نوعِ فرم** از کاتالوگِ سرور، نه دو چیپِ جداگانه.
                       تا دیروز این‌جا «مراجعه» + کلیدِ خامِ انگلیسیِ `surgery`
@@ -352,28 +427,15 @@ export default function FormBuilder() {
                     یک بازسازیِ دوم. فرم‌سازِ دومی ساخته نمی‌شود (§۴.۷)، پس هر
                     نوعِ فیلدِ تازه همین‌جا هم خودش را نشان می‌دهد.
                     مقادیر جایی ذخیره نمی‌شوند و آپلود در دسترس نیست. */}
-                <details className="fb-fold fb-preview">
-                  <summary>پیش‌نمایشِ زنده</summary>
-                  <p className="fb-fold-note">
-                    همان کادرهایی که کاربر می‌بیند. چیزی که این‌جا می‌نویسید ذخیره نمی‌شود.
-                  </p>
-                  {form.pages > 1 && (
-                    <Tabs
-                      variant="inset"
-                      label="صفحهٔ پیش‌نمایش"
-                      value={String(Math.min(previewPage, form.pages))}
-                      onChange={(k) => setPreviewPage(Number(k))}
-                      items={Array.from({ length: form.pages }, (_, i) => ({ key: String(i + 1), label: `صفحهٔ ${toFa(i + 1)}` }))}
-                    />
-                  )}
-                  <DynForm
-                    fields={form.fields.filter((f) => f.active !== false
-                      && (form.pages > 1 ? (f.page ?? 1) === Math.min(previewPage, form.pages) : true))}
-                    values={preview}
-                    errors={{}}
-                    onChange={setPreview}
-                  />
-                </details>
+                {!wide && (
+                  <details className="fb-fold fb-preview">
+                    <summary>پیش‌نمایشِ زنده</summary>
+                    <p className="fb-fold-note">
+                      همان کادرهایی که کاربر می‌بیند. چیزی که این‌جا می‌نویسید ذخیره نمی‌شود.
+                    </p>
+                    {previewBody}
+                  </details>
+                )}
 
                 {/* هستهٔ ثابتِ مطب (بستهٔ ۶) — توضیح یک‌بار بالای فهرست، نه روی هر ردیف. */}
                 {form.fields.some((f) => f.core) && (
@@ -384,7 +446,20 @@ export default function FormBuilder() {
                     فیلدهای دلخواه، فرمِ تکمیلیِ همین نوع‌اند.
                   </p>
                 )}
-                <div className="fb-list">
+                {form.fields.length > 1 && (
+                  <div className="fb-listbar">
+                    <button
+                      type="button"
+                      className={`fb-reorder${reorder ? ' on' : ''}`}
+                      aria-pressed={reorder}
+                      onClick={() => setReorder((x) => !x)}
+                    >
+                      <span className="fb-reorder-ic" aria-hidden="true"><ArrowUp width="13" height="13" /><ArrowDown width="13" height="13" /></span>
+                      {reorder ? 'پایانِ جابه‌جایی' : 'جابه‌جاییِ ترتیب'}
+                    </button>
+                  </div>
+                )}
+                <div className={`fb-list${reorder ? ' is-reorder' : ''}`}>
                   {form.fields.map((f, i) => (
                     <motion.article key={f.id} {...stagger(i)} className={`glass fb-row${f.active ? '' : ' off'}`}>
                       <div className="fb-order">
@@ -394,8 +469,8 @@ export default function FormBuilder() {
                         {/* ترتیبِ بخشِ استاندارد ثابت است (سرور هسته را اول می‌چیند)؛
                             فلشِ غیرفعال از فلشی که کار نمی‌کند صادق‌تر است — برای
                             اولین ردیفِ دلخواه هم، چون بالاترش هسته است. */}
-                        <button type="button" onClick={() => move(f, -1)} disabled={busy || i === 0 || f.core || form.fields[i - 1]?.core} aria-label="بالاتر"><ArrowUp width="11" height="11" /></button>
-                        <button type="button" onClick={() => move(f, 1)} disabled={busy || i === form.fields.length - 1 || f.core} aria-label="پایین‌تر"><ArrowDown width="11" height="11" /></button>
+                        <button type="button" onClick={() => move(f, -1)} disabled={busy || i === 0 || f.core || form.fields[i - 1]?.core} aria-label={`بالاتر بردنِ «${f.label}»`}><ArrowUp width="13" height="13" /></button>
+                        <button type="button" onClick={() => move(f, 1)} disabled={busy || i === form.fields.length - 1 || f.core} aria-label={`پایین‌تر بردنِ «${f.label}»`}><ArrowDown width="13" height="13" /></button>
                       </div>
 
                       <div className="fb-main">
@@ -456,7 +531,7 @@ export default function FormBuilder() {
                         )}
                         {/* فیلدِ هسته‌ای سطلِ زباله ندارد — نبودِ دکمه از خطای بعدِ کلیک بهتر است. */}
                         {!f.builtin && (
-                          <button type="button" className="df-act danger" disabled={busy} onClick={() => removeField(f)} aria-label="حذف">
+                          <button type="button" className="df-act danger" disabled={busy} onClick={() => setConfirmDel({ kind: 'field', field: f })} aria-label={`حذفِ فیلدِ ${f.label}`}>
                             <Trash width="15" height="15" />
                           </button>
                         )}
@@ -469,26 +544,25 @@ export default function FormBuilder() {
                   <button type="button" className="df-add" onClick={() => setEditing({ formId: form.id, field: {} })}>
                     <Plus width="16" height="16" /> فیلدِ تازه
                   </button>
-                  <button
-                    type="button"
-                    className="fb-delform"
-                    onClick={async () => {
-                      const r = await api(`/forms/${form.id}`, { method: 'DELETE' }).catch((e) => ({ error: e.message }));
-                      if (r.error) { setToast(r.error); return; }
-                      /* پیام از خودِ پاسخ ساخته می‌شود، نه از حدس: سرور
-                         می‌داند حذف شد یا فقط خاموش. */
-                      setToast(r.deactivated ? `به‌دلیلِ ${r.used} مراجعهٔ ثبت‌شده فقط خاموش شد` : 'فرم حذف شد');
-                      load();
-                    }}
-                  >
+                  <button type="button" className="fb-delform" disabled={busy} onClick={() => setConfirmDel({ kind: 'form', form })}>
                     حذفِ این فرم
                   </button>
                   <button type="button" className="fb-reset" onClick={() => setResetting(true)}>
                     بازگرداندن به قالبِ {verticalLabel || 'حوزه'}
                   </button>
                 </div>
-              </>
+              </div>
             )}
+            {wide && form && (
+              <aside className="fb-live" aria-labelledby="fb-live-title">
+                <header className="fb-live-head">
+                  <b id="fb-live-title">پیش‌نمایشِ زنده</b>
+                  <small>همان کادرهایی که کاربر می‌بیند. چیزی که این‌جا می‌نویسید ذخیره نمی‌شود.</small>
+                </header>
+                {previewBody}
+              </aside>
+            )}
+            </div>
           </>
         )}
       </div>
@@ -526,6 +600,24 @@ export default function FormBuilder() {
       </AnimatePresence>
 
       <AnimatePresence>
+        {confirmDel && (
+          <ConfirmDialog
+            title={confirmDel.kind === 'field' ? `حذفِ فیلدِ «${confirmDel.field.label}»؟` : `حذفِ فرمِ «${confirmDel.form.title}»؟`}
+            text={confirmDel.kind === 'field'
+              ? 'فیلد از این فرم برداشته می‌شود و این کار برگشت ندارد. اگر فقط نمی‌خواهید دیده شود، «خاموش» کنید.'
+              : 'این کار برگشت ندارد. اگر مراجعه‌ای با این فرم ثبت شده باشد، پاک نمی‌شود و فقط خاموش می‌شود.'}
+            busy={busy}
+            onConfirm={async () => {
+              const c = confirmDel;
+              if (c.kind === 'field') await removeField(c.field); else await removeForm(c.form);
+              setConfirmDel(null);
+            }}
+            onCancel={() => setConfirmDel(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
         {resetting && (
           <Overlay backdrop="df-overlay" panel="df-sheet" as="section" onClose={() => setResetting(false)} closable={!busy}>
             <header className="df-sheet-head">
@@ -551,7 +643,7 @@ export default function FormBuilder() {
         )}
       </AnimatePresence>
 
-      <div className={`df-toast${toast ? ' on' : ''}`} role="status">{toast}</div>
+      {toast && <div className="df-toast" role="status">{toast}</div>}
     </div>
   );
 }
@@ -568,30 +660,40 @@ export default function FormBuilder() {
  * هیچ اطلاعاتی حمل نمی‌کرد. انتخاب حالا فقط با مقایسهٔ خودِ رنگ مشخص می‌شود.
  */
 function ColorPick({ form, busy, onPick }) {
+  /* موبایل (بازبینیِ UX ۱۴۰۵/۰۷ — surgery-18): نُه خانهٔ رنگ با کفِ لمسیِ ۴۴ پیکسل دو سطرِ کامل
+     می‌گرفتند، برای کاری که کم پیش می‌آید. پالت پشتِ یک کلیدِ «رنگِ کارت» است؛ دسکتاپ همیشه باز. */
+  const [open, setOpen] = useState(false);
+  const cur = FORM_COLORS[form.color];
   return (
-    <span className="fb-colors" role="group" aria-label="رنگِ کارت">
-      <button
-        type="button"
-        className="fb-color auto"
-        disabled={busy}
-        onClick={() => onPick('')}
-        title="یک رنگِ آزاد از پالت بگیر"
-      >
-        خودکار
+    <span className={`fb-colorpick${open ? ' open' : ''}`}>
+      <button type="button" className="fb-colortoggle" aria-expanded={open} onClick={() => setOpen((x) => !x)}>
+        <i style={cur ? { '--sw': cur.solid } : undefined} aria-hidden="true" />
+        {cur ? `رنگِ کارت: ${cur.fa}` : 'رنگِ کارت'}
       </button>
-      {COLOR_KEYS.map((k) => (
+      <span className="fb-colors" role="group" aria-label="رنگِ کارت">
         <button
-          key={k}
           type="button"
-          className={`fb-color${form.color === k ? ' on' : ''}`}
-          style={{ '--sw': FORM_COLORS[k].solid }}
+          className="fb-color auto"
           disabled={busy}
-          onClick={() => onPick(k)}
-          aria-pressed={form.color === k}
-          aria-label={FORM_COLORS[k].fa}
-          title={FORM_COLORS[k].fa}
-        />
-      ))}
+          onClick={() => onPick('')}
+          title="یک رنگِ آزاد از پالت بگیر"
+        >
+          خودکار
+        </button>
+        {COLOR_KEYS.map((k) => (
+          <button
+            key={k}
+            type="button"
+            className={`fb-color${form.color === k ? ' on' : ''}`}
+            style={{ '--sw': FORM_COLORS[k].solid }}
+            disabled={busy}
+            onClick={() => onPick(k)}
+            aria-pressed={form.color === k}
+            aria-label={FORM_COLORS[k].fa}
+            title={FORM_COLORS[k].fa}
+          />
+        ))}
+      </span>
     </span>
   );
 }
@@ -964,7 +1066,7 @@ function NewFormSheet({ onClose, onCreated, scope = 'visit' }) {
               />
             ))}
           </span>
-        ), 'در داشبورد کارتِ این فرم با همین رنگ دیده می‌شود.')}
+        ), 'در فهرستِ بیماران کارتِ این فرم با همین رنگ دیده می‌شود.')}
 
         {form.scope === 'visit' && (
           <p className="fb-note">

@@ -3221,6 +3221,8 @@ jobs:
       # غیب می‌شد، بی‌هیچ خطایی.
       - name: Verify one definition of today
         run: node scripts/e2e/clinic-day-local.mjs
+      - name: Verify the theatre board uses the clinic's today, shows done surgeries as done, and overdue rows never crowd the waitlist cap
+        run: node scripts/e2e/theatre-waitlist-local.mjs
 
       - name: Verify atomic clinical order answers and review lifecycle (W1.2)
         run: node scripts/e2e/w1-2-order-review-local.mjs
@@ -3299,6 +3301,10 @@ jobs:
 
       - name: Verify draft resume, indicator and no browser storage (W1.8 UI)
         run: node scripts/e2e/w1-8-draft-ui.mjs
+      - name: Verify the theatre desk never replaces a newer operation note with a stale device draft
+        run: node scripts/e2e/theatre-desk-ui.mjs
+      - name: Verify the visit form guards unsaved text from the first render and sends each error to its own tab
+        run: node scripts/e2e/visit-form-guards-ui.mjs
 
       # ⚠️ W1.9/§8: syncNextVisit cancelled and recreated every pending
       # reminder on each call, and 'uncertain' was effectively terminal --

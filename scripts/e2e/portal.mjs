@@ -82,10 +82,14 @@ try {
   const d = pub.json;
   const body = JSON.stringify(d);
   ok(d?.patient?.fullName === 'بیمارِ پرتال', 'نامِ بیمار');
-  ok((d?.visits ?? []).length === 2, `هر دو مراجعه در تاریخچه (${d?.visits?.length})`);
-  ok(d.visits.every((v) => typeof v.summaryUrl === 'string' && v.summaryUrl.startsWith('/v/')),
-    'هر مراجعه لینکِ خلاصه دارد');
+  /* بازبینیِ UX (بندِ ۱۰۰): مراجعهٔ آینده‌ای که در انتظار است برنامهٔ «پیشِ‌رو»ست نه تاریخچه، و
+     خلاصه فقط برای مراجعهٔ انجام‌شده لینک می‌شود. */
+  ok((d?.visits ?? []).length === 1, `تاریخچه فقط مراجعهٔ گذشته را دارد (${d?.visits?.length})`);
+  ok(d.visits.every((v) => (v.status === 'done' ? String(v.summaryUrl).startsWith('/v/') : v.summaryUrl === null)),
+    'خلاصه فقط برای مراجعهٔ انجام‌شده لینک دارد');
   ok((d?.surgeries ?? []).length === 1, 'بخشِ عمل‌ها فقط جراحی را دارد');
+  const ahead = d.upcoming.find((u) => u.kind === 'visit' && /-V2$/.test(u.code ?? ''));
+  ok(!!ahead && /\S+ \S+ \S+ \S+/.test(ahead.whenFa ?? ''), `**جراحیِ آینده در «پیشِ‌رو»** با روزِ هفته («${ahead?.whenFa}»)`);
   ok(d.upcoming.some((u) => u.kind === 'next_visit'), 'ویزیتِ بعدی در «پیشِ‌رو» هست');
   ok(d.notices.some((n) => n.text.includes('پروندهٔ الکترونیک')), 'پیامکِ پرتال در فیدِ پیام‌ها هست');
   ok(d.notices.some((n) => n.upcoming && n.text.includes('یادآوری')), 'یادآوریِ برنامه‌ریزی‌شده هم دیده می‌شود');

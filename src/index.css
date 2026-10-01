@@ -54,6 +54,18 @@
   --radius-sm: 12px;
   --shadow-glow: 0 0 40px rgba(var(--brand-rgb), 0.25);
   --maxw: 1140px;
+  /* دو عرضِ استانداردِ محتوای صفحه‌های /app (بازبینیِ UX، shell-15 — تا آن روز دوازده عرضِ
+     مختلف از ۴۶۸ تا ۱۴۰۰ بود): فهرست و جدول `--maxw` (هم‌عرضِ نوارِ پوسته)، فرم و خواندن
+     `--maxw-form`. سربرگِ هر صفحه (`PageHeader`، `width`) همان عرضِ محتوایش را می‌گیرد. */
+  --maxw-form: 720px;
+  /* عرضِ محتوای **همین** صفحه — ریشهٔ هر صفحه یکی از دو عرض را می‌گذارد و سربرگ و نوارِ تب
+     (`.ph`، `.ui-tabs`) از همین می‌خوانند تا لبه‌هایشان با محتوا یکی بماند. */
+  --page-w: var(--maxw);
+  /* ارتفاعِ نوارِ بالای پوسته (`shell.css`: ۵۲ + ۲×۸ فاصله… در عمل چیپِ پروفایل ۴۶ +
+     ۱۶ + خطِ زیرین = ۶۳). صفحهٔ تمام‌قدِ زیرِ پوسته `calc(100dvh - var(--shell-h))`
+     می‌گیرد، نه `100dvh`: وگرنه نوار رویش اضافه می‌شود و کادرِ نوشتنِ گفتگو زیرِ
+     لبهٔ صفحه می‌افتد (بازبینیِ UX ۱۴۰۵/۰۷). */
+  --shell-h: 63px;
 
   /* ── پردهٔ روی سطح (W3.6) ──
      تا دیروز ۶۰۰ جای CSS نوشته بود `rgba(var(--veil-rgb), .05)` — یعنی «کمی
@@ -87,6 +99,21 @@
   /* مرکّبِ روی پُرکنندهٔ **روشنِ ثابت** (چیپِ کهربایی/سایانی). چون خودِ پُرکننده با
      تم عوض نمی‌شود، مرکّبش هم نباید عوض شود — در هر دو تم تیره می‌ماند. */
   --ink-bright: #16132b;
+  /* ── زمینهٔ چیپِ وضعیت — همزادِ `--green-text` / `--amber-text` / `--red-text` ──
+     در تمِ تیره **مات و هم‌فام** (نه لایهٔ کم‌آلفا که روی زمینهٔ تیره خاکستری می‌شود).
+     همین زمینهٔ تیره در تمِ روشن گِلِ کدر بود و «در مطب/نیامد/لغو»ِ صفحهٔ «امروز» رویش
+     ۱٫۱ تا ۱٫۴:۱ خوانده می‌شد (بازبینیِ UX ۱۴۰۵/۰۷). مقدارِ تیره دقیقاً همان قبلی است. */
+  --green-bg: rgba(6, 56, 42, 0.55);
+  --amber-bg: rgba(58, 39, 8, 0.6);
+  --red-bg: rgba(60, 12, 12, 0.5);
+  /* ── توست (پیامِ «انجام شد» / «ذخیره نشد») — یک ظاهر در کلِ سامانه ──
+     سطحِ «وارونه»: تیره با متنِ روشن در **هر دو** تم، پس روی هر صفحه‌ای دیده می‌شود و
+     به رنگِ برندِ شرکت هم بسته نیست (متنِ سفید روی برندِ روشن خوانده نمی‌شود). تا
+     ۱۴۰۵/۰۷ هجده توست سه ظاهرِ جدا داشتند و در تمِ روشن نیمی‌شان نامرئی بودند:
+     سرمه‌ای روی سرمه‌ای، یا سفید روی سفید. */
+  --toast-bg: rgba(27, 18, 56, 0.97);
+  --toast-ink: #f2f0fc;
+  --toast-edge: rgba(var(--brand-2-rgb), 0.45);
 
   --veil-rgb: 255, 255, 255;
   /* لبهٔ براقِ شیشه — بازتابِ نور، پس در **هر دو** تم سفید می‌ماند. */
@@ -178,6 +205,15 @@
   --kind-fuchsia: 162, 28, 175;
   --kind-slate: 71, 85, 105;
   --red-text: #b91c1c;
+  /* زمینهٔ چیپِ وضعیت: رنگِ ۵۰ِ همان فام، مات — متنِ `--green`/`--amber`/`--red-text`
+     رویش از ۴٫۵ می‌گذرد. ته‌رنگِ پررنگ‌تر (۱۰۰) کهربای ‎#a16207 را به ۴٫۴ می‌رساند. */
+  --green-bg: #ecfdf5;
+  --amber-bg: #fffbeb;
+  --red-bg: #fef2f2;
+  /* توست در تمِ روشن هم تیره می‌ماند (وارونه): قابِ سفید روی صفحهٔ روشن گم می‌شود. */
+  --toast-bg: rgba(22, 19, 43, 0.95);
+  --toast-ink: #f4f4f9;
+  --toast-edge: rgba(var(--brand-2-rgb), 0.55);
   /* ⚠️ بنفشِ ثابت این‌جا ممنوع است (گامِ «رنگِ برند یک تنظیم است» در CI):
      شرکتی که برندش فیروزه‌ای است نباید متنِ کنترل‌هایش بنفش بماند.
      `--brand-dark` را `applyBrand` از روی رنگِ همان شرکت مشتق می‌کند. */
@@ -234,6 +270,12 @@
   --red-text: #fecaca;
   --press-ink: #fff;
   --brand-text: #ddd6fe;
+  --green-bg: rgba(6, 56, 42, 0.55);
+  --amber-bg: rgba(58, 39, 8, 0.6);
+  --red-bg: rgba(60, 12, 12, 0.5);
+  --toast-bg: rgba(27, 18, 56, 0.97);
+  --toast-ink: #f2f0fc;
+  --toast-edge: rgba(var(--brand-2-rgb), 0.45);
   background: var(--bg);
   color: var(--text1);
 }
@@ -576,6 +618,9 @@ a:focus:not(:focus-visible), button:focus:not(:focus-visible) { outline: none; }
 @media print { .version-notice { display: none; } }
 
 .account-verification-notice { padding: .75rem 1rem; background: var(--bg3); color: var(--text1); text-align: center; position: relative; z-index: 50; }
+/* مهلتِ تأییدِ شماره گذشته و حساب فقط چون آخرین سوپرادمین است باز مانده (بستهٔ PS، PS2) — هشدار، نه اطلاع. */
+.account-verification-notice.overdue { background: var(--amber-bg); color: var(--amber-text); font-weight: 700; }
+.account-verification-notice.overdue a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
 
 .nv-con > label { grid-column: 1 / -1; display: grid; gap: .5rem; min-width: 0; }
 .nv-con > label select { width: 100%; max-width: 100%; background: var(--bg3); color: var(--text1); border: 1px solid var(--card-border); border-radius: 12px; padding: .6rem; }

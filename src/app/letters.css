@@ -1,48 +1,40 @@
 /* نامهٔ اداری — فهرست، ویرایش و چاپ روی سربرگ. */
-.lt { position: relative; min-height: 100dvh; padding: 16px 14px 40px; color: var(--text1); }
+/* عرضِ محتوا = «فهرست/جدول»ِ استاندارد (shell-15)؛ سربرگ و بلوک‌ها از `--page-w` می‌خوانند. */
+.lt { position: relative; min-height: calc(100dvh - var(--shell-h)); padding: 20px 14px 40px; color: var(--text1); --page-w: var(--maxw); }
 .lt-bg {
   position: fixed; inset: 0; z-index: -1;
   background:
     radial-gradient(900px 520px at 70% -10%, rgba(var(--brand-rgb), .15), transparent 60%),
     var(--bg);
 }
-.lt-head { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; max-width: 780px; margin: 0 auto 12px; }
-.lt-back {
-  flex-basis: 100%;
-  display: inline-flex; align-items: center; gap: 6px;
-  font-size: 12.5px; text-decoration: none; color: var(--text2);
-}
-.lt-back:hover { color: var(--brand-2); }
-.lt-title h1 { display: flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 900; }
-.lt-title p { margin-top: 4px; font-size: 12.5px; color: var(--text2); }
 .lt-new {
-  display: inline-flex; align-items: center; gap: 6px; margin-inline-start: auto;
+  display: inline-flex; align-items: center; gap: 6px; min-height: 40px;
   padding: 9px 16px; cursor: pointer; font: inherit; font-size: 12.5px; font-weight: 800; color: #fff;
   background: linear-gradient(135deg, var(--brand-2), var(--brand-mid));
   border: 0; border-radius: 12px;
 }
 
 .lt-search {
-  display: flex; align-items: center; gap: 8px; max-width: 780px; margin: 0 auto 12px;
+  display: flex; align-items: center; gap: 8px; max-width: var(--page-w); margin: 0 auto 12px;
   padding: 9px 13px; border-radius: 13px; color: var(--text3);
   background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .12);
 }
 .lt-search input { flex: 1; min-width: 0; font: inherit; font-size: 13px; color: var(--text1); background: none; border: 0; outline: none; }
 
 .lt-err {
-  display: flex; align-items: center; gap: 7px; max-width: 780px; margin: 0 auto 12px;
+  display: flex; align-items: center; gap: 7px; max-width: var(--page-w); margin: 0 auto 12px;
   padding: 10px 13px; border-radius: 12px; font-size: 12.5px;
   color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .3);
 }
 .lt-empty {
-  max-width: 780px; margin: 0 auto 12px; padding: 26px 16px; text-align: center;
+  max-width: var(--page-w); margin: 0 auto 12px; padding: 26px 16px; text-align: center;
   font-size: 13px; color: var(--text3);
   border: 1px dashed rgba(var(--veil-rgb), .12); border-radius: 16px;
 }
 
 /* ردیفِ یک نامه */
 .lt-row {
-  display: flex; align-items: stretch; gap: 8px; max-width: 780px; margin: 0 auto 8px;
+  display: flex; align-items: stretch; gap: 8px; max-width: var(--page-w); margin: 0 auto 8px;
 }
 .lt-open {
   flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px;

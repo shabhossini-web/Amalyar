@@ -1,16 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api, apiUpload, apiUrl } from '../lib/api.js';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay from '../ui/Overlay.jsx';
 import { useStagger } from '../ui/stagger.js';
 import { SITE_ICON_KEYS } from '../pages/TenantLanding.jsx';
-import { ArrowDown, ArrowUp, Back, Close, Pencil, Plus, Trash, Upload } from '../ui/icons.jsx';
+import { ArrowDown, ArrowUp, Close, Pencil, Plus, Trash, Upload } from '../ui/icons.jsx';
+import PageHeader from '../ui/PageHeader.jsx';
 import './definitions.css';
 import './launcher.css';
 import './users.css';
 import './site.css';
+import Toast, { useToast } from '../ui/Toast.jsx';
+import { useTerms } from './config.jsx';
 
 /**
  * ویرایشگرِ سایتِ عمومیِ شرکت.
@@ -230,16 +232,12 @@ export default function Site() {
   const [tab, setTab] = useState('sections');
   const [editing, setEditing] = useState(null); // {kind, row}
   const [draft, setDraft] = useState({});       // متن‌های ویرایش‌نشده‌ی در دست
-  const [toast, setToast] = useState('');
+  const { msg: toast, show: setToast } = useToast(2200);
   const [busy, setBusy] = useState(false);
   const stagger = useStagger();
 
-  useEffect(() => { document.title = 'عمل‌یار — سایتِ معرفی'; }, []);
-  useEffect(() => {
-    if (!toast) return undefined;
-    const t = setTimeout(() => setToast(''), 2200);
-    return () => clearTimeout(t);
-  }, [toast]);
+  /* «دامنهٔ خودِ مطب» / «دامنهٔ خودِ شرکت» — واژهٔ سازمان از حوزه (بازبینیِ UX). */
+  const { org } = useTerms();
 
   const load = useCallback(async () => {
     try {
@@ -319,8 +317,9 @@ export default function Site() {
 
   if (!data) {
     return (
-      <div className="df">
+      <div className="df df-form">
         <div className="df-bg" aria-hidden="true" />
+        <PageHeader tool="site" />
         <div className="df-empty">در حال بارگذاری…</div>
       </div>
     );
@@ -333,15 +332,9 @@ export default function Site() {
   }, {});
 
   return (
-    <div className="df">
+    <div className="df df-form">
       <div className="df-bg" aria-hidden="true" />
-      <header className="df-head">
-        <Link to="/app" className="df-back"><Back width="15" height="15" /> سامانه</Link>
-        <div>
-          <h1>سایتِ معرفی</h1>
-          <p>صفحه‌ای که روی دامنهٔ خودِ شرکت دیده می‌شود — پیش از هر ورودی.</p>
-        </div>
-      </header>
+      <PageHeader tool="site" sub={`صفحه‌ای که روی دامنهٔ خودِ ${org} دیده می‌شود — پیش از هر ورودی.`} />
 
       {/* ── وضعیتِ انتشار ── */}
       <div className={`st-publish${data.published ? ' on' : ''}`}>
@@ -349,7 +342,7 @@ export default function Site() {
           <b>{data.published ? 'سایت منتشر شده است' : 'سایت منتشر نشده'}</b>
           <small>
             {data.published
-              ? 'ریشهٔ دامنهٔ شرکت این صفحه را نشان می‌دهد.'
+              ? `ریشهٔ دامنهٔ ${org} این صفحه را نشان می‌دهد.`
               : 'تا وقتی منتشر نشود، ریشهٔ دامنه مثلِ همیشه به فرمِ ورود می‌رود.'}
           </small>
         </div>
@@ -465,7 +458,7 @@ export default function Site() {
         )}
       </AnimatePresence>
 
-      {toast && <div className="df-toast">{toast}</div>}
+      <Toast msg={toast} />
     </div>
   );
 }

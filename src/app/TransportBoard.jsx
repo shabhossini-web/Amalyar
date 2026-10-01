@@ -3,6 +3,7 @@ import { api } from '../lib/api.js';
 import { toEnDigits } from '../lib/jalali.js';
 import { faTime } from '../lib/time.js';
 import { usePlaces } from '../lib/places.js';
+import { useTerms } from './config.jsx';
 import TimePick from '../ui/TimePick.jsx';
 import { Alert, Box, CheckCircle, Close, Hospital, Phone, Send, Truck, User } from '../ui/icons.jsx';
 import './transport-board.css';
@@ -19,6 +20,7 @@ const linesText = (lines) => (lines ?? []).map((l) => `${l.itemName}${l.serialNo
  * هیچ فرمِ جداگانه‌ای برای حواله یا مسیر نمی‌ماند.
  */
 export default function TransportBoard({ on, onChanged, onToast }) {
+  const terms = useTerms();
   const [data, setData] = useState(null);
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
@@ -64,7 +66,7 @@ export default function TransportBoard({ on, onChanged, onToast }) {
   if (!data) return <div className="tb-empty">در حال بارگذاری…</div>;
 
   const { hospitals, drivers, runs, summary } = data;
-  if (hospitals.length === 0) return <div className="tb-empty">برای این روز عمل و بیمارستانی ثبت نشده</div>;
+  if (hospitals.length === 0) return <div className="tb-empty">برای این روز {terms.surgery}ی ثبت نشده</div>;
 
   return (
     <div className="tb">
@@ -85,6 +87,7 @@ export default function TransportBoard({ on, onChanged, onToast }) {
         <Card
           key={h.key}
           h={h}
+          terms={terms}
           drivers={drivers}
           runs={runs}
           busy={busy}
@@ -106,7 +109,7 @@ export default function TransportBoard({ on, onChanged, onToast }) {
   );
 }
 
-function Card({ h, drivers, runs, busy, isOpen, onOpen, onSave, onPatch, onRemoveDelivery, onRemoveTransfer, onPickup }) {
+function Card({ h, terms, drivers, runs, busy, isOpen, onOpen, onSave, onPatch, onRemoveDelivery, onRemoveTransfer, onPickup }) {
   const missing = h.visits.length > 0 && !h.hasCargo;
   return (
     <article className={`tb-card${missing ? ' missing' : ''}`}>
@@ -114,7 +117,7 @@ function Card({ h, drivers, runs, busy, isOpen, onOpen, onSave, onPatch, onRemov
         <div className="tb-title">
           <b><Hospital width="14" height="14" /> {h.name}</b>
           <small>
-            {num(h.visits.length)} عمل
+            {num(h.visits.length)} {terms.surgery}
             {h.firstTime ? ` · از ساعت ${faTime(h.firstTime)}` : ''}
           </small>
         </div>
