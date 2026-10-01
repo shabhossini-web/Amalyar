@@ -85,3 +85,17 @@
 .tb-qty button:disabled { opacity: .35; cursor: not-allowed; }
 .tb-qty button:focus-visible { outline: 2px solid rgba(var(--brand-soft-rgb), .8); outline-offset: 1px; }
 .tb-chip small { font-size: 10px; color: rgba(var(--veil-rgb), .5); }
+
+/* چرا قلم آزاد نیست (`Holds`) — رزرو یا بیرون از انبار، با حواله‌اش. هم‌خانوادهٔ `.tb-away`. */
+.tb-holds { list-style: none; margin: 0; margin-inline-start: 28px; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--text2); }
+.tb-holds li { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
+.tb-holds li span { min-width: 0; overflow-wrap: anywhere; }
+.tb-hold-x {
+  font: inherit; font-size: 11px; min-height: 32px; padding: 4px 10px; border-radius: 9px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 4px;
+  color: var(--red-text); background: none; border: 1px solid rgba(var(--veil-rgb), .16);
+}
+.tb-hold-x:hover { border-color: currentColor; }
+.tb-hold-x:disabled { opacity: .45; cursor: not-allowed; }
+.tb-hold-x:focus-visible { outline: 2px solid rgba(var(--brand-soft-rgb), .8); outline-offset: 2px; }
+@media (pointer: coarse) { .tb-hold-x { min-height: 44px; } }

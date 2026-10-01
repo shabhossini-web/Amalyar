@@ -27,6 +27,26 @@ export type PlanDeliveryDto = {
 };
 
 /**
+ * **چرا یک قلم آزاد نیست** — هر رزرو یا هر عددی که بیرونِ انبار است، با حواله‌اش.
+ *
+ * گزارشِ مالک (۱۴۰۵/۰۷/۰۹، رهام): «دستگاه و دو ست هنوز گیرند و هیچ‌جا حواله‌ای نشان نمی‌دهد که
+ * حذفش کنم.» تخته فقط «آزاد نیست» می‌گفت؛ رزروِ حواله‌ای که توقفش رفته بود یا مالِ روزِ دیگری
+ * بود هیچ‌جا دیده نمی‌شد. حالا هر عددِ کم‌شده یک ردیف دارد: `planned` = رزروِ حوالهٔ
+ * ارسال‌نشده (بی‌توقف = جامانده، قابلِ لغو)، `out` = موجودیِ بیرون از انبار طبقِ دفتر.
+ */
+export type Hold = {
+  kind: 'planned' | 'out';
+  transferId: number | null;
+  code: string | null;
+  status: string | null;
+  quantity: number;
+  place: string | null;
+  plannedFor: Date | null;
+  plannedAt: string | null;
+  stopId: number | null;
+};
+
+/**
  * تختهٔ روزِ حمل‌ونقل — «بیمارستان‌های آن روز» به‌جای فرمِ خالی.
  *
  * هر بیمارستانِ روز یک کارت است با عمل‌ها، کارشناسِ حاضر و تحویل‌هایش. «ثبتِ
@@ -179,9 +199,9 @@ export class TransportBoardService {
   async availability(lotIds: number[], on: Date | string, forHospitalId?: number | null) {
     const [from, to] = this.bounds(on);
     const ids = [...new Set(lotIds.map(Number).filter((x) => Number.isInteger(x) && x > 0))];
-    const out = new Map<number, { lotId: number; name: string; returnable: boolean; available: number; reserved: number; free: number; inUse: any[] }>();
+    const out = new Map<number, { lotId: number; name: string; returnable: boolean; available: number; reserved: number; free: number; inUse: any[]; holds: Hold[] }>();
     if (!ids.length) return out;
-    const [lots, sums, home, transfers] = await Promise.all([
+    const [lots, sums, home, transfers, outside] = await Promise.all([
       this.prisma.stockLot.findMany({ where: { id: { in: ids } }, include: { item: { select: { name: true, size: true, assetKind: true } } } }),
       this.prisma.stockMovement.groupBy({ by: ['lotId', 'location'], where: { lotId: { in: ids } }, _sum: { quantity: true } }),
       this.inventory.home(),
@@ -193,16 +213,28 @@ export class TransportBoardService {
           movements: { where: { kind: 'transfer', quantity: { gt: 0 } }, select: { lotId: true, quantity: true, location: true } },
         },
       }),
+      // حواله‌های بازی که لات را از انبار بیرون برده‌اند — فقط برای اینکه «بیرون» بگوید با کدام حواله.
+      this.prisma.stockTransfer.findMany({
+        where: { status: { in: ['sent', 'received'] }, movements: { some: { lotId: { in: ids }, kind: 'transfer', quantity: { gt: 0 } } } },
+        select: { id: true, code: true, status: true, movements: { where: { lotId: { in: ids }, kind: 'transfer', quantity: { gt: 0 } }, select: { lotId: true, location: true } } },
+        orderBy: { id: 'desc' },
+      }),
     ]);
     for (const lot of lots) {
       const rows = sums.filter((x) => x.lotId === lot.id).map((x) => ({ quantity: x._sum.quantity ?? 0, location: x.location }));
       const homeOf = lot.location ?? home;
+      const byPlace = balanceByLocation(rows, homeOf);
+      /* «بیرون»: هرچه در محلی جز انبارِ خودِ لات مانده — از همان دفتر، نه حدس. */
+      const away: Hold[] = [...byPlace.entries()].filter(([place, q]) => place !== homeOf && q > 0).map(([place, q]) => {
+        const t = outside.find((x) => x.movements.some((m) => m.lotId === lot.id && m.location === place));
+        return { kind: 'out', transferId: t?.id ?? null, code: t?.code ?? null, status: t?.status ?? null, quantity: q, place, plannedFor: null, plannedAt: null, stopId: null };
+      });
       out.set(lot.id, {
         lotId: lot.id,
         name: [lot.item.name, lot.item.size].filter(Boolean).join(' ') + (lot.serialNo ? ` (${lot.serialNo})` : ''),
         returnable: RETURNABLE.includes(lot.item.assetKind ?? 'consumable'),
-        available: balanceByLocation(rows, homeOf).get(homeOf) ?? 0,
-        reserved: 0, free: 0, inUse: [],
+        available: byPlace.get(homeOf) ?? 0,
+        reserved: 0, free: 0, inUse: [], holds: away,
       });
     }
     for (const t of transfers) {
@@ -215,7 +247,13 @@ export class TransportBoardService {
         if (!a) continue;
         const lot = lots.find((x) => x.id === l.lotId)!;
         const fromHome = t.fromLocation === (lot.location ?? home);
-        if (t.status === 'planned' && fromHome && (!a.returnable || sameDay)) a.reserved += l.quantity;
+        if (t.status === 'planned' && fromHome && (!a.returnable || sameDay)) {
+          a.reserved += l.quantity;
+          a.holds.push({
+            kind: 'planned', transferId: t.id, code: t.code, status: t.status, quantity: l.quantity,
+            place: t.hospital?.name ?? t.toLocation, plannedFor: t.plannedFor, plannedAt: t.stop?.plannedAt ?? null, stopId: t.stop?.id ?? null,
+          });
+        }
         if (a.returnable && sameDay && t.hospitalId && t.hospitalId !== forHospitalId) {
           a.inUse.push({ transferId: t.id, code: t.code, hospitalId: t.hospitalId, hospitalName: t.hospital?.name ?? t.toLocation, location: t.toLocation, plannedAt: t.stop?.plannedAt ?? null, quantity: l.quantity, status: t.status });
         }
@@ -234,6 +272,7 @@ export class TransportBoardService {
       return {
         id: r.id, itemName: r.itemName, itemSize: r.itemSize, serialNo: r.serialNo, lotNo: r.lotNo, unit: r.unit,
         available: a?.available ?? r.available, free: a?.free ?? 0, returnable: !!a?.returnable, inUse: a?.inUse ?? [],
+        holds: a?.holds ?? [],
       };
     });
   }

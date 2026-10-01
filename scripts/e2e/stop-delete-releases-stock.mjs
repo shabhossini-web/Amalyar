@@ -107,6 +107,65 @@ try {
   assert.equal(av.get(devLot.id).available, 0, 'and the warehouse still knows the device is out');
   pass('shipped cargo stays shipped: the stop goes, the stock movement stays');
 
+  /* «چرا آزاد نیست» — گزارشِ دومِ مالک: دستگاه و دو ست گیر بودند و «بارِ بی‌مسیر»ِ همان روز چیزی
+     نشان نمی‌داد. رزروِ جامانده از حذفِ پیش از این اصلاح (همان کارِ کدِ قبلی: جداکردن + پاک‌کردنِ
+     توقف) و رزروِ مصرفیِ روزِ دیگر باید زیرِ همان قلم در فرمِ تحویل دیده و لغو شوند. */
+  const lotRow = async (lotId) => (await board.lots(day, '', h.id)).find((r) => r.id === lotId);
+  await routes.removeStop(s4.id, admin).catch(() => {});
+  const back = await prisma.stockTransfer.findUnique({ where: { id: t4.id } });
+  await prisma.stockMovement.createMany({ data: [
+    { lotId: devLot.id, kind: 'adjust', quantity: 1, location: home }, { lotId: devLot.id, kind: 'adjust', quantity: -1, location: back.toLocation },
+    { lotId: setLot.id, kind: 'adjust', quantity: 2, location: home }, { lotId: setLot.id, kind: 'adjust', quantity: -2, location: back.toLocation },
+  ] });
+  await prisma.stockTransfer.update({ where: { id: t4.id }, data: { status: 'closed' } });
+  assert.deepEqual(await free(), { device: 1, set: 10 }, 'stock is back home before the next scenario');
+
+  await plan();
+  const s5 = await deliveryStop();
+  await prisma.stockTransfer.updateMany({ where: { stopId: s5.id }, data: { stopId: null } });
+  await prisma.transportStop.delete({ where: { id: s5.id } });
+  const devRow = await lotRow(devLot.id);
+  assert.equal(devRow.free, 0, 'the orphan still reserves the device (data left by the old removeStop)');
+  const dh = devRow.holds.find((x) => x.kind === 'planned');
+  assert.ok(dh, 'the device row says why it is not free');
+  assert.equal(dh.stopId, null); assert.equal(dh.place, 'بیمارستان آرمان'); assert.equal(dh.quantity, 1); assert.match(dh.code, /^HV-/);
+  const setRow = await lotRow(setLot.id);
+  assert.equal(setRow.free, 8);
+  assert.equal(setRow.holds.find((x) => x.transferId === dh.transferId)?.quantity, 2, 'and the set row names the same waybill with its two sets');
+  await board.removeTransfer(dh.transferId, admin);
+  assert.deepEqual(await free(), { device: 1, set: 10 });
+  assert.equal((await lotRow(devLot.id)).holds.length, 0, 'nothing left to explain once it is cancelled');
+  pass('a stuck reservation is named under the item it blocks, and cancelling it there frees it');
+
+  const kit = await prisma.item.create({ data: { name: 'الکترود سوزنی' } }); // بی‌نوع = مصرفی
+  const kitLot = await prisma.stockLot.create({ data: { itemId: kit.id, lotNo: 'EN-1', location: home } });
+  await prisma.stockMovement.create({ data: { lotId: kitLot.id, kind: 'in', quantity: 5, location: home } });
+  const tomorrow = new Date(new Date(day).getTime() + 864e5).toISOString().slice(0, 10);
+  await board.planDelivery({ on: tomorrow, hospitalId: h.id, plannedAt: '09:00', staffId: staff.id, lines: [{ lotId: kitLot.id, quantity: 3 }] }, admin);
+  const s6 = await prisma.transportStop.findFirst({ where: { kind: 'deliver' }, orderBy: { id: 'desc' } });
+  await prisma.stockTransfer.updateMany({ where: { stopId: s6.id }, data: { stopId: null } });
+  await prisma.transportStop.delete({ where: { id: s6.id } });
+  assert.equal((await routes.unassigned(new Date(day))).length, 0, 'today\'s unrouted list cannot show a reservation dated tomorrow');
+  const kitRow = await lotRow(kitLot.id);
+  assert.equal(kitRow.free, 2, 'a consumable is reserved whatever the day');
+  const kh = kitRow.holds.find((x) => x.kind === 'planned');
+  assert.equal(kh?.quantity, 3); assert.equal(kh.stopId, null);
+  assert.equal(new Date(kh.plannedFor).toISOString().slice(0, 10), tomorrow, 'the row says which day holds it');
+  await board.removeTransfer(kh.transferId, admin);
+  assert.equal((await lotRow(kitLot.id)).free, 5);
+  pass('a reservation from another day is visible and cancellable from today\'s form');
+
+  await plan();
+  const s7 = await deliveryStop();
+  const t7 = await prisma.stockTransfer.findFirst({ where: { stopId: s7.id } });
+  await inventory.shipTransfer(t7.id, admin);
+  const outRow = await lotRow(devLot.id);
+  const oh = outRow.holds.find((x) => x.kind === 'out');
+  assert.ok(oh, 'shipped stock is explained as outside the warehouse');
+  assert.equal(oh.place, 'بیمارستان آرمان'); assert.equal(oh.quantity, 1); assert.equal(oh.transferId, t7.id);
+  assert.ok(!outRow.holds.some((x) => x.kind === 'planned'), 'a shipped waybill is not also counted as a reservation');
+  pass('stock that already left is named with its place and waybill, never offered for cancelling');
+
   /* ماژولِ «حمل‌ونقل»: خاموش‌ماندهٔ یک نصبِ قدیمی، و پیامِ «چرا هیچ نمی‌بیند». */
   const sql = await readFile(new URL(`${MODULE_ON}/migration.sql`, migrations), 'utf8');
   const enabled = async () => (await prisma.feature.findUnique({ where: { key: 'transport' } })).enabled;

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '../lib/api.js';
-import { toEnDigits } from '../lib/jalali.js';
+import { faDate, toEnDigits } from '../lib/jalali.js';
 import { faTime } from '../lib/time.js';
 import { usePlaces } from '../lib/places.js';
 import { useTerms } from './config.jsx';
@@ -49,6 +49,9 @@ export default function TransportBoard({ on, onChanged, onToast }) {
   const post = (body) => api('/routes/board/delivery', { method: 'POST', body: { on, ...body } });
   const removeDelivery = (id) => apply(() => api(`/routes/board/delivery/${id}`, { method: 'DELETE' }), 'تحویل حذف شد');
   const removeTransfer = (id) => apply(() => api(`/routes/board/transfer/${id}`, { method: 'DELETE' }), 'قلم برداشته شد');
+  /* رزروِ جامانده (حوالهٔ ارسال‌نشدهٔ بی‌توقف) از فرمِ تحویل لغو می‌شود. هشدار: همین روز دوباره خوانده
+     می‌شود، نه تختهٔ روزِ آن حواله که پاسخِ سرور است — حواله ممکن است مالِ روزِ دیگری باشد. */
+  const cancelHold = (id) => apply(async () => { await api(`/routes/board/transfer/${id}`, { method: 'DELETE' }); return null; }, 'رزرو لغو شد و به انبار برگشت');
 
   /** ابلاغِ برنامهٔ **همهٔ** راننده‌های روز — یک پیام برای هر راننده، بدونِ اطلاعاتِ بیمار. */
   const notifyAll = () => apply(async () => {
@@ -98,6 +101,7 @@ export default function TransportBoard({ on, onChanged, onToast }) {
           onPatch={(stopId, body) => apply(() => post({ hospitalId: h.hospitalId, stopId, ...body }))}
           onRemoveDelivery={removeDelivery}
           onRemoveTransfer={removeTransfer}
+          onCancelHold={cancelHold}
           onPickup={(body) => apply(async () => {
             const run = runs.find((r) => r.staffId === Number(body.staffId))
               ?? await api('/routes', { method: 'POST', body: { staffId: Number(body.staffId), runDate: on } });
@@ -110,7 +114,7 @@ export default function TransportBoard({ on, onChanged, onToast }) {
   );
 }
 
-function Card({ h, on, terms, drivers, runs, busy, isOpen, onOpen, onSave, onPatch, onRemoveDelivery, onRemoveTransfer, onPickup }) {
+function Card({ h, on, terms, drivers, runs, busy, isOpen, onOpen, onSave, onPatch, onRemoveDelivery, onRemoveTransfer, onCancelHold, onPickup }) {
   const missing = h.visits.length > 0 && !h.hasCargo;
   return (
     <article className={`tb-card${missing ? ' missing' : ''}`}>
@@ -180,7 +184,7 @@ function Card({ h, on, terms, drivers, runs, busy, isOpen, onOpen, onSave, onPat
       )}
 
       {isOpen
-        ? <Editor h={h} on={on} drivers={drivers} busy={busy} onSave={onSave} onCancel={onOpen} />
+        ? <Editor h={h} on={on} drivers={drivers} busy={busy} onSave={onSave} onCancel={onOpen} onCancelHold={onCancelHold} />
         : <button type="button" className="tb-btn" disabled={busy} onClick={onOpen}>+ تحویلِ تازه</button>}
     </article>
   );
@@ -231,7 +235,51 @@ function Pickup({ h, drivers, busy, onPickup }) {
 }
 
 /** فرمِ یک تحویل: قلم‌ها از انبار، ساعت، تحویل‌گیرنده و راننده. */
-function Editor({ h, on, drivers, busy, onSave, onCancel }) {
+/**
+ * چرا این قلم آزاد نیست — هر رزرو یا هر عددِ بیرون از انبار، با حواله‌اش (`Hold`ِ سرور).
+ *
+ * گزارشِ مالک (۱۴۰۵/۰۷/۰۹): «دستگاه و دو ست هنوز گیرند و هیچ‌جا حواله‌ای نشان نمی‌دهد که حذفش
+ * کنم.» تا امروز این‌جا فقط «آزاد نیست» بود. هر رزرو همین‌جا لغو می‌شود — همان «برداشتنِ قلم»ِ
+ * کارتِ تحویل؛ رزروِ **بی‌توقف** (جامانده از توقفی که پاک شده، یا مالِ روزِ دیگری که در «بارِ
+ * بی‌مسیر»ِ امروز نیست) با «بی‌توقف» علامت می‌خورد. عددِ «بیرون» واقعاً از انبار رفته و فقط با
+ * برگشتِ انبار برمی‌گردد، پس دکمه ندارد. ردیف‌هایی که «جابجایی» (inUse) از قبل توضیح می‌دهد
+ * تکرار نمی‌شوند.
+ */
+function Holds({ l, busy, onCancel }) {
+  /* وقتی قلم آزاد است، رزروهای عادیِ تحویل‌های دیگر فقط شلوغی‌اند؛ فقط رزروِ جامانده (بی‌توقف) دیده شود. */
+  const rows = (l.holds ?? [])
+    .filter((x) => !(l.inUse ?? []).some((u) => u.transferId && u.transferId === x.transferId))
+    .filter((x) => l.free < 1 || (x.kind === 'planned' && !x.stopId));
+  if (!rows.length) return null;
+  return (
+    <ul className="tb-holds">
+      {rows.map((x, i) => (
+        <li key={`${x.kind}-${x.transferId ?? x.place}-${i}`}>
+          <span>
+            {x.kind === 'out'
+              ? <>{num(x.quantity)} عدد بیرون از انبار: {x.place}{x.code ? <> (<bdi dir="ltr">{x.code}</bdi>)</> : ''} — برگشتش از «انبار»</>
+              : <>
+                  {num(x.quantity)} عدد رزروِ <bdi dir="ltr">{x.code}</bdi> · {x.place}{x.plannedFor ? ` · ${faDate(x.plannedFor)}` : ''}
+                  {x.plannedAt ? <> · <bdi dir="ltr">{faTime(x.plannedAt)}</bdi></> : ''}
+                  {x.stopId ? '' : ' — بی‌توقف'}
+                </>}
+          </span>
+          {x.kind === 'planned' && (
+            /* لغو کلِ حواله است (همهٔ اقلامش)، پس دکمه نامِ حواله را می‌گوید نه نامِ این قلم را. */
+            <button
+              type="button" className="tb-hold-x" disabled={busy} onClick={() => onCancel(x.transferId)}
+              aria-label={`لغوِ حوالهٔ ${x.code} و برگشتِ همهٔ اقلامش به انبار`}
+            >
+              <Close width="12" height="12" aria-hidden="true" /> لغوِ <bdi dir="ltr">{x.code}</bdi>
+            </button>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function Editor({ h, on, drivers, busy, onSave, onCancel, onCancelHold }) {
   const places = usePlaces();
   const [q, setQ] = useState('');
   const [lots, setLots] = useState([]);
@@ -241,6 +289,7 @@ function Editor({ h, on, drivers, busy, onSave, onCancel }) {
   const [staffId, setStaffId] = useState(drivers.length === 1 ? String(drivers[0].id) : '');
   const [force, setForce] = useState(false);
   const [msg, setMsg] = useState('');
+  const [reload, setReload] = useState(0); // پس از لغوِ یک رزرو، موجودی دوباره خوانده شود
 
   /* موجودیِ **آزادِ همان روز** از سرور — همان عددی که «ثبت» با آن سنجیده می‌شود. */
   useEffect(() => {
@@ -251,7 +300,9 @@ function Editor({ h, on, drivers, busy, onSave, onCancel }) {
         .catch((e) => { if (alive) setMsg(e.message); });
     }, 250);
     return () => { alive = false; clearTimeout(t); };
-  }, [q, on, h.hospitalId]);
+  }, [q, on, h.hospitalId, reload]);
+
+  const cancelHold = async (id) => { if (await onCancelHold(id)) setReload((n) => n + 1); };
 
   const chips = useMemo(() => {
     const seen = new Set();
@@ -311,6 +362,7 @@ function Editor({ h, on, drivers, busy, onSave, onCancel }) {
                 <em dir="ltr">{l.serialNo || l.lotNo}</em>
                 <small className={l.free < 1 ? 'tb-out' : ''}>{l.free < 1 ? 'آزاد نیست' : `آزاد ${num(l.free)}`}</small>
               </label>
+              <Holds l={l} busy={busy} onCancel={cancelHold} />
               {away && (
                 <div className="tb-away">
                   <p><Alert width="12" height="12" /> این روز در {l.inUse.map((u) => `${u.hospitalName}${u.plannedAt ? ` (${faTime(u.plannedAt)})` : ''}`).join('، ')} است</p>
