@@ -1,24 +1,16 @@
 <!-- claim:begin -->
 agent: claude-fable
 status: active
-branch: claude/planned-cargo-panels
+branch: claude/page-title-tile
 since: 2026-10-01
 paths:
-  - server/src/accounts/accounts.service.ts
-  - server/src/features/features.service.ts
-  - server/src/work/today.service.ts
-  - server/src/patients/transport.service.ts
-  - server/src/patients/tech.service.ts
-  - server/src/patients/dispatch.service.ts
-  - server/src/patients/routes.service.ts
-  - server/prisma/migrations/20261001000000_field_role_staff/
-  - src/app/Today.jsx
-  - scripts/e2e/field-role-driver.mjs
+  - src/app/Tech.jsx
+  - src/app/Transport.jsx
+  - src/ui/PageHeader.jsx
+  - scripts/e2e/superadmin-field.mjs
 note: >-
-  گزارشِ مالک ۱۴۰۵/۰۷/۰۹ (حسابِ رانندهٔ «test car»): نقشِ راننده/پیک از صفحهٔ کاربران رکوردِ نیرو
-  نمی‌ساخت، «امروز»ِ راننده خالی بود، کاشی‌های بالینی برایش باز بود، و پنلِ راننده/کارشناس بارِ
-  تحویلِ تختهٔ روز را بی‌نامِ کالا نشان می‌داد. در routes.service.ts فقط دو فیلدِ افزایشی در
-  linesOf/withPlannedLots (itemId، category) — بی‌تغییرِ رفتار برای تختهٔ روز.
+  بستهٔ حسابِ راننده/پیک (f3b9bb5) روی main رفت. حالا «گزینهٔ الف»ِ مصوبِ مالک: عنوانِ «پنل کارشناسی» و
+  «حمل‌ونقل» همان نامِ کاشی (قانونِ ۲۴)؛ «دفترِ کار» / «مسیرِ من» به اولِ زیرعنوان. فقط متنِ سربرگ و سنجه‌هایش.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
