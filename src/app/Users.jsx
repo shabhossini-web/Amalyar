@@ -148,6 +148,7 @@ function TemporaryAccountSheet({ onClose, onSaved, testingEnabled }) {
       {result ? <><p>حساب ساخته شد. این رمز فقط همین بار نمایش داده می‌شود؛ اطلاعات ورود را به صاحب حساب تحویل دهید.</p>
         <p>{result.account.isTestAccount ? 'حساب آزمایشی؛ ورود فقط با نام کاربری. ' : ''}نام کاربری: <b dir="ltr">{result.account.username}</b></p><p>رمز اولیه: <b dir="ltr">{result.temporaryPassword}</b></p>
         <p>مهلت تأیید شماره: {faDate(result.account.verificationDueAt)}. شخص پس از ورود از «پروفایل من» شماره را با کد پیامکی تأیید و مشخصات و رمز خود را تکمیل کند. بعد از مهلت، حساب تأییدنشده غیرفعال می‌شود.</p>
+        {result.notice && <p role="status">{result.notice}</p>}
       </> : <>{testingEnabled && <label className="us-test-toggle"><input type="checkbox" checked={testAccount} onChange={e => setTestAccount(e.target.checked)} disabled={busy} /><span>حساب آزمایشی با شماره مشترک</span></label>}
         {testAccount && <p>پروفایل جدید و مستقل با همین شماره ساخته می‌شود. ورود فقط با نام کاربری است. کد ملی تکراری وارد نکنید؛ این فیلد اختیاری است. حساب آزمایشی به داده‌های همین شرکت طبق نقش انتخابی دسترسی دارد.</p>}
         <label className="pf-field"><span>نام کاربری {testAccount ? '(الزامی)' : '(اختیاری)'}</span><input dir="ltr" autoComplete="off" value={username} maxLength={40} onChange={e => setUsername(e.target.value.trim())} disabled={busy} placeholder="test-doctor" />{errors.username && <em role="alert">{errors.username}</em>}</label>
@@ -247,8 +248,9 @@ export default function Users() {
   const setJobRole = async (row, jobRole) => {
     setBusyId(row.id);
     try {
-      await api(`/accounts/${row.id}/job-role`, { method: 'POST', body: { jobRole } });
-      setToast(jobRole ? 'نقشِ شغلی ثبت شد' : 'نقشِ شغلی برداشته شد');
+      const res = await api(`/accounts/${row.id}/job-role`, { method: 'POST', body: { jobRole } });
+      // راننده/پیک وقتی ماژولِ «حمل‌ونقل» خاموش است: سرور می‌گوید چرا چیزی نمی‌بیند.
+      setToast(res?.notice ?? (jobRole ? 'نقشِ شغلی ثبت شد' : 'نقشِ شغلی برداشته شد'));
       await load();
     } catch (e) { setToast(e.message); } finally { setBusyId(0); }
   };

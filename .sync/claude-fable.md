@@ -1,12 +1,19 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: idle
-branch: claude/page-title-tile
+status: active
+branch: claude/board-stop-release
 since: 2026-10-01
-paths: []
+paths:
+  - server/src/patients/routes.service.ts
+  - server/src/accounts/accounts.service.ts
+  - src/app/Dispatch.jsx
+  - src/app/Users.jsx
+  - server/prisma/migrations/20261001100000_transport_module_in_use/
+  - scripts/e2e/stop-delete-releases-stock.mjs
 note: >-
-  حسابِ راننده/پیک (f3b9bb5) و «گزینهٔ الف»ِ عنوانِ صفحه‌ها روی main رفتند. بازِ بعدی منتظرِ تصمیمِ مالک است
-  (لینکِ پیامکِ اولِ ادامهٔ ثبت‌نام) — STATUS.md.
+  گزارشِ مالک ۱۴۰۵/۰۷/۰۹ (رهام): حذفِ توقف/مسیر حوالهٔ برنامه‌ریزی‌شده را فقط جدا می‌کرد و رزروِ انبار
+  می‌ماند («پاک کردن مساوی لغو است»)؛ و ماژولِ «حمل‌ونقل» روی آن نصب خاموش مانده بود. نگهبانِ ④ِ
+  «transport is planned by route» با قاعدهٔ تازه هم‌خوان شد (ارسال‌شده فقط جدا، برنامه‌ریزی‌شده لغو).
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

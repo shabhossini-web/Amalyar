@@ -1138,10 +1138,18 @@ jobs:
             console.error('جابه‌جاییِ ترتیب باید دومرحله‌ای باشد'); process.exit(1);
           }
 
-          // ④ حذفِ مسیر نباید حواله را ببرد — حواله سند است، مسیر برنامه.
+          // ④ حذفِ مسیر یا توقف حوالهٔ **ارسال‌شده** را نمی‌برد — آن سندِ حرکتِ انبار است؛ فقط جدا
+          //    می‌شود. حوالهٔ **برنامه‌ریزی‌شده** فقط رزروِ همان توقف است و لغو می‌شود (گزارشِ مالک
+          //    ۱۴۰۵/۰۷/۰۹: «پاک کردن مساوی لغو است» — رزروِ یتیم دستگاه را «آزاد نیست» نگه می‌داشت).
+          //    هر دو مسیر از یک تابع می‌گذرند تا دو قاعده نشوند.
           const del = routes.split('async deleteRun(')[1].split(/\n  \}/)[0];
-          if (!/stockTransfer\.updateMany/.test(del) || !/stopId: null/.test(del)) {
-            console.error('حذفِ مسیر باید حواله را آزاد کند نه حذف'); process.exit(1);
+          const rmStop = routes.split('async removeStop(')[1].split(/\n  \}/)[0];
+          if (!/releaseCargo\(/.test(del) || !/releaseCargo\(/.test(rmStop)) {
+            console.error('حذفِ مسیر و توقف باید از همان releaseCargo بگذرند'); process.exit(1);
+          }
+          const rel = routes.split('private async releaseCargo(')[1].split(/\n  \}/)[0];
+          if (!/status: 'planned'/.test(rel) || !/deleteMany\(\{ where: \{ id: \{ in: planned\.map/.test(rel) || !/stopId: null/.test(rel)) {
+            console.error('releaseCargo فقط حوالهٔ برنامه‌ریزی‌شده را لغو و بقیه را جدا می‌کند'); process.exit(1);
           }
 
           // ⑤ ابلاغِ مسیر یک پیام است و همان قاعدهٔ حریمِ خصوصی را دارد:
@@ -3195,6 +3203,9 @@ jobs:
 
       - name: Verify a driver account sees its route, its cargo and only its own tiles
         run: node scripts/e2e/field-role-driver.mjs
+
+      - name: Verify deleting a stop or a run returns its planned cargo to the warehouse
+        run: node scripts/e2e/stop-delete-releases-stock.mjs
 
       - name: Verify isolated test accounts sharing one phone
         run: node scripts/e2e/test-accounts.mjs

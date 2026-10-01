@@ -45,7 +45,22 @@ export class AccountsService {
       await tx.auditEvent.create({ data: { actorId, action: 'account.temporary.create', entityType: 'account', entityId: String(row.id), afterJson: { level: row.level, jobRole: row.jobRole, verificationDueAt: row.verificationDueAt, testAccount: !!dto.testAccount } } });
       return row;
     });
-    return { account: this.auth.publicUser(account), temporaryPassword };
+    const notice = await this.fieldRoleNotice(dto.jobRole);
+    return { account: this.auth.publicUser(account), temporaryPassword, ...(notice ? { notice } : {}) };
+  }
+
+  /**
+   * راننده/پیک بی‌ماژولِ «حمل‌ونقل» هیچ‌چیز نمی‌بیند — نه کاشی، نه «مسیرِ امروز». به‌جای سکوت،
+   * همان لحظهٔ دادنِ نقش گفته می‌شود (گزارشِ مالک ۱۴۰۵/۰۷/۰۹: روی رهام ماژول خاموش بود و نه
+   * راننده کاشی را می‌دید نه سوپرادمین). فقط **می‌گوید**؛ روشن‌کردن کارِ «سطوحِ دسترسی» است —
+   * تنها نویسندهٔ ممیزی‌شدهٔ ماژول‌ها.
+   */
+  private async fieldRoleNotice(jobRole: string | null | undefined): Promise<string | null> {
+    if (jobRole !== 'driver' && jobRole !== 'courier') return null;
+    const f = await this.prisma.feature.findUnique({ where: { key: 'transport' }, select: { enabled: true } });
+    return f && !f.enabled
+      ? 'ماژولِ «حمل‌ونقل» در این شرکت خاموش است؛ تا از «سطوحِ دسترسی» روشنش نکنید، این حساب مسیرش را نمی‌بیند.'
+      : null;
   }
 
   async testingMode() { return { enabled: await testAccountsEnabled(this.prisma) }; }
@@ -181,7 +196,8 @@ export class AccountsService {
       }
       return row;
     });
-    return this.auth.publicUser(acc);
+    const notice = await this.fieldRoleNotice(jobRole);
+    return { ...this.auth.publicUser(acc), ...(notice ? { notice } : {}) };
   }
 
   async setLevel(id: number, level: number, actorId?: number) {

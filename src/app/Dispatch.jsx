@@ -154,8 +154,11 @@ export default function Dispatch() {
     if (!timeOk(v)) { setToast('ساعت باید به شکلِ ۰۸:۳۰ باشد'); return undefined; }
     return patchStop(id, { plannedAt: v });
   };
-  const removeStop = (id) => guard(() => api(`/routes/stops/${id}`, { method: 'DELETE' }));
-  const removeRun = (id) => guard(() => api(`/routes/${id}`, { method: 'DELETE' }), 'مسیر حذف شد');
+  /* حذفِ توقف یا مسیر = لغوِ همان کار: بارِ برنامه‌ریزی‌شده‌اش به انبار برمی‌گردد (سرور، `releaseCargo`). */
+  const removeStop = (id) => guard(() => api(`/routes/stops/${id}`, { method: 'DELETE' }), 'توقف حذف شد؛ بارِ ارسال‌نشده‌اش به انبار برگشت');
+  const removeRun = (id) => guard(() => api(`/routes/${id}`, { method: 'DELETE' }), 'مسیر حذف شد؛ بارِ ارسال‌نشده‌اش به انبار برگشت');
+  /** بارِ بی‌مسیرِ ارسال‌نشده را لغو می‌کند — رزروش آزاد می‌شود (همان «برداشتنِ قلم»ِ تختهٔ روز). */
+  const cancelLoose = (id) => guard(() => api(`/routes/board/transfer/${id}`, { method: 'DELETE' }), 'بار لغو شد و به انبار برگشت');
   const detach = (stopId, tid) => guard(() => api(`/routes/stops/${stopId}/transfers/${tid}`, { method: 'DELETE' }));
   /* رسیدِ تحویل چندتاست (عکسِ بار، امضا، فاکتور) — صف را کادرِ مشترک می‌برد
      و خطا **پرتاب** می‌شود تا همان فایل در فهرست قرمز شود. */
@@ -300,6 +303,13 @@ export default function Dispatch() {
                     {t.hospitalName}
                     {t.opStartTime ? ` · ${t.opStartTime}` : ''}
                     {' · '}{t.lines.map((l) => `${l.itemName}${l.serialNo ? ` (${l.serialNo})` : ''}`).join('، ') || 'بدونِ قلم'}
+                    {/* بارِ ارسال‌نشده بی‌توقف فقط رزروِ انبار است؛ تا امروز راهی برای لغوش نبود و
+                        همان دستگاه در تختهٔ روز «آزاد نیست» می‌ماند. بارِ ارسال‌شده با برگشتِ انبار برمی‌گردد. */}
+                    {t.status === 'planned' && (
+                      <button type="button" className="x" disabled={busy} onClick={() => cancelLoose(t.id)} title="لغو و برگشت به انبار" aria-label={`لغوِ ${t.code} و برگشت به انبار`}>
+                        <Close size={12} />
+                      </button>
+                    )}
                   </span>
                 ))}
             </div>

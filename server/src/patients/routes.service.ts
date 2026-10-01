@@ -259,13 +259,34 @@ export class RoutesService {
   async deleteRun(id: number, user: any) {
     const r = await this.prisma.transportRun.findUnique({ where: { id }, include: { stops: true } });
     if (!r) throw new NotFoundException('مسیر یافت نشد');
-    // حواله‌ها به توقف گره خورده‌اند؛ حذفِ مسیر نباید حواله را ببرد.
-    await this.prisma.stockTransfer.updateMany({
-      where: { stopId: { in: r.stops.map((s) => s.id) } }, data: { stopId: null },
+    // حذفِ مسیر = حذفِ همهٔ توقف‌هایش، با همان قاعدهٔ `releaseCargo`.
+    const cancelled = await this.prisma.$transaction(async (tx) => {
+      const gone = await this.releaseCargo(tx, r.stops.map((s) => s.id));
+      await tx.transportRun.delete({ where: { id } });
+      return gone;
     });
-    await this.prisma.transportRun.delete({ where: { id } });
-    await this.audit.record({ actorId: user?.id, action: 'transport.run.delete', entityType: 'transport_run', entityId: id, before: r });
-    return { ok: true };
+    await this.audit.record({ actorId: user?.id, action: 'transport.run.delete', entityType: 'transport_run', entityId: id, before: r, after: { cancelledTransfers: cancelled } });
+    return { ok: true, cancelledTransfers: cancelled.length };
+  }
+
+  /**
+   * بارِ توقف‌هایی که پاک می‌شوند. **پاک‌کردنِ توقف یعنی لغوِ همان کار** (گزارشِ مالک ۱۴۰۵/۰۷/۰۹).
+   *
+   * ⚠️ حوالهٔ **برنامه‌ریزی‌شده** فقط رزرو است و بی‌توقفش معنایی ندارد. تا امروز این‌جا فقط از
+   * توقف جدا می‌شد: رزروِ انبار سرِ جایش می‌ماند، تختهٔ روز همان دستگاه را «آزاد نیست» نشان
+   * می‌داد و بارش در هیچ تحویلی دیده نمی‌شد که بشود برش داشت. پس لغو می‌شود — همان کارِ
+   * «حذفِ تحویل»ِ تخته — و موجودی به انبار برمی‌گردد. حوالهٔ **ارسال‌شده** حرکتِ انبار دارد و
+   * مثلِ قبل فقط جدا می‌شود؛ برگشتش از چرخهٔ جمع‌آوری است، نه از پاک‌کردنِ یک ردیف.
+   * یک قاعده برای «حذفِ توقف» و «حذفِ مسیر» — دو مسیر با دو رفتار همان چیزی بود که این باگ را ساخت.
+   */
+  private async releaseCargo(tx: any, stopIds: number[]) {
+    if (!stopIds.length) return [];
+    const planned: { id: number; code: string }[] = await tx.stockTransfer.findMany({
+      where: { stopId: { in: stopIds }, status: 'planned' }, select: { id: true, code: true },
+    });
+    if (planned.length) await tx.stockTransfer.deleteMany({ where: { id: { in: planned.map((t) => t.id) } } });
+    await tx.stockTransfer.updateMany({ where: { stopId: { in: stopIds } }, data: { stopId: null } });
+    return planned;
   }
 
   async addStop(
@@ -387,12 +408,16 @@ export class RoutesService {
     return this.run(runId);
   }
 
+  /** حذفِ یک توقف — بارِ برنامه‌ریزی‌شده‌اش لغو می‌شود و به انبار برمی‌گردد (`releaseCargo`). */
   async removeStop(id: number, user: any) {
     const s = await this.prisma.transportStop.findUnique({ where: { id } });
     if (!s) throw new NotFoundException('توقف یافت نشد');
-    await this.prisma.stockTransfer.updateMany({ where: { stopId: id }, data: { stopId: null } });
-    await this.prisma.transportStop.delete({ where: { id } });
-    await this.audit.record({ actorId: user?.id, action: 'transport.stop.remove', entityType: 'transport_stop', entityId: id, before: s });
+    const cancelled = await this.prisma.$transaction(async (tx) => {
+      const gone = await this.releaseCargo(tx, [id]);
+      await tx.transportStop.delete({ where: { id } });
+      return gone;
+    });
+    await this.audit.record({ actorId: user?.id, action: 'transport.stop.remove', entityType: 'transport_stop', entityId: id, before: s, after: { cancelledTransfers: cancelled } });
     return s.runId ? this.run(s.runId) : { unassigned: true };
   }
 
