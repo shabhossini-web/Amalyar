@@ -1,19 +1,12 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: active
+status: idle
 branch: claude/board-stop-release
 since: 2026-10-01
-paths:
-  - server/src/patients/routes.service.ts
-  - server/src/accounts/accounts.service.ts
-  - src/app/Dispatch.jsx
-  - src/app/Users.jsx
-  - server/prisma/migrations/20261001100000_transport_module_in_use/
-  - scripts/e2e/stop-delete-releases-stock.mjs
+paths: []
 note: >-
-  گزارشِ مالک ۱۴۰۵/۰۷/۰۹ (رهام): حذفِ توقف/مسیر حوالهٔ برنامه‌ریزی‌شده را فقط جدا می‌کرد و رزروِ انبار
-  می‌ماند («پاک کردن مساوی لغو است»)؛ و ماژولِ «حمل‌ونقل» روی آن نصب خاموش مانده بود. نگهبانِ ④ِ
-  «transport is planned by route» با قاعدهٔ تازه هم‌خوان شد (ارسال‌شده فقط جدا، برنامه‌ریزی‌شده لغو).
+  حذفِ توقف/مسیر = لغوِ بارِ ارسال‌نشده، دکمهٔ لغوِ «بارِ بی‌مسیر» و روشن‌شدنِ «حمل‌ونقل» در نصبِ دارای
+  راننده روی main رفت. بازِ بعدی منتظرِ تصمیمِ مالک است (لینکِ پیامکِ اولِ ادامهٔ ثبت‌نام) — STATUS.md.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
