@@ -2229,15 +2229,20 @@ jobs:
             console.error('releaseTransfer باید توقفِ جمع‌آوریِ بی‌راننده بسازد'); process.exit(1);
           }
 
-          // ⑥ کسریِ الگو و «عملِ بی‌بار» در سرور محاسبه می‌شوند، نه در رندر —
-          //    وگرنه هر نمای تازه تعریفِ خودش را از «بی‌بار» می‌سازد.
+          // ⑥ «بدونِ بار» در سرور محاسبه می‌شود، نه در رندر — وگرنه هر نمای تازه
+          //    تعریفِ خودش را از «بی‌بار» می‌سازد. تختهٔ روزِ حمل‌ونقل (hasCargo) جای
+          //    هشدارِ قدیمیِ الگو را گرفته؛ الگوی نوعِ عمل حذف شده است.
           const dis = read('server/src/patients/dispatch.service.ts');
-          if (!/noCargo/.test(dis) || !/missingNeeds/.test(dis)) {
-            console.error('تختهٔ چینش باید noCargo و missingNeeds بدهد'); process.exit(1);
+          if (!/noCargo/.test(dis)) {
+            console.error('تختهٔ چینش باید noCargo بدهد'); process.exit(1);
+          }
+          const board = read('server/src/patients/transport-board.service.ts');
+          if (!/hasCargo/.test(board)) {
+            console.error('تختهٔ حمل‌ونقل باید hasCargo را در سرور بسازد'); process.exit(1);
           }
           const dj = read('src/app/Dispatch.jsx');
-          if (!/noCargo/.test(dj) || !/missingNeeds/.test(dj)) {
-            console.error('هشدارِ عملِ بی‌بار در تختهٔ چینش دیده نمی‌شود'); process.exit(1);
+          if (!/TransportBoard/.test(dj) || !/hasCargo/.test(read('src/app/TransportBoard.jsx'))) {
+            console.error('تختهٔ روزِ حمل‌ونقل در صفحهٔ چینش دیده نمی‌شود'); process.exit(1);
           }
 
           // ⑦ توقف باید از همان لحظهٔ ساخت ساعت و تحویل‌گیرنده بگیرد. مقصدِ
@@ -3685,16 +3690,14 @@ jobs:
             if (!/\bCODING_TWIN_OWNER\[/.test(vf)) bad('C8 VisitForm.jsx: CODING_TWIN_OWNER تعریف شده ولی در قفلِ نقش خوانده نمی‌شود');
           }
 
-          /* ── C9: کیت یک منبع دارد ──
-             دو عمل در یک جلسه یعنی اقلامِ هر دو — مصرفی جمع، ست/دستگاه بیشینه.
-             هر خواننده قاعدهٔ override خودش را روی requiredItems نگه می‌دارد، ولی
-             fallbackِ الگو فقط kitTemplate است؛ و تأییدِ پذیرش پیش از
-             resolveRequirements با mergeNeeds ادغام می‌کند (کالای تکراری ۴۰۰ است). */
-          for (const f of ['dispatch.service.ts', 'theatre.service.ts', 'surgeon-portal.service.ts']) {
-            if (!/\bkitTemplate\(/.test(strip(read(P(f))))) bad('C9 ' + f + ' باید الگوی کیت را از kitTemplate بگیرد');
-          }
-          if (!/\bmergeNeeds\(/.test(strip(read(P('visit-requirements.ts'))))) {
-            bad('C9 visit-requirements.ts باید کیتِ چندعملیِ تأییدِ پذیرش را با mergeNeeds ادغام کند');
+          /* ── C9: حذف شد (۱۴۰۵/۰۷/۰۹) ──
+             الگوی اقلامِ نوعِ عمل (kitTemplate و mergeNeeds) به دستورِ مالک کامل حذف شد؛
+             اقلام فقط صریح و روی همان مراجعه‌اند (requiredItems). برای برنگشتنِ آن،
+             هیچ خواننده‌ای نباید دوباره آن را بسازد. */
+          for (const f of fs.readdirSync('server/src/patients').filter((n) => n.endsWith('.ts'))) {
+            if (/\b(kitTemplate|mergeNeeds|NEEDS_SELECT|procedureTypeItem)\b/.test(strip(read('server/src/patients/' + f)))) {
+              bad('C9 ' + f + ': الگوی اقلامِ نوعِ عمل حذف شده و نباید برگردد');
+            }
           }
 
           if (errs.length) {

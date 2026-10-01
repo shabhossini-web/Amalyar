@@ -3,6 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { InventoryService } from './inventory.service';
 import { normalizeTime, RoutesService } from './routes.service';
+import { OTHER_PX, procedureLabel } from './visit-coding';
 
 const DAY = 24 * 60 * 60 * 1000;
 const dayOf = (d: Date) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
@@ -60,7 +61,8 @@ export class TransportBoardService {
           id: true, seq: true, opStartTime: true, techArriveTime: true, hospitalId: true, hospitalName: true, hospital: { select: { name: true } },
           patient: { select: { code: true, firstName: true, lastName: true } },
           tech: { select: { id: true, person: { select: { firstName: true, lastName: true, phone: true } } } },
-          procedureType: { select: { name: true } },
+          procedureType: { select: { name: true, active: true } },
+          otherProcedures: OTHER_PX,
           stockTransfers: { where: { status: { not: 'closed' } }, select: { id: true } },
         },
       }),
@@ -107,7 +109,7 @@ export class TransportBoardService {
       const r = rowOf(v.hospitalId, v.hospital?.name ?? v.hospitalName ?? null);
       r.visits.push({
         id: v.id, code: `${v.patient.code}-V${v.seq}`, opStartTime: v.opStartTime,
-        procedure: v.procedureType?.name ?? null,
+        procedure: procedureLabel(v),
       });
       if (v.stockTransfers.length) r.hasCargo = true;
       if (v.tech) r.techs.set(`t${v.tech.id}`, { id: v.tech.id, name: fullName(v.tech.person), phone: v.tech.person.phone ?? null, arriveTime: v.techArriveTime ?? null });

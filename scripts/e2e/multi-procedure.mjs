@@ -190,6 +190,8 @@ try {
   const { jy: dy, jm: dm, jd: dd } = jOf(VM.opDate);
   const day = (await send(`/dispatch/day?year=${dy}&month=${dm}&day=${dd}`)).json;
   const dRow = (day?.visits ?? []).find((v) => v.id === VM.id);
+  const rS = await mkVisit(surgery(`تک‌عمل${tag}`, { procedureTypeId: P1.id, amount: 400_000 }));
+  const VS = rS.json;
   const rK = await mkVisit(surgery(`اسنپ${tag}`, { procedureTypeId: P1.id }));
   const VK = rK.json;
   const ins = await send(`/surgeon/visits/${VK.id}/instructions`, 'PATCH', { instructions: `دستورِ جراح ${tag}`, requiredItems: [{ itemId: X.id, quantity: 7 }] });
