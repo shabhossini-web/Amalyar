@@ -73,29 +73,42 @@ const b = await chromium.launch({
   args: ['--no-sandbox'],
 });
 const p = await (await b.newContext({ viewport: { width: 480, height: 1000 }, locale: 'fa-IR' })).newPage();
+/* ⚠️ زیرِ بارِ CI (دو شارد + جابِ build هم‌زمان) یک کلیک با مهلتِ پیش‌فرضِ ۳۰ ثانیه یک‌بار افتاد
+   (رانِ ۶۴۳ روی main؛ همان کد در رانِ بعدی سبز). مهلتِ سخاوتمندتر، و پایین‌تر هر گام منتظرِ
+   **خودِ نتیجه** (شیت، ردیفِ نوع، فیلدها) می‌ماند نه ساعت — قاعدهٔ CI محلی در CLAUDE.md. */
+p.setDefaultTimeout(60_000);
 const errs = [];
 p.on('pageerror', (e) => errs.push(String(e)));
 try {
   await p.goto(UI + '/', { waitUntil: 'domcontentloaded' });
   await browserLogin(p, login.accessToken);
   await p.goto(UI + '/app/dashboard', { waitUntil: 'networkidle' });
+  await p.locator('.db-add').waitFor();
   await p.waitForTimeout(1800);
 
   /** تا گامِ ۳ با نوعِ داده‌شده؛ متنِ برچسب‌های دیده‌شده را برمی‌گرداند. */
   /* ⚠️ دکمهٔ نوع با کلیدش (`data-kind`)، نه متن: برچسب از واژهٔ حوزه است نه عنوانِ فرم (clinic-daily-04). */
   const stepThreeLabels = async (kindKey) => {
     await p.locator('.db-add').click();
-    await p.waitForTimeout(700);
     /* گامِ ۱ از بازبینیِ UX (clinic-daily-22) یک جست‌وجوی واحد است؛ پروندهٔ تازه با «ساختِ پروندهٔ تازه». */
-    await p.locator('.db-sheet [data-act="new-record"]').click();
+    const newRecord = p.locator('.db-sheet [data-act="new-record"]');
+    await newRecord.waitFor();
+    await p.waitForTimeout(300);
+    await newRecord.click();
     await p.locator('input[required]').first().fill('آزمونِ');
     await p.locator('input[required]').nth(1).fill('فرمِ نوع');
     await p.locator('.db-stepnav .db-submit').click();
-    await p.waitForTimeout(600);
-    await p.locator(`.db-kindrow button[data-kind="${kindKey}"]`).click();
+    /* ردیفِ نوع تا فهرستِ فرم‌ها نیامده اسکلتِ `db-kindrow-loading` است؛ دکمهٔ خودِ نوع ملاک است. */
+    const kindBtn = p.locator(`.db-kindrow button[data-kind="${kindKey}"]`);
+    await kindBtn.waitFor();
+    await p.waitForTimeout(300);
+    await kindBtn.click();
     await p.locator('.db-stepnav .db-submit').click();
+    const fields = p.locator('.db-sheet .db-field > span, .db-sheet .df-label, .db-sheet label span');
+    /* برچسبِ گام‌های قبلی پنهان در DOM می‌ماند؛ ملاک اولین برچسبِ **دیدنی**ِ گامِ ۳ است، نه اولینِ DOM. */
+    await fields.filter({ visible: true }).first().waitFor();
     await p.waitForTimeout(900);
-    const collect = () => p.locator('.db-sheet .db-field > span, .db-sheet .df-label, .db-sheet label span').allInnerTexts();
+    const collect = () => fields.allInnerTexts();
     let labels = await collect();
     /* فرمِ عمل زبانه‌های «مشخصات | قبل | حین | بعد» را زیرِ سربرگ دارد (بستهٔ ۴؛ بازبینیِ UX،
        surgery-10) و فقط زبانهٔ فعالِ مرحله رندر می‌شود (ثبتِ تازه روی «مشخصات» باز می‌شود)؛
@@ -110,8 +123,10 @@ try {
     const text = labels.join(' | ');
     await p.locator('.db-x').click();
     /* نام‌های گامِ ۱ تایپ شده‌اند و بستنِ فرمِ دست‌خورده اول می‌پرسد (بازبینیِ UX، clinic-daily-08). */
-    await p.locator('[data-unsaved="discard"]').click({ timeout: 4000 });
-    await p.waitForTimeout(900);
+    await p.locator('[data-unsaved="discard"]').click({ timeout: 15_000 });
+    /* شیت با انیمیشن بسته می‌شود؛ تا نرفته، `.db-add`ِ بعدی زیرِ پرده است. */
+    await p.locator('.db-sheet').first().waitFor({ state: 'hidden' });
+    await p.waitForTimeout(400);
     return text;
   };
 
@@ -128,6 +143,7 @@ try {
   const hosp = def.fields.find((x) => x.key === 'hospitalId');
   await fetch(API + `/forms/fields/${hosp.id}`, { method: 'PATCH', headers: A, body: JSON.stringify({ active: true, label: 'مرکزِ ویزیت' }) });
   await p.reload({ waitUntil: 'networkidle' });
+  await p.locator('.db-add').waitFor();
   await p.waitForTimeout(1500);
   const v2 = await stepThreeLabels(tag);
   ok(/مرکزِ ویزیت/.test(v2), 'بیمارستان با برچسبِ سفارشی ظاهر شد');
