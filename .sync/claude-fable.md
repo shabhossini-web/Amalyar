@@ -1,28 +1,13 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: active
+status: idle
 branch: claude/consumables
 since: 2026-10-04
-paths:
-  - server/src/patients/usage.service.ts
-  - server/src/patients/inventory.service.ts
-  - server/src/patients/inventory.controller.ts
-  - server/src/patients/transport.service.ts
-  - server/src/patients/tech.service.ts
-  - server/src/patients/handover.ts
-  - server/src/patients/dto/inventory.dto.ts
-  - server/src/patients/dto/routes.dto.ts
-  - server/src/auth/auth.service.ts
-  - server/src/auth/dto/profile.dto.ts
-  - server/prisma/schema.prisma
-  - src/app/Tech.jsx
-  - src/app/Transport.jsx
-  - src/app/Inventory.jsx
-  - src/ui/Stepper.jsx
+paths: []
 note: >-
-  بستهٔ جِ طرحِ انبار/ست (مالک، ۱۴۰۵/۰۷/۱۱): بلوکِ «ثبتِ مصرفی» در پنلِ کارشناسی (از ست، ارسالیِ حواله، از
-  انبار؛ چندبارمصرف فقط شمرده می‌شود) با پیش‌فرض‌های شخصی در /auth/prefs + شمارشِ راننده هنگامِ جمع‌آوری
-  (باید برگردد = ارسالی − مصرف؛ کسریِ مرحلهٔ جمع‌آوری). بسته‌های الف و ب روی main هستند.
+  بستهٔ جِ طرحِ انبار/ست (ثبتِ مصرفیِ کارشناس با پیش‌فرضِ شخصی + شمارشِ راننده هنگامِ جمع‌آوری) روی main رفت
+  (b42f51a) و دو نگهبانِ قرمزِ CI (دفترِ فقط‌افزودنی، موجودی موقعِ ارسال) هم با آن رفع شد. طرحِ ده‌بندیِ
+  انبار/ست/تحویل/مصرفی (الف، ب، ج) تمام است؛ بعدی: بازخوردِ مالک.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
