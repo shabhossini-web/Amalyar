@@ -3210,6 +3210,9 @@ jobs:
       - name: Verify deleting a stop or a run returns its planned cargo to the warehouse
         run: node scripts/e2e/stop-delete-releases-stock.mjs
 
+      - name: Verify the two-sided handover (driver's done ships the cargo, tech confirms, office work item)
+        run: node scripts/e2e/delivery-handshake.mjs
+
       - name: Verify isolated test accounts sharing one phone
         run: node scripts/e2e/test-accounts.mjs
 

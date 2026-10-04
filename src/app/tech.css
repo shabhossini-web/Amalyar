@@ -55,6 +55,8 @@
 }
 .tk-tag.ok { color: var(--green-text); background: rgba(52, 211, 153, .12); border-color: rgba(52, 211, 153, .35); }
 .tk-tag.no { color: var(--red-text); background: rgba(248, 113, 113, .1); border-color: rgba(248, 113, 113, .3); }
+/* «منتظرِ تأییدِ شما» / «با مغایرت» — کهربایی، همان سه‌گانهٔ متن+زمینه+بوردرِ بقیهٔ چیپ‌ها. */
+.tk-tag.warn { color: var(--amber-text); background: rgba(251, 191, 36, .12); border-color: rgba(251, 191, 36, .38); }
 
 .tk-facts { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--text2); }
 .tk-facts span { display: inline-flex; align-items: center; gap: 5px; }
@@ -83,6 +85,16 @@
 }
 .tk-items em { font-style: normal; font-size: 10.5px; color: var(--text3); }
 .tk-items span { margin-inline-start: auto; font-weight: 700; color: var(--text1); }
+
+/* ── تحویلِ دوطرفه ── ستی که راننده داده و کارشناس هنوز نگرفته، تا تأیید کهربایی می‌ماند. */
+.tk-set.d-awaiting { border-color: rgba(251, 191, 36, .38); }
+.tk-hand { display: flex; align-items: flex-start; gap: 6px; font-size: 12px; line-height: 1.8; color: var(--text2); }
+.tk-hand svg { flex: 0 0 auto; margin-top: 4px; color: var(--brand-2); }
+.tk-recv { display: flex; gap: 8px; }
+.tk-recv .tk-mini { flex: 1; }
+.tk-recv .tk-ghost { flex: 0 0 auto; min-width: 0; padding: 8px 14px; }
+.tk-recv-issue { color: var(--amber-text); border-color: rgba(251, 191, 36, .4); }
+.tk-note.warn { color: var(--amber-text); }
 
 .tk-mini, .tk-ghost, .tk-report, .tk-save {
   font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; border-radius: 11px;
@@ -183,6 +195,32 @@
 .tk-note { font-size: 12px; line-height: 1.9; color: var(--text2); }
 .tk-note.ok { color: var(--green-text); }
 .tk-note.no { color: var(--red-text); }
+
+/* ── برگهٔ شمارشِ تحویل («با مغایرت») — پنج ستون: قلم · استاندارد · شمردم · خرابی · کسری ── */
+.tk-count {
+  display: grid; gap: 6px; padding: 10px;
+  border-radius: 13px; background: var(--well-bg); border: 1px solid rgba(var(--veil-rgb), .07);
+}
+.tk-count-head { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+.tk-count-head small { font-size: 11px; color: var(--text3); }
+.tk-count-head span { margin-inline-start: auto; font-size: 11px; color: var(--text3); }
+.tk-count-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) 46px 56px 56px 40px; gap: 6px; align-items: center;
+  font-size: 12px; color: var(--text2);
+}
+.tk-count-cols span { font-size: 10.5px; color: var(--text3); text-align: center; }
+.tk-count-cols span:first-child { text-align: start; }
+.tk-count-label { min-width: 0; overflow-wrap: anywhere; color: var(--text1); }
+.tk-count-std, .tk-count-miss { text-align: center; font-variant-numeric: tabular-nums; }
+.tk-count-miss { color: var(--text3); }
+.tk-count-miss.on { color: var(--amber-text); font-weight: 800; }
+.tk-count-row input {
+  width: 100%; min-width: 0; margin: 0; padding: 7px 4px; text-align: center; font: inherit; font-size: 13px;
+  color: var(--text1); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .14); border-radius: 9px;
+}
+.tk-count-row input:focus { border-color: rgba(var(--brand-2-rgb), .6); outline: none; }
+.tk-count-row input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+.tk-count-row.off .tk-count-label { color: var(--amber-text); }
 .tk-done-note { display: flex; align-items: center; gap: 6px; font-weight: 700; }
 .tk-done-note svg { flex: 0 0 auto; }
 /* پرسشِ «عملِ آینده — تاریخ به امروز؟» (company-20). پرسشِ احتیاط است نه خطا: کهربایی فقط

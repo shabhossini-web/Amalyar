@@ -704,6 +704,7 @@ function Transfers({ onToast, onChanged }) {
                 <span className={`iv-tag s-${t.status}`}>{t.statusLabel}</span>
                 {' '}ارسال: {faDate(t.sentAt)}
                 {t.receivedBy && ` · تحویل: ${t.receivedBy}`}
+                {t.receipt && ` · کارشناس ${t.receipt.issue ? 'با مغایرت ' : ''}تحویل گرفت`}
               </small>
             </div>
             <div className="iv-acts">
@@ -920,6 +921,12 @@ function TransferDetail({ id, onClose, onChanged, onError }) {
             </button>
           )}
 
+          {/* دستِ دومِ تحویلِ دوطرفه — کنارِ رسیدِ CSR، نه به‌جایش: یکی امضای بیمارستان است، یکی امضای کارشناسِ خودمان. */}
+          {t.receipt && (
+            <p className={`iv-note ${t.receipt.issue ? 'warn' : 'ok'}`}>
+              کارشناس {t.receipt.issue ? 'با مغایرت ' : ''}تحویل گرفت — {faDate(t.receipt.at)}{t.receipt.note ? ` · ${t.receipt.note}` : ''}
+            </p>
+          )}
           {t.receivedBy ? (
             <p className="iv-note">تحویلِ CSR: <b>{t.receivedBy}</b> — {faDate(t.receivedAt)}</p>
           ) : (

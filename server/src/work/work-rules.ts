@@ -270,6 +270,20 @@ export const RULES: Record<string, Rule> = {
     reopen: true,
   }),
   'usage.confirmed': (_e, ref) => close(ref, 'confirm_usage'),
+  /* ── تحویلِ دوطرفه (مالک، ۱۴۰۵/۰۷/۱۱) ── راننده «تحویل دادم» زده و تا پایانِ روزِ تحویل کارشناس
+     «تحویل گرفتم» نزده (work-detectors؛ ref = خودِ حواله). کارِ **دفتر** است نه کارشناس: دفتر
+     باید زنگ بزند و بفهمد ست کجاست — کارشناسی که تأیید نمی‌زند همان کسی نیست که یادآوری را
+     می‌خواند. */
+  'delivery.unconfirmed': (e, ref) => upsert({
+    ...base(e, 'confirm_delivery', ref),
+    title: `تحویلِ ست تأیید نشده — ${e.payload?.code ? `حوالهٔ ${e.payload.code}` : 'حواله'}${e.payload?.techName ? ` (${e.payload.techName})` : ''}`,
+    ownerRole: 'secretary',
+    dueAt: e.at ?? new Date(),
+    priority: 2,
+    note: e.payload?.place ? `تحویلِ راننده در ${e.payload.place}` : null,
+    reopen: true,
+  }),
+  'delivery.confirmed': (_e, ref) => close(ref, 'confirm_delivery'),
 
   /* ── مالی ── */
   'invoice.ready': (e, ref) => upsert({

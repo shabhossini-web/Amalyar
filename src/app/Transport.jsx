@@ -7,12 +7,21 @@ import { Alert, Arrive, Box, CheckCircle, Clock, Close, Hospital, Phone, Truck, 
 import Tabs from '../ui/Tabs.jsx';
 import PageHeader from '../ui/PageHeader.jsx';
 import Overlay from '../ui/Overlay.jsx';
-import { faTime } from '../lib/time.js';
+import { faTime, minToTime } from '../lib/time.js';
 import { useStagger } from '../ui/stagger.js';
 import { usePlaces } from '../lib/places.js';
 
 const num = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 const time = (t) => (t ? faTime(t) : '—');
+/* ساعتِ رسیدِ کارشناس با همان شکلِ فارسیِ بقیهٔ ساعت‌ها. */
+const clock = (iso) => { const d = new Date(iso); return faTime(minToTime(d.getHours() * 60 + d.getMinutes())); };
+
+/* برچسبِ دستِ دومِ تحویل — وضعیت از سرور (`handover.ts`)؛ راننده باید بداند کارشناس گرفت یا نه. */
+const DELIVERY_TAG = {
+  awaiting: ['warn', 'منتظرِ تأییدِ کارشناس'],
+  received: ['ok', 'کارشناس تحویل گرفت'],
+  received_issue: ['warn', 'تحویل با مغایرت'],
+};
 
 const SCOPES = [
   { key: 'today', label: 'امروز', icon: Arrive },
@@ -171,6 +180,7 @@ export default function Transport() {
                     <div className="tr-bag-head">
                       <b><Box width="14" height="14" /> {c.code}</b>
                       <span dir="auto">{c.from} ← {c.to}</span>
+                      {DELIVERY_TAG[c.delivery] && <i className={`tr-tag ${DELIVERY_TAG[c.delivery][0]}`}>{DELIVERY_TAG[c.delivery][1]}</i>}
                     </div>
                     <ul className="tr-items">
                       {c.items.map((it, k) => (
@@ -181,6 +191,11 @@ export default function Transport() {
                         </li>
                       ))}
                     </ul>
+                    {c.receipt && (
+                      <p className={`tr-recv${c.receipt.issue ? ' warn' : ''}`}>
+                        کارشناس ساعتِ {clock(c.receipt.at)} تحویل گرفت{c.receipt.issue ? ' — با مغایرت' : ''}
+                      </p>
+                    )}
                     {c.leftAt && <p className="tr-left">کارشناس گذاشته در: <b>{c.leftAt}</b></p>}
                   </div>
                 ))}
@@ -263,7 +278,8 @@ function DoneSheet({ stop, team, onClose, onSaved, onError }) {
         method: 'POST',
         body: { handedActual: who.trim(), notes: notes.trim() },
       });
-      onSaved('تحویل ثبت شد');
+      /* تحویلِ دوطرفه: ثبتِ راننده بار را ارسال می‌کند و دستِ دوم با کارشناس است. */
+      onSaved(stop.kind === 'deliver' && stop.cargo?.length ? 'تحویل ثبت شد — منتظرِ تأییدِ کارشناس' : 'تحویل ثبت شد');
     } catch (e) { onError(e.message); setBusy(false); }
   };
 

@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsBoolean, IsInt, IsISO8601, IsOptional, IsString, MaxLength, Min, MinLength, ValidateIf, ValidateNested } from 'class-validator';
+import { ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsISO8601, IsOptional, IsString, MaxLength, Min, MinLength, ValidateIf, ValidateNested } from 'class-validator';
 
 export class LotCreateDto {
   @Type(() => Number) @IsInt({ message: 'کالای انتخابی نامعتبر است' })
@@ -143,4 +143,29 @@ export class ReleaseDto {
   pickupAt?: string;
 
   @IsOptional() @IsString() @MaxLength(60) leftAt?: string;
+}
+
+/** یک ردیفِ کسری/خرابیِ برگهٔ شمارشِ تحویل (کارشناس، تحویلِ دوطرفه). */
+export class ReceiptLineDto {
+  @Type(() => Number) @IsInt({ message: 'لاتِ انتخابی نامعتبر است' })
+  lotId!: number;
+
+  @IsString() @MinLength(1, { message: 'عنوانِ قلم را وارد کنید' }) @MaxLength(120, { message: 'عنوانِ قلم طولانی است' })
+  label!: string;
+
+  /// کسری یا خرابی — **حساب‌شدهٔ** رابط از «استاندارد − شمردم»، نه عددی که کارشناس تایپ کند.
+  @Type(() => Number) @IsInt({ message: 'تعداد باید عدد باشد' }) @Min(0, { message: 'تعداد نمی‌تواند منفی باشد' })
+  missing!: number;
+
+  @IsOptional() @IsIn(['missing', 'damaged'], { message: 'نوعِ کسری نامعتبر است' })
+  kind?: string;
+}
+
+/** «تحویل گرفتم» — بی‌ردیف یعنی سالم؛ با ردیفِ کسری/خرابی یعنی «با مغایرت». */
+export class TransferReceiptDto {
+  @IsOptional() @IsString() @MaxLength(300, { message: 'یادداشت طولانی است' })
+  note?: string;
+
+  @IsOptional() @IsArray({ message: 'ردیف‌های شمارش نامعتبر است' }) @ValidateNested({ each: true }) @Type(() => ReceiptLineDto)
+  lines?: ReceiptLineDto[];
 }

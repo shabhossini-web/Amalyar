@@ -4,7 +4,7 @@ import FileDrop from '../ui/FileDrop.jsx';
 import { api, apiUpload } from '../lib/api.js';
 import { faDate, jStrToIso, toEnDigits, todayJStr } from '../lib/jalali.js';
 import './tech.css';
-import { Alert, Arrive, CheckCircle, Clock, Close, Hospital, Doctor, Box, User, Users, Wave } from '../ui/icons.jsx';
+import { Alert, Arrive, CheckCircle, Clock, Close, Hospital, Doctor, Box, Truck, User, Users, Wave } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import PageHeader from '../ui/PageHeader.jsx';
 import Overlay from '../ui/Overlay.jsx';
@@ -20,6 +20,8 @@ const num = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 /* نمایشِ فارسیِ ساعت از `lib/time` می‌آید — همان تبدیلی که خودِ ورودی به کار
    می‌برد، تا آنچه کارشناس ثبت می‌کند و آنچه بعداً روی کارت می‌بیند یکی باشد. */
 const time = (t) => (t ? faTime(t) : '—');
+/* ساعتِ یک لحظهٔ ثبت‌شده (تحویلِ راننده، رسیدِ کارشناس) با همان شکلِ فارسیِ بقیهٔ ساعت‌ها. */
+const clock = (iso) => { const d = new Date(iso); return faTime(minToTime(d.getHours() * 60 + d.getMinutes())); };
 
 /* روزِ تقویمیِ عمل («2026-09-30») از خودِ رشتهٔ ذخیره‌شده (نیمه‌شبِ UTCِ همان روز)، نه
    `new Date` که در منطقهٔ زمانیِ دیگر روزِ کناری را می‌دهد. هم‌شکلِ «امروز»ِ سرور
@@ -137,6 +139,8 @@ export default function Tech() {
   const [err, setErr] = useState('');
   const [toast, setToast] = useState('');
   const [usageFor, setUsageFor] = useState(null); // {visit, transfer}
+  const [receiptFor, setReceiptFor] = useState(null); // {visit, transfer} — برگهٔ شمارشِ «با مغایرت»
+  const [receiving, setReceiving] = useState(null); // شناسهٔ حواله‌ای که «تحویل گرفتم»ش در راه است
   const [timesFor, setTimesFor] = useState(null); // visit
   const [statusFor, setStatusFor] = useState(null); // visit
   const [claiming, setClaiming] = useState(null);
@@ -155,6 +159,16 @@ export default function Tech() {
     catch (e) { setErr(e.message); setData(null); }
   }, []);
   useEffect(() => { load(scope); }, [load, scope]);
+
+  /* «تحویل گرفتم» بی‌مغایرت — دستِ دومِ تحویلِ دوطرفه؛ «با مغایرت» برگهٔ شمارش را باز می‌کند. */
+  const receive = async (t) => {
+    setReceiving(t.id);
+    try {
+      await api(`/stock/transfers/${t.id}/receipt`, { method: 'POST', body: {} });
+      setToast('تحویل ثبت شد');
+      await load(scope);
+    } catch (e) { setToast(e.message); } finally { setReceiving(null); }
+  };
 
   const team = !!data?.team;
   /* «امروز»ِ مطب از خودِ دفترِ کار (سرور، `clinic-day`) — نه ساعتِ گوشی. */
@@ -284,29 +298,12 @@ export default function Tech() {
             {v.transfers.length > 0 && (
               <div className="tk-sets">
                 {v.transfers.map((t) => (
-                  <div key={t.id} className="tk-set">
-                    <div className="tk-set-head">
-                      <b><Box width="14" height="14" /> <bdi dir="ltr">{t.code}</bdi></b>
-                      <span>{t.toLocation}</span>
-                      {t.releasedAt
-                        ? <i className="tk-tag ok">پایان اعلام شد</i>
-                        : t.status === 'planned' ? <i className="tk-tag">هنوز ارسال نشده</i> : null}
-                    </div>
-                    <ul className="tk-items">
-                      {t.items.map((it, k) => (
-                        <li key={k}>
-                          {it.name}
-                          {it.serialNo && <em dir="ltr">{it.serialNo}</em>}
-                          <span>{num(it.quantity)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    {t.status !== 'planned' && (
-                      <button type="button" className="tk-mini" onClick={() => setUsageFor({ visit: v, transfer: t })}>
-                        برگهٔ مصرف و پایانِ عمل
-                      </button>
-                    )}
-                  </div>
+                  <SetCard
+                    key={t.id} transfer={t} team={team} busy={receiving === t.id}
+                    onReceive={() => receive(t)}
+                    onCount={() => setReceiptFor({ visit: v, transfer: t })}
+                    onUsage={() => setUsageFor({ visit: v, transfer: t })}
+                  />
                 ))}
               </div>
             )}
@@ -329,6 +326,15 @@ export default function Tech() {
           داخل بنشیند، با unmountِ شیت خودش هم می‌رود و انیمیشنِ خروج هرگز
           اجرا نمی‌شود — شیت به‌جای بسته‌شدن، می‌پرد. */}
       <AnimatePresence>
+        {receiptFor && (
+          <ReceiptSheet
+            transferId={receiptFor.transfer.id}
+            team={team}
+            onClose={() => setReceiptFor(null)}
+            onToast={setToast}
+            onDone={(m) => { setReceiptFor(null); setToast(m); load(scope); }}
+          />
+        )}
         {usageFor && (
           <UsageSheet
             transferId={usageFor.transfer.id}
@@ -548,6 +554,171 @@ export function StatusSheet({ visit, today, onClose, onSaved }) {
           </>
         )}
       </div>
+    </Overlay>
+  );
+}
+
+/* برچسبِ وضعیتِ تحویل — خودِ وضعیت از سرور می‌آید (`handover.ts`)؛ این‌جا فقط رنگ و واژه. */
+const DELIVERY_TAG = {
+  not_sent: ['', 'هنوز ارسال نشده', 'هنوز ارسال نشده'],
+  awaiting: ['warn', 'منتظرِ تأییدِ شما', 'منتظرِ تأییدِ کارشناس'],
+  received: ['ok', 'تحویل گرفتید', 'کارشناس تحویل گرفت'],
+  received_issue: ['warn', 'تحویل با مغایرت', 'تحویل با مغایرت'],
+};
+
+/**
+ * یک ستِ همراهِ عمل — تحویلِ دوطرفه (مالک، ۱۴۰۵/۰۷/۱۱).
+ *
+ * دستِ اول «راننده … تحویل داد» است (توقفِ راننده، که همان لحظه حواله را ارسال کرده)؛ دستِ دوم
+ * «تحویل گرفتم / با مغایرت»ِ همین کارت. تا دستِ دوم زده نشود کارت کهربایی است و برگهٔ مصرف
+ * باز نمی‌شود — ستی که هنوز نگرفته‌ای مصرف ندارد. حوالهٔ بی‌رانندهٔ دفتر (`delivery: none`)
+ * مثلِ قبل مستقیم به برگهٔ مصرف می‌رود.
+ */
+function SetCard({ transfer: t, team, busy, onReceive, onCount, onUsage }) {
+  const tag = t.releasedAt ? ['ok', 'پایان اعلام شد', 'پایان اعلام شد'] : DELIVERY_TAG[t.delivery] ?? null;
+  const awaiting = t.delivery === 'awaiting';
+  return (
+    <div className={`tk-set d-${t.delivery || 'none'}`}>
+      <div className="tk-set-head">
+        <b><Box width="14" height="14" /> <bdi dir="ltr">{t.code}</bdi></b>
+        <span>{t.toLocation}</span>
+        {tag && <i className={`tk-tag ${tag[0]}`}>{team ? tag[2] : tag[1]}</i>}
+      </div>
+      {t.handover && (
+        <p className="tk-hand">
+          <Truck width="13" height="13" />
+          <span>
+            {t.handover.role === 'courier' ? 'پیک' : 'راننده'}{t.handover.by ? ` (${t.handover.by})` : ''} ساعتِ {clock(t.handover.at)} تحویل داد
+            {t.handover.to ? ` — به «${t.handover.to}»` : ''}
+          </span>
+        </p>
+      )}
+      <ul className="tk-items">
+        {t.items.map((it, k) => (
+          <li key={k}>
+            {it.name}
+            {it.serialNo && <em dir="ltr">{it.serialNo}</em>}
+            <span>{num(it.quantity)}</span>
+          </li>
+        ))}
+      </ul>
+      {t.receipt && (
+        <p className={`tk-note ${t.receipt.issue ? 'warn' : 'ok'}`}>
+          {t.receipt.issue ? 'تحویل با مغایرت ثبت شد' : 'تحویل گرفته شد'} — {faDate(t.receipt.at)} · {clock(t.receipt.at)}
+          {t.receipt.note ? ` · ${t.receipt.note}` : ''}
+        </p>
+      )}
+      {awaiting ? (
+        <div className="tk-recv">
+          <button type="button" className="tk-mini" disabled={busy} onClick={onReceive}>
+            {busy ? 'در حال ثبت…' : team ? 'تحویل گرفت' : 'تحویل گرفتم'}
+          </button>
+          <button type="button" className="tk-ghost tk-recv-issue" disabled={busy} onClick={onCount}>با مغایرت</button>
+        </div>
+      ) : t.status !== 'planned' && (
+        <button type="button" className="tk-mini" onClick={onUsage}>برگهٔ مصرف و پایانِ عمل</button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * برگهٔ شمارشِ تحویل — «با مغایرت» (مالک، ۱۴۰۵/۰۷/۱۱).
+ *
+ * سه ستون: استاندارد (از سرور: محتویاتِ قالبِ ست، یا خودِ قلم)، شمردم، خرابی. کسری =
+ * استاندارد − شمردم و **نوشته می‌شود، تایپ نمی‌شود** (قانونِ ۱۵). فقط ردیف‌های کسری/خرابی به
+ * سرور می‌رود — همان قاعدهٔ چک‌لیستِ برگشتِ انبار: بیست ردیفِ «سالم» را هیچ‌کس ثبت نمی‌کند.
+ */
+function ReceiptSheet({ transferId, team, onClose, onToast, onDone }) {
+  const [sheet, setSheet] = useState(null);
+  const [counted, setCounted] = useState({});
+  const [damaged, setDamaged] = useState({});
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api(`/stock/transfers/${transferId}/receipt`).then(setSheet).catch((e) => onToast(e.message));
+  }, [transferId, onToast]);
+
+  const parse = (v, fallback) => {
+    const raw = String(v ?? '').trim();
+    if (!raw) return fallback;
+    const x = Number(toEnDigits(raw));
+    return Number.isFinite(x) ? Math.max(0, Math.trunc(x)) : fallback;
+  };
+  const rows = sheet ? sheet.lots.flatMap((l) => l.contents.map((c, i) => {
+    const k = `${l.lotId}:${i}`;
+    const got = parse(counted[k], c.expected);
+    const bad = parse(damaged[k], 0);
+    return { k, lotId: l.lotId, label: c.label, expected: c.expected, got, bad, missing: Math.max(0, c.expected - got) };
+  })) : [];
+  const lines = rows.flatMap((r) => [
+    ...(r.missing > 0 ? [{ lotId: r.lotId, label: r.label, missing: r.missing, kind: 'missing' }] : []),
+    ...(r.bad > 0 ? [{ lotId: r.lotId, label: r.label, missing: r.bad, kind: 'damaged' }] : []),
+  ]);
+  const totalMissing = rows.reduce((a, r) => a + r.missing, 0);
+  const totalBad = rows.reduce((a, r) => a + r.bad, 0);
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      await api(`/stock/transfers/${transferId}/receipt`, { method: 'POST', body: { note: note.trim(), lines } });
+      onDone(lines.length ? 'تحویل با مغایرت ثبت شد' : 'تحویل ثبت شد');
+    } catch (e) { onToast(e.message); setBusy(false); }
+  };
+
+  return (
+    <Overlay backdrop="tk-overlay" panel="tk-sheet" as="section" onClose={onClose} closable={!busy}>
+      <header className="tk-sheet-head">
+        <b>{sheet ? <>شمارشِ تحویل — <bdi dir="ltr">{sheet.code}</bdi></> : 'شمارشِ تحویل'}</b>
+        <button type="button" className="tk-x" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
+      </header>
+      {!sheet ? <div className="tk-empty">در حال بارگذاری…</div> : (
+        <div className="tk-sheet-body">
+          <p className="tk-note">هر قلم را بشمارید؛ کسری خودش حساب می‌شود. قلمِ خراب را جدا بنویسید تا به‌جای «کم» «خراب» ثبت شود.</p>
+          {sheet.lots.map((l) => (
+            <div key={l.lotId} className="tk-count">
+              <div className="tk-count-head">
+                <b>{l.itemName}</b>
+                {l.serialNo && <small dir="ltr">{l.serialNo}</small>}
+                <span>{num(l.sent)} {l.unit}</span>
+              </div>
+              <div className="tk-count-row tk-count-cols" aria-hidden="true">
+                <span>قلم</span><span>استاندارد</span><span>شمردم</span><span>خرابی</span><span>کسری</span>
+              </div>
+              {l.contents.map((c, i) => {
+                const r = rows.find((x) => x.k === `${l.lotId}:${i}`);
+                return (
+                  <div key={r.k} className={`tk-count-row${r.missing || r.bad ? ' off' : ''}`}>
+                    <span className="tk-count-label">{c.label}</span>
+                    <span className="tk-count-std">{num(c.expected)}</span>
+                    <input dir="ltr" inputMode="numeric" aria-label={`شمردم — ${c.label}`}
+                           value={counted[r.k] ?? String(c.expected)}
+                           onChange={(e) => setCounted((st) => ({ ...st, [r.k]: e.target.value }))} />
+                    <input dir="ltr" inputMode="numeric" aria-label={`خرابی — ${c.label}`} placeholder="۰"
+                           value={damaged[r.k] ?? ''}
+                           onChange={(e) => setDamaged((st) => ({ ...st, [r.k]: e.target.value }))} />
+                    <span className={`tk-count-miss${r.missing ? ' on' : ''}`}>{r.missing ? num(r.missing) : '—'}</span>
+                  </div>
+                );
+              })}
+            </div>
+          ))}
+          <div className="tk-tot">
+            <div><b>{num(rows.length)}</b><span>قلم</span></div>
+            <div className={totalMissing ? 'warn' : ''}><b>{num(totalMissing)}</b><span>کسری</span></div>
+            <div className={totalBad ? 'warn' : ''}><b>{num(totalBad)}</b><span>خرابی</span></div>
+          </div>
+          {/* داخلِ `tk-field` تا پوستهٔ کادرهای شیت را بگیرد — کادرِ لخت در تمِ تیره سفید می‌افتد (عکسِ اولین اجرا). */}
+          <label className="tk-field">
+            <span>یادداشت (اختیاری)</span>
+            <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="مثلاً «الکترود پاره بود»" />
+          </label>
+          <button type="button" className="tk-save" disabled={busy} onClick={save}>
+            {busy ? 'در حال ثبت…' : lines.length ? `ثبتِ تحویل با ${num(lines.length)} مغایرت` : team ? 'تحویل گرفت — بی‌مغایرت' : 'تحویل گرفتم — بی‌مغایرت'}
+          </button>
+        </div>
+      )}
     </Overlay>
   );
 }

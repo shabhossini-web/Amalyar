@@ -7,6 +7,7 @@ import { RecordService } from './record.service';
 import { clinicDateIso, dayUtc } from '../common/clinic-day';
 import { HospitalDutiesService } from './hospital-duties.service';
 import { RoutesService } from './routes.service';
+import { deliveryState, handoverOf, receiptOf } from './handover';
 import { OTHER_PX, procedureLabel } from './visit-coding';
 import { SERVICES, isServiceKey } from '../config/tenant-profile';
 
@@ -69,6 +70,14 @@ const VISIT_SELECT = {
     select: {
       id: true, code: true, status: true, toLocation: true,
       releasedAt: true, windowFrom: true, windowTo: true,
+      // تحویلِ دوطرفه: دستِ اول (توقفِ راننده) و دستِ دوم (رسیدِ خودِ کارشناس).
+      techReceivedAt: true, techReceiptIssue: true, techReceiptNote: true,
+      stop: {
+        select: {
+          kind: true, doneAt: true, handedTo: true, handedActual: true,
+          run: { select: { staff: { select: { role: true, person: { select: { firstName: true, lastName: true } } } } } },
+        },
+      },
       // حوالهٔ برنامه‌ریزی‌شده (تختهٔ روز) هنوز حرکتی ندارد؛ قلم‌هایش این‌جاست.
       plannedLines: true,
       movements: {
@@ -231,6 +240,11 @@ export class TechService {
         releasedAt: t.releasedAt,
         windowFrom: t.windowFrom,
         windowTo: t.windowTo,
+        /* تحویلِ دوطرفه (مالک، ۱۴۰۵/۰۷/۱۱): «راننده … تحویل داد» و «تحویل گرفتم»ِ خودِ کارشناس —
+           وضعیت را سرور می‌سازد (`handover.ts`)، رابط فقط برچسب می‌زند. */
+        delivery: deliveryState(t, t.stop),
+        handover: handoverOf(t.stop),
+        receipt: receiptOf(t),
         /* ⚠️ حوالهٔ planned (تختهٔ روز) حرکتی ندارد — بی‌این شاخه کارشناس فقط «HV-…، هنوز ارسال
            نشده» می‌دید و نمی‌دانست چه ستی برایش می‌آید (۱۴۰۵/۰۷/۰۹). */
         items: t.status === 'planned' && this.routes

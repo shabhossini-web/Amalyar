@@ -2,7 +2,8 @@ import { BadRequestException, Inject, Injectable, NotFoundException, forwardRef 
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { EventsService } from '../work/events.service';
-import { AssetsService, windowOf } from './assets.service';
+import { AssetsService, RETURNABLE, windowOf } from './assets.service';
+import { receiptOf } from './handover';
 import { balanceByLocation, balanceOf, HOME_FALLBACK } from './stock-math';
 import { SettingsService } from '../config/settings.service';
 import { RoutesService, normalizeTime } from './routes.service';
@@ -561,6 +562,18 @@ export class InventoryService {
    * جلوی ارسال گرفته شود.
    */
   async shipTransfer(id: number, user: any) {
+    await this.ship(id, user);
+    return this.transfer(id, user);
+  }
+
+  /**
+   * هستهٔ ارسال — بی‌خواندنِ دوبارهٔ حواله در پایان.
+   *
+   * «ثبتِ تحویل»ِ راننده (`TransportService.markDone`) از همین‌جا می‌آید: راننده سطح ۲ است و
+   * دامنهٔ خواندنِ حوالهٔ کارشناس را ندارد (`transferScope`)، ولی ارسالِ باری که خودش برده
+   * کارِ اوست. اگر `shipTransfer` صدا زده می‌شد، بعد از ارسال با «حواله یافت نشد» می‌افتاد.
+   */
+  async ship(id: number, user: any) {
     const t = await this.prisma.stockTransfer.findUnique({
       where: { id },
       include: { visit: { select: { seq: true, patient: { select: { code: true } } } } },
@@ -585,6 +598,112 @@ export class InventoryService {
     await this.audit.record({
       actorId: user?.id, action: 'stock.transfer.send', entityType: 'stock_transfer', entityId: id,
       before: { status: 'planned' }, after: { status: 'sent' },
+    });
+    return { id, code: t.code };
+  }
+
+  // ───────────────────────── تحویلِ دوطرفه ─────────────────────────
+
+  /**
+   * برگهٔ شمارشِ تحویل برای کارشناس — هر قلمِ حواله با «استاندارد»ش.
+   *
+   * ست/دستگاه: محتویاتِ قالب (`ItemComponent`) — همان چیزی که دفتر هنگامِ برگشت می‌شمارد
+   * (`AssetsService.returnCheck`)؛ قلمِ مصرفی یا ستِ بی‌قالب: خودِ قلم با تعدادِ ارسالی.
+   * کارشناس «شمردم» و «خرابی» را می‌زند؛ کسری در رابط از همین استاندارد حساب می‌شود، نه
+   * تایپ (قانونِ ۱۵) — و فقط کسری ثبت می‌شود، نه بیست ردیفِ «سالم» (`returnCheck`).
+   */
+  async receiptSheet(id: number, user: any) {
+    const t = await this.assertTransfer(id, user);
+    if (t.status === 'planned') throw new BadRequestException('این حواله هنوز ارسال نشده است');
+    const movements = await this.prisma.stockMovement.findMany({
+      where: { transferId: id, kind: 'transfer', quantity: { gt: 0 }, location: t.toLocation },
+      orderBy: { id: 'asc' },
+      include: { lot: { include: { item: { select: { id: true, name: true, size: true, assetKind: true, unit: true } } } } },
+    });
+    const setIds = [...new Set(movements.filter((m) => RETURNABLE.includes(m.lot.item.assetKind)).map((m) => m.lot.itemId))];
+    const comps = setIds.length
+      ? await this.prisma.itemComponent.findMany({ where: { setId: { in: setIds } }, orderBy: { id: 'asc' } })
+      : [];
+    const shortages = await this.prisma.setShortage.findMany({ where: { transferId: id, stage: 'receipt' }, orderBy: { id: 'asc' } });
+    return {
+      transferId: t.id, code: t.code, status: t.status, toLocation: t.toLocation,
+      receipt: receiptOf(t),
+      lots: movements.map((m) => {
+        const name = [m.lot.item.name, m.lot.item.size].filter(Boolean).join(' ');
+        const contents = comps.filter((c) => c.setId === m.lot.itemId);
+        return {
+          lotId: m.lotId, itemName: name, assetKind: m.lot.item.assetKind,
+          serialNo: m.lot.serialNo || m.lot.lotNo || null, sent: m.quantity, unit: m.lot.item.unit ?? 'عدد',
+          /* دو ست از یک لات = دو برابرِ محتویاتِ قالب. */
+          contents: contents.length
+            ? contents.map((c) => ({ label: c.label, expected: c.quantity * m.quantity }))
+            : [{ label: name, expected: m.quantity }],
+          shortages: shortages.filter((x) => x.lotId === m.lotId).map((x) => ({ id: x.id, label: x.label, missing: x.missing, kind: x.kind, notes: x.notes })),
+        };
+      }),
+    };
+  }
+
+  /**
+   * «تحویل گرفتم» — دستِ دومِ تحویلِ دوطرفه (مالک، ۱۴۰۵/۰۷/۱۱).
+   *
+   * ⚠️ کسری فقط از برگهٔ شمارش می‌آید (`lines`)، نه از یک عددِ «مغایرت»: «۲ تا کم» با «۲ تا
+   * خراب» دو تصمیمِ متفاوتِ انبار است (تکمیل در برابرِ خرابی‌ها). ردیف‌ها با `stage = receipt`
+   * ثبت می‌شوند تا از شمارشِ برگشتِ دفتر جدا بمانند. موجودی این‌جا جابه‌جا نمی‌شود — کالا با
+   * ارسالِ راننده رفته؛ این فقط امضای کارشناس و ساعت است، همان چیزی که دعوای «من دادم، او
+   * می‌گوید نگرفتم» را حل می‌کند.
+   */
+  async confirmReceipt(
+    id: number,
+    dto: { note?: string; lines?: { lotId: number; label: string; missing: number; kind?: string }[] },
+    user: any,
+  ) {
+    const t = await this.assertTransfer(id, user);
+    if (t.status === 'planned') throw new BadRequestException('این حواله هنوز ارسال نشده است — راننده باید اول «ثبتِ تحویل» بزند');
+    if (t.status === 'closed') throw new BadRequestException('این حواله بسته شده است');
+    if (t.techReceivedAt) throw new BadRequestException('تحویلِ این حواله قبلاً تأیید شده است');
+    const sent = await this.prisma.stockMovement.findMany({
+      where: { transferId: id, kind: 'transfer', quantity: { gt: 0 }, location: t.toLocation },
+      select: { lotId: true },
+    });
+    const inTransfer = new Set(sent.map((x) => x.lotId));
+    const lines = (dto.lines ?? [])
+      .map((l) => ({
+        lotId: Number(l.lotId),
+        label: typeof l.label === 'string' ? l.label.trim() : '',
+        missing: Math.trunc(Number(l.missing)),
+        kind: l.kind === 'damaged' ? 'damaged' : 'missing',
+      }))
+      .filter((l) => l.missing > 0);
+    for (const l of lines) {
+      if (!inTransfer.has(l.lotId)) throw new BadRequestException('این لات در حواله نیست');
+      if (!l.label) throw new BadRequestException('عنوانِ قلمِ کسری را وارد کنید');
+    }
+    const note = typeof dto.note === 'string' ? dto.note.trim() || null : null;
+    const issue = lines.length > 0;
+
+    await this.prisma.$transaction(async (tx) => {
+      if (lines.length) {
+        await tx.setShortage.createMany({
+          data: lines.map((l) => ({
+            transferId: id, lotId: l.lotId, label: l.label, missing: l.missing, kind: l.kind,
+            stage: 'receipt', notes: note, reportedById: user?.id ?? null,
+          })),
+        });
+      }
+      await tx.stockTransfer.update({
+        where: { id },
+        data: { techReceivedAt: new Date(), techReceivedById: user?.id ?? null, techReceiptIssue: issue, techReceiptNote: note },
+      });
+    });
+    await this.audit.record({
+      actorId: user?.id, action: 'stock.transfer.tech_receipt', entityType: 'stock_transfer', entityId: id,
+      after: { issue, lines, note },
+    });
+    /* کارِ «تأییدِ تحویل»ِ دفتر بسته می‌شود (work-rules: delivery.confirmed؛ ref = خودِ حواله). */
+    await this.events.emit({
+      type: 'delivery.confirmed', visitId: t.visitId, refType: 'stock_transfer', refId: id,
+      actorId: user?.id ?? null, payload: { issue, shortages: lines.length },
     });
     return this.transfer(id, user);
   }
@@ -816,6 +935,7 @@ export class InventoryService {
       status: t.status, statusLabel: TRANSFER_LABELS[t.status] ?? t.status,
       plannedFor: t.plannedFor,
       sentAt: t.sentAt, receivedAt: t.receivedAt, receivedBy: t.receivedBy, notes: t.notes,
+      receipt: receiptOf(t),
       lineCount: t.status === 'planned'
         ? new Set(((t.plannedLines as any[] | null) ?? []).map((l) => l.lotId)).size
         : new Set(t.movements.map((m) => m.lotId)).size,
@@ -909,6 +1029,8 @@ export class InventoryService {
       // جمع‌آوری از رویش ساخته شد؛ بی این دو کارت فقط «تمام شد» می‌گوید.
       releasedAt: t.releasedAt, releaseNote: t.releaseNote, pickupAt: t.pickupAt, leftAt: t.leftAt,
       sentAt: t.sentAt, receivedAt: t.receivedAt, receivedBy: t.receivedBy, notes: t.notes,
+      /* دستِ دومِ تحویل — «کارشناس تحویل گرفت» کنارِ رسیدِ CSR، نه به‌جایش. */
+      receipt: receiptOf(t),
       lines,
       totals: {
         sent: lines.reduce((s, l) => s + l.sent, 0),

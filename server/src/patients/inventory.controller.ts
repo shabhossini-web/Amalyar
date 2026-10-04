@@ -6,7 +6,7 @@ import { PermissionGuard } from '../auth/permission.guard';
 import { RequirePermissions } from '../auth/permission.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { InventoryService } from './inventory.service';
-import { AdjustDto, LotCreateDto, LotPatchDto, MovementDto, ReleaseDto, TransferReceiveDto, TransferSendDto, TransferUsageDto } from './dto/inventory.dto';
+import { AdjustDto, LotCreateDto, LotPatchDto, MovementDto, ReleaseDto, TransferReceiptDto, TransferReceiveDto, TransferSendDto, TransferUsageDto } from './dto/inventory.dto';
 
 /**
  * انبار — لات، سریال، دفترِ حرکت و ردیابی.
@@ -141,6 +141,26 @@ export class InventoryController {
   @Post('transfers/:id/usage')
   usage(@Param('id', ParseIntPipe) id: number, @Body() dto: TransferUsageDto, @CurrentUser() user: any) {
     return this.inv.recordUsage(id, dto.lines, user);
+  }
+
+  /**
+   * تحویلِ دوطرفه (مالک، ۱۴۰۵/۰۷/۱۱): برگهٔ شمارش و «تحویل گرفتم»ِ کارشناس.
+   *
+   * مجوزِ سبکِ خودش (`stock.consume`) و `@Feature('tech')` — همان درسِ `release`: کارشناسِ
+   * سطح ۲ نباید پشتِ ماژولِ انبار (سطح ۳) بماند.
+   */
+  @Feature('tech')
+  @RequirePermissions('stock.consume')
+  @Get('transfers/:id/receipt')
+  receiptSheet(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
+    return this.inv.receiptSheet(id, user);
+  }
+
+  @Feature('tech')
+  @RequirePermissions('stock.consume')
+  @Post('transfers/:id/receipt')
+  confirmReceipt(@Param('id', ParseIntPipe) id: number, @Body() dto: TransferReceiptDto, @CurrentUser() user: any) {
+    return this.inv.confirmReceipt(id, dto, user);
   }
 
   @RequirePermissions('inventory.write')

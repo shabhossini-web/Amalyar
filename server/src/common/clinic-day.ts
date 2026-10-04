@@ -67,3 +67,36 @@ export function dayRangeUtc(iso: string): [Date, Date] {
 export function todayRangeUtc(at: Date = new Date(), tz: string = CLINIC_TZ): [Date, Date] {
   return dayRangeUtc(clinicTodayIso(at, tz));
 }
+
+/**
+ * آفسِتِ منطقهٔ زمانی (دقیقه) در یک لحظه — فرمترِ کش‌شده، همان دلیلِ بالا.
+ */
+const OFFSET_FORMATTERS = new Map<string, Intl.DateTimeFormat>();
+function tzOffsetMinutes(at: Date, tz: string): number {
+  let f = OFFSET_FORMATTERS.get(tz);
+  if (!f) {
+    f = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+    });
+    OFFSET_FORMATTERS.set(tz, f);
+  }
+  const parts = f.formatToParts(at);
+  const g = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
+  const asUtc = Date.UTC(g('year'), g('month') - 1, g('day'), g('hour'), g('minute'), g('second'));
+  return Math.round((asUtc - at.getTime()) / 60_000);
+}
+
+/**
+ * **لحظهٔ واقعیِ** شروعِ روزِ مطبِ حاوی `at` — برای مقایسه با زمان‌مهرهای واقعی
+ * (`doneAt`، `createdAt`)، نه با تاریخ‌های ذخیره‌شده (که نیمه‌شبِ UTC‌اند و `dayUtc` دارند).
+ *
+ * ⚠️ تفاوتش با `todayRangeUtc` همان سه ساعت و نیم است: نیمه‌شبِ تهران ۲۰:۳۰ UTCِ روزِ
+ * قبل است. آشکارسازی که «تحویلِ دیشب» را با `doneAt < نیمه‌شبِ UTC` می‌سنجید، تحویلِ
+ * ۱۲:۳۰ بامدادِ تهران را «دیروز» می‌شمرد و همان شب برای دفتر کار می‌ساخت.
+ */
+export function clinicDayStart(at: Date = new Date(), tz: string = CLINIC_TZ): Date {
+  const midnightAsUtc = dayUtc(clinicDateIso(at, tz)).getTime();
+  const guess = new Date(midnightAsUtc - tzOffsetMinutes(at, tz) * 60_000);
+  /* اگر آفست درست در همان شب عوض شده باشد (DST)، آفستِ خودِ نیمه‌شب ملاک است. */
+  return new Date(midnightAsUtc - tzOffsetMinutes(guess, tz) * 60_000);
+}

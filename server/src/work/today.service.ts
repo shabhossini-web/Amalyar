@@ -63,6 +63,8 @@ const EVENT_FA: Record<string, string> = {
   'report.uploaded': 'گزارشِ مراجعه بارگذاری شد',
   'usage.unconfirmed': 'مصرفِ اقلام تأیید نشده',
   'usage.confirmed': 'مصرفِ اقلام تأیید شد',
+  'delivery.unconfirmed': 'تحویلِ ست تأیید نشده',
+  'delivery.confirmed': 'کارشناس ست را تحویل گرفت',
   'invoice.ready': 'آمادهٔ صدورِ فاکتور',
   'invoice.issued': 'فاکتور صادر شد',
   'sms.failed': 'پیامک نرسید',

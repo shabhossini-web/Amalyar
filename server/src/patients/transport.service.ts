@@ -5,6 +5,8 @@ import { isUnrestricted } from '../common/own-scope';
 import { clinicDateIso, dayUtc } from '../common/clinic-day';
 import { PlacesService } from './places.service';
 import { RoutesService } from './routes.service';
+import { InventoryService } from './inventory.service';
+import { deliveryState, receiptOf } from './handover';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -38,7 +40,13 @@ function dayBounds(at: Date): [Date, Date] {
 export class TransportService {
   /* `routes` اختیاری است چون سوییتِ e2e این سرویس را ممکن است مستقیم بسازد؛ Nest همیشه پاسش
      می‌دهد. بی‌آن، حوالهٔ برنامه‌ریزی‌شده فقط شماره‌اش را نشان می‌دهد (رفتارِ پیش از ۱۴۰۵/۰۷/۰۹). */
-  constructor(private prisma: PrismaService, private audit: AuditService, private places: PlacesService, private routes?: RoutesService) {}
+  constructor(
+    private prisma: PrismaService, private audit: AuditService, private places: PlacesService,
+    private routes?: RoutesService,
+    /* «ثبتِ تحویل» حوالهٔ برنامه‌ریزی‌شده را از همین‌جا ارسال می‌کند (`InventoryService.ship`). اختیاری به
+       همان دلیلِ `routes`؛ Nest همیشه پاسش می‌دهد. */
+    private inventory?: InventoryService,
+  ) {}
 
   /** رکوردِ نیرویِ حمل‌ونقلِ همین کاربر — از روی شخصِ مشترک. */
   private async me(user: any) {
@@ -89,6 +97,8 @@ export class TransportService {
               select: {
                 id: true, code: true, status: true, toLocation: true, fromLocation: true,
                 releasedAt: true, pickupAt: true, leftAt: true,
+                // دستِ دومِ تحویل — راننده باید ببیند کارشناس «تحویل گرفتم» زده یا نه.
+                techReceivedAt: true, techReceiptIssue: true, techReceiptNote: true,
                 // حوالهٔ برنامه‌ریزی‌شده (تختهٔ روز) هنوز حرکتی ندارد؛ قلم‌هایش این‌جاست.
                 plannedLines: true,
                 // ⚠️ فقط عنوانِ کالا و تعداد. نه بیمار، نه مبلغ.
@@ -158,6 +168,10 @@ export class TransportService {
         id: t.id, code: t.code, status: t.status,
         from: t.fromLocation, to: t.toLocation,
         pickupAt: t.pickupAt, leftAt: t.leftAt, releasedAt: t.releasedAt,
+        /* تحویلِ دوطرفه: `awaiting` تا کارشناس تأیید کند، بعد `received` یا `received_issue` —
+           ردِ «من دادم، او می‌گوید نگرفتم» (`handover.ts`، یک منبع برای سه پنل). */
+        delivery: deliveryState(t, s),
+        receipt: receiptOf(t),
         /* ⚠️ تختهٔ روز همهٔ تحویل‌ها را **planned** می‌سازد و حوالهٔ planned حرکتی ندارد؛ تا
            ۱۴۰۵/۰۷/۰۹ راننده فقط شمارهٔ حواله را می‌دید، نه اینکه چه چیزی ببرد. */
         items: t.status === 'planned' && this.routes
@@ -187,7 +201,10 @@ export class TransportService {
     const staff = team ? null : await this.me(user);
     const stop = await this.prisma.transportStop.findFirst({
       where: { id: stopId, ...(staff ? { run: { staffId: staff.id } } : { runId: { not: null } }) },
-      select: { id: true, doneAt: true, run: { select: { staffId: true } } },
+      select: {
+        id: true, kind: true, doneAt: true, run: { select: { staffId: true } },
+        transfers: { select: { id: true, code: true, status: true }, orderBy: { id: 'asc' } },
+      },
     });
     if (!stop) throw new NotFoundException(team ? 'این توقف در هیچ مسیری نیست' : 'این توقف در مسیرِ شما نیست');
     if (stop.doneAt) throw new BadRequestException('این توقف قبلاً انجام‌شده ثبت شده است');
@@ -195,6 +212,22 @@ export class TransportService {
     // ⚠️ همان کانونی‌سازیِ کارشناس، این‌بار روی حرفِ راننده — وگرنه یک طرفِ
     //    مقایسه مرتب می‌شد و طرفِ دیگر نه، و «برنامه در برابر واقعیت» بی‌معنا.
     const handedActual = await this.places.canonical(dto.handedActual);
+
+    /* ⚠️ «تحویل دادم»ِ راننده همان ارسالِ حواله است — ریشهٔ باگِ «راننده زده تحویل داده شد ولی
+       پنلِ کارشناسی می‌گوید فرستاده نشد» (مالک، ۱۴۰۵/۰۷/۱۱): تختهٔ روز حواله را `planned`
+       می‌سازد و تا امروز هیچ دکمه‌ای `ship` را صدا نمی‌زد، پس دفترِ انبار هرگز نمی‌خورد و ست
+       روی کاغذ در انبار می‌ماند. ارسال **پیش از** مهرِ انجام است: اگر موجودی کم باشد
+       (`InventoryService.move`) توقف انجام‌شده ثبت نمی‌شود و راننده همان خطای فارسی را
+       می‌بیند تا با دفتر هماهنگ کند — نه اینکه بار «رفته» باشد و دفتر از چیزی که نیست کم کند. */
+    const shipped: { id: number; code: string }[] = [];
+    if (stop.kind === 'deliver' && this.inventory) {
+      for (const t of stop.transfers) {
+        if (t.status !== 'planned') continue;
+        await this.inventory.ship(t.id, user);
+        shipped.push({ id: t.id, code: t.code });
+      }
+    }
+
     await this.prisma.transportStop.update({
       where: { id: stopId },
       data: {
@@ -205,7 +238,7 @@ export class TransportService {
     });
     await this.audit.record({
       actorId: user?.id, action: 'transport.stop.done', entityType: 'transport_stop', entityId: stopId,
-      after: { handedActual, ...(team ? { staffId: stop.run?.staffId ?? null } : {}) },
+      after: { handedActual, shipped, ...(team ? { staffId: stop.run?.staffId ?? null } : {}) },
     });
     return this.agenda(user, 'today');
   }

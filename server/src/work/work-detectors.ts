@@ -11,6 +11,7 @@
  * | عملِ جراحیِ گذشته، هنوز `pending` | `visit.unconfirmed` | `opDate` قبل از امروز |
  * | عملِ `done` بدونِ سندِ `report` | `report.missing` | همان |
  * | حوالهٔ `sent/received` روی عملِ گذشته | `usage.unconfirmed` | یک رویداد به‌ازای هر مراجعه |
+ * | توقفِ تحویلِ راننده انجام‌شده، کارشناس «تحویل گرفتم» نزده | `delivery.unconfirmed` | روزِ تحویل گذشته؛ یک رویداد به‌ازای هر حواله |
  * | دعوتِ فرمِ پیگیری، ۳ روز بی‌پاسخ | `form.unanswered` | هنوز منقضی نشده |
  * | کارِ «گزارش» باز ولی سند رسیده | `report.uploaded` | از هر مسیری که آپلود شده باشد |
  *
@@ -28,7 +29,7 @@
  * - جدولِ نبوده (tenantِ migrate‌نشده) هر آشکارساز را جداگانه خاموش می‌کند،
  *   نه کلِ sweep را.
  */
-import { todayRangeUtc } from '../common/clinic-day';
+import { clinicDayStart, todayRangeUtc } from '../common/clinic-day';
 
 const DAY = 864e5;
 
@@ -69,7 +70,7 @@ async function guard(fn: () => Promise<number>): Promise<number> {
 
 export type DetectResult = {
   unconfirmed: number; reportMissing: number; usageUnconfirmed: number; formUnanswered: number; reportUploaded: number;
-  pathwayOverdue: number;
+  pathwayOverdue: number; deliveryUnconfirmed: number;
 };
 
 export async function detectStaleWork(client: any, now: Date = new Date()): Promise<DetectResult> {
@@ -128,6 +129,40 @@ export async function detectStaleWork(client: any, now: Date = new Date()): Prom
       byVisit.set(t.visitId, cur);
     }
     return emitOnce(client, 'usage.unconfirmed', [...byVisit.values()], since);
+  });
+
+  /**
+   * تحویلِ دوطرفه (مالک، ۱۴۰۵/۰۷/۱۱): راننده روی توقفِ تحویل «تحویل دادم» زده — حواله ارسال
+   * شده — ولی کارشناس تا پایانِ **روزِ مطبِ** تحویل «تحویل گرفتم» نزده. کارِ دفتر، با ref =
+   * خودِ حواله (`stock_transfer`) تا «تحویل گرفتم»ِ بعدی (`delivery.confirmed`) همان را ببندد.
+   * حوالهٔ بی‌مراجعه (بارِ آزادِ تخته) هم شمرده می‌شود؛ مراجعهٔ بیمارِ حذف‌شده نه.
+   */
+  const deliveryUnconfirmed = await guard(async () => {
+    /* `doneAt` زمان‌مهرِ واقعی است، نه تاریخِ نیمه‌شبِ UTC — مرزِ روز هم باید لحظهٔ واقعی باشد. */
+    const dayStart = clinicDayStart(now);
+    const rows = await client.stockTransfer.findMany({
+      where: {
+        status: { in: ['sent', 'received'] }, techReceivedAt: null,
+        stop: { is: { kind: 'deliver', doneAt: { lt: dayStart, gte: new Date(dayStart.getTime() - 60 * DAY) } } },
+        OR: [{ visitId: null }, { visit: { is: live } }],
+      },
+      select: {
+        id: true, code: true, visitId: true, toLocation: true,
+        visit: { select: { patientId: true, techId: true, tech: { select: { person: { select: { firstName: true, lastName: true } } } } } },
+      },
+      orderBy: { id: 'asc' }, take: 200,
+    });
+    return emitOnce(client, 'delivery.unconfirmed', rows.map((t: any) => {
+      const p = t.visit?.tech?.person;
+      return {
+        patientId: t.visit?.patientId ?? null, visitId: t.visitId ?? null,
+        refType: 'stock_transfer', refId: t.id,
+        payload: {
+          code: t.code, place: t.toLocation, techId: t.visit?.techId ?? null,
+          techName: p ? `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim() || null : null,
+        },
+      };
+    }), since);
   });
 
   const formUnanswered = await guard(async () => {
@@ -198,5 +233,5 @@ export async function detectStaleWork(client: any, now: Date = new Date()): Prom
     })), since);
   });
 
-  return { unconfirmed, reportMissing, usageUnconfirmed, formUnanswered, reportUploaded, pathwayOverdue };
+  return { unconfirmed, reportMissing, usageUnconfirmed, formUnanswered, reportUploaded, pathwayOverdue, deliveryUnconfirmed };
 }

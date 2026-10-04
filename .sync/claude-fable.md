@@ -1,12 +1,26 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: idle
-branch: claude/board-holds
-since: 2026-10-01
-paths: []
+status: active
+branch: claude/delivery-handshake
+since: 2026-10-03
+paths:
+  - server/src/patients/transport.service.ts
+  - server/src/patients/tech.service.ts
+  - server/src/patients/inventory.service.ts
+  - server/src/patients/inventory.controller.ts
+  - server/src/patients/dto/inventory.dto.ts
+  - server/src/patients/handover.ts
+  - server/src/work/work-rules.ts
+  - server/src/work/work-detectors.ts
+  - server/prisma/schema.prisma
+  - src/app/Tech.jsx
+  - src/app/Transport.jsx
+  - src/app/Inventory.jsx
 note: >-
-  «چرا آزاد نیست» زیرِ هر قلمِ فرمِ تحویل (holdsِ availability) با لغوِ همان حواله روی main رفت؛ پیش از آن
-  حذفِ توقف = لغو و «حمل‌ونقل» روی رهام. بازِ بعدی منتظرِ تصمیمِ مالک است (لینکِ پیامکِ ادامهٔ ثبت‌نام).
+  بستهٔ الفِ طرحِ انبار/ست/تحویل (مالک، ۱۴۰۵/۰۷/۱۱): «ثبتِ تحویل»ِ راننده حوالهٔ برنامه‌ریزی‌شده را
+  ارسال می‌کند (رفعِ باگِ «راننده زده تحویل داده شد ولی پنلِ کارشناسی می‌گوید فرستاده نشد»)،
+  کارشناس «تحویل گرفتم / با مغایرت» می‌زند، و تحویلِ تأییدنشده تا پایانِ روز کارِ «تأییدِ تحویل»
+  برای دفتر می‌سازد. بسته‌های ب (کالا و ست در انبار) و ج (مصرفی) بعد از این.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

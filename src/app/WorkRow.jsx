@@ -18,7 +18,7 @@ import './work-row.css';
 export const TYPE_FA = {
   review_result: 'بررسیِ نتیجه', review_form: 'بررسیِ فرم', approve_intake: 'تأییدِ ثبت‌نام', repair_intake: 'تأییدِ نیمه‌کاره',
   call_patient: 'تماس با بیمار', confirm_appointment: 'تأییدِ نوبت', confirm_surgery_done: 'وضعیتِ عمل',
-  complete_report: 'گزارشِ خدمت', confirm_usage: 'تأییدِ مصرف', issue_invoice: 'صدورِ فاکتور', resend_sms: 'پیامک',
+  complete_report: 'گزارشِ خدمت', confirm_usage: 'تأییدِ مصرف', confirm_delivery: 'تأییدِ تحویل', issue_invoice: 'صدورِ فاکتور', resend_sms: 'پیامک',
   follow_up_unanswered: 'پیگیریِ بی‌پاسخ', fill_form: 'فرم', upload_result: 'ارسالِ نتیجه', pick_slot: 'انتخابِ زمان', manual: 'یادداشت',
   repair_data: 'تطبیقِ دادهٔ ناقص',
 };

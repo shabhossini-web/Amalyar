@@ -525,6 +525,14 @@ model StockTransfer {
   pickupAt     String?   @map("pickup_at")
   /// «گذاشتم CSR» — کجا تحویل داده شده تا جمع‌آور بداند سراغِ کجا برود.
   leftAt       String?   @map("left_at")
+  /// **دستِ دومِ تحویلِ دوطرفه** (مالک، ۱۴۰۵/۰۷/۱۱): راننده روی توقف «تحویل دادم» را می‌زند
+  /// (همان لحظه حواله ارسال می‌شود)، کارشناس این‌جا «تحویل گرفتم» را. تا این خالی است
+  /// حواله «منتظرِ تأییدِ کارشناس» است و دفتر از آن کار می‌سازد (`delivery.unconfirmed`).
+  techReceivedAt   DateTime? @map("tech_received_at")
+  techReceivedById Int?      @map("tech_received_by_id")
+  /// «با مغایرت»: برگهٔ شمارشِ کارشناس کسری یا خرابی داشت (ردیف‌هایش در `SetShortage` با `stage = receipt`).
+  techReceiptIssue Boolean   @default(false) @map("tech_receipt_issue")
+  techReceiptNote  String?   @map("tech_receipt_note")
   sentAt     DateTime  @default(now()) @map("sent_at")
   receivedAt DateTime? @map("received_at")
   /// نامِ تحویل‌گیرندهٔ CSR.
@@ -2175,6 +2183,8 @@ model SetShortage {
   missing  Int    @default(1)
   /// missing | damaged
   kind     String @default("missing")
+  /// کجا شمرده شد: `receipt` = کارشناس هنگامِ تحویل‌گرفتن، `return` = دفتر هنگامِ برگشت به انبار.
+  stage    String @default("return")
   notes    String?
 
   reportedById Int?     @map("reported_by_id")
