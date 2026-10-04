@@ -4,6 +4,7 @@ import { AuditService } from '../audit/audit.service';
 import { SettingsService } from '../config/settings.service';
 import { InventoryService } from './inventory.service';
 import { balanceByLocation, DAMAGED_LOCATION, HOME_FALLBACK, setLocationOf } from './stock-math';
+import { digitVariants } from '../common/search';
 
 /**
  * ست به‌عنوانِ **بستهٔ موجودی** (مالک، ۱۴۰۵/۰۷/۱۱؛ بستهٔ ب).
@@ -41,7 +42,16 @@ export class SetStockService {
         serialNo: { not: null },
         item: { assetKind: 'set' },
         ...(opts.lotId ? { id: opts.lotId } : {}),
-        ...(term ? { OR: [{ serialNo: { contains: term, mode: 'insensitive' } }, { item: { name: { contains: term, mode: 'insensitive' } } }] } : {}),
+        // هشدار: سریالِ ست را کاربر با کیبوردِ فارسی هم تایپ می‌کند و هم وارد
+        //        کرده است؛ پس هر دو صورتِ رقمی جست‌وجو می‌شود (`common/search.ts`).
+        ...(term
+          ? {
+              OR: digitVariants(term).flatMap((v) => [
+                { serialNo: { contains: v, mode: 'insensitive' } },
+                { item: { name: { contains: v, mode: 'insensitive' } } },
+              ]),
+            }
+          : {}),
       },
       include: { item: { select: { id: true, name: true, size: true } }, consignedTo: { select: { name: true } } },
       orderBy: [{ itemId: 'asc' }, { serialNo: 'asc' }],

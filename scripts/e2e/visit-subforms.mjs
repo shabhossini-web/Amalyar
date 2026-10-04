@@ -434,7 +434,9 @@ try {
 
   console.log('\n۱۳) منتخب‌ها');
   r = await send('/auth/prefs');
-  ok('پیش‌فرضِ خالی، سه خانه', JSON.stringify(r.json) === JSON.stringify({ subformPins: [null, null, null], todayPins: [null, null, null] }), JSON.stringify(r.json));
+  // هشدار: شکلِ کاملِ ترجیحات این‌جا سنجیده می‌شود؛ هر کلیدِ تازه (مثلِ پیش‌فرض‌های
+  //        مصرفی در بستهٔ ج) باید همین‌جا هم اضافه شود وگرنه این سنجه می‌افتد.
+  ok('پیش‌فرضِ خالی، سه خانه', JSON.stringify(r.json) === JSON.stringify({ subformPins: [null, null, null], todayPins: [null, null, null], usagePresets: [] }), JSON.stringify(r.json));
   r = await send('/auth/prefs', 'PATCH', { subformPins: ['vitals', 'subform.growth'] });
   ok('فرم‌های منتخب ذخیره شد و به سه خانه پر شد', JSON.stringify(r.json?.subformPins) === JSON.stringify(['vitals', 'subform.growth', null]), JSON.stringify(r.json));
   r = await send('/auth/prefs', 'PATCH', { todayPins: ['dashboard', null, 'dashboard'] });
