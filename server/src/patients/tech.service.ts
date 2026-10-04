@@ -239,7 +239,7 @@ export class TechService {
       usage: {
         recordedAt: v.usages.reduce((m: Date | null, u: any) => (!m || u.updatedAt > m ? u.updatedAt : m), null),
         lines: v.usages.map((u: any) => ({ name: [u.item.name, u.item.size].filter(Boolean).join(' '), unit: u.item.unit, mode: u.mode, quantity: u.quantity })),
-        canStart: !v.stockTransfers.some((t: any) => deliveryState(t, t.stop) === 'awaiting'),
+        canRecord: !v.stockTransfers.some((t: any) => deliveryState(t, t.stop) === 'awaiting'),
       },
       transfers: v.stockTransfers.map((t: any) => ({
         id: t.id,

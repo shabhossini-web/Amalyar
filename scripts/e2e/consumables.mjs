@@ -111,7 +111,7 @@ try {
   // ── 1) locked until the tech confirms receipt ──
   let sh = await usage.sheet(visit.id, techUser);
   assert.equal(sh.awaiting, true);
-  assert.equal(sh.canStart, false);
+  assert.equal(sh.canRecord, false);
   assert.equal(sh.editable, true);
   await rejects(() => usage.save(visit.id, { lines: [{ source: 'warehouse', itemId: gel.id, quantity: 1 }] }, techUser), /تحویلِ ست را تأیید/, 'no usage before the handshake');
   pass('the sheet is locked while the set awaits «تحویل گرفتم» — a set you have not received has no usage');
@@ -163,7 +163,7 @@ try {
   assert.ok(sh.recordedAt);
   const ag = await tech.agenda(techUser, 'today');
   const v1 = ag.visits.find(v => v.id === visit.id);
-  assert.equal(v1.usage.canStart, true);
+  assert.equal(v1.usage.canRecord, true);
   assert.deepEqual(v1.usage.lines.map(l => [l.name, l.quantity, l.mode]).sort(), [['الکترود SDN', 2, 'consume'], ['پروبِ تحریک', 1, 'use'], ['ژلِ هادی', 1, 'consume'], ['کابلِ رابط', 1, 'use'], ['گازِ استریل', 3, 'consume']].sort(), 'the card summary comes from the server');
   pass('save: set parts leave the set, loose lines leave the waybill, flagged items leave the warehouse; multi-use is only counted');
 

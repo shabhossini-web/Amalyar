@@ -204,7 +204,7 @@ export class VisitUsageService {
       patientName: [v.patient.firstName, v.patient.lastName].filter(Boolean).join(' '),
       editable,
       awaiting,
-      canStart: !awaiting,
+      canRecord: !awaiting,
       recordedAt,
       home,
       sets: setBlocks,

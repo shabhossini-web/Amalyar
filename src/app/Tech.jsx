@@ -891,10 +891,10 @@ function UsageBlock({ visit: v, onOpen }) {
     <div className={`tk-set tk-usage${has ? ' has' : ''}`}>
       <div className="tk-set-head">
         <b><Boxes width="14" height="14" /> ثبتِ مصرفی</b>
-        <span>{has ? usageText(u.lines) : u.canStart ? 'هنوز چیزی ثبت نشده' : 'پس از تحویل‌گرفتن فعال می‌شود'}</span>
+        <span>{has ? usageText(u.lines) : u.canRecord ? 'هنوز چیزی ثبت نشده' : 'پس از تحویل‌گرفتن فعال می‌شود'}</span>
         {has && u.recordedAt && <i className="tk-tag ok">ثبت شد {clock(u.recordedAt)}</i>}
       </div>
-      <button type="button" className={has ? 'tk-ghost' : 'tk-mini'} disabled={!u.canStart} onClick={onOpen}>
+      <button type="button" className={has ? 'tk-ghost' : 'tk-mini'} disabled={!u.canRecord} onClick={onOpen}>
         {has ? 'ویرایشِ مصرفی' : 'ثبتِ مصرفیِ این بیمار'}
       </button>
     </div>
