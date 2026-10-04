@@ -4,7 +4,7 @@ import { AuditService } from '../audit/audit.service';
 import { EventsService } from '../work/events.service';
 import { AssetsService, RETURNABLE, windowOf } from './assets.service';
 import { receiptOf } from './handover';
-import { balanceByLocation, balanceOf, HOME_FALLBACK } from './stock-math';
+import { balanceByLocation, balanceOf, DAMAGED_LOCATION, HOME_FALLBACK, setLocationOf } from './stock-math';
 import { SettingsService } from '../config/settings.service';
 import { RoutesService, normalizeTime } from './routes.service';
 import { PlacesService } from './places.service';
@@ -243,7 +243,17 @@ export class InventoryService {
       data.serialNo = serialNo;
     }
 
-    await this.prisma.stockLot.update({ where: { id }, data });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.stockLot.update({ where: { id }, data });
+      /* ستِ سریالی یک محل است («ست SE-07»): با تغییرِ سریال، محتویاتش نباید در دفتر یتیم بمانند. */
+      const serialChanged = data.serialNo !== undefined && data.serialNo !== before.serialNo;
+      const lotNoChanged = data.lotNo !== undefined && data.lotNo !== before.lotNo;
+      if (serialChanged || lotNoChanged) {
+        const from = setLocationOf(before);
+        const to = setLocationOf({ id, serialNo: data.serialNo !== undefined ? data.serialNo : before.serialNo, lotNo: data.lotNo !== undefined ? data.lotNo : before.lotNo });
+        if (from !== to) await tx.stockMovement.updateMany({ where: { location: from }, data: { location: to } });
+      }
+    });
     await this.audit.record({
       actorId: user?.id, action: 'stock.lot.update', entityType: 'stock_lot', entityId: id, before, after: data,
     });
@@ -275,7 +285,67 @@ export class InventoryService {
     return this.shapeLot(row, rows, await this.home());
   }
 
+  // ───────────────────────── کاتالوگِ انبار ─────────────────────────
+
+  /**
+   * کالاها از نگاهِ انبار — همان کاتالوگِ تعاریف، به‌اضافهٔ «در دسترس» و شمارِ لات.
+   *
+   * مالک (۱۴۰۵/۰۷/۱۱): «بخشِ تعریفِ کالا که توی تعاریفِ پایه است ببر توی کاشیِ انبار». تعریف
+   * همان جدولِ `items` است و تک‌منبع می‌ماند؛ فقط درِ ورودش انبار (سطح ۳) شد، نه مدیریت (سطح ۵).
+   */
+  async catalog(q?: string) {
+    const term = q?.trim();
+    const items = await this.prisma.item.findMany({
+      where: term ? { OR: textSearchOr(term, ['name', 'sku', 'brand', 'irc', 'category']) } : {},
+      orderBy: [{ active: 'desc' }, { name: 'asc' }],
+      take: 300,
+      include: { _count: { select: { lots: true, contents: true } } },
+    });
+    const available = new Map<number, number>();
+    for (let i = 0; i < items.length; i += 100) {
+      for (const a of await this.availability(items.slice(i, i + 100).map((x) => x.id))) available.set(a.itemId, a.available);
+    }
+    return items.map((r) => ({
+      id: r.id, name: r.name, sku: r.sku, irc: r.irc, brand: r.brand, size: r.size,
+      category: r.category, unit: r.unit, price: r.price, notes: r.notes, active: r.active,
+      assetKind: r.assetKind, assetLabel: r.assetKind === 'set' ? 'ست' : r.assetKind === 'device' ? 'دستگاه' : 'مصرفی',
+      turnaroundHours: r.turnaroundHours,
+      showInTechPanel: r.showInTechPanel,
+      /* ست و دستگاه ذاتاً چندبارمصرف‌اند، حتی اگر ردیف از جایی بی‌تیک ساخته شده باشد (seed/آزمون). */
+      usageMode: ['set', 'device'].includes(r.assetKind) ? 'multi' : r.usageMode,
+      usageLabel: ['set', 'device'].includes(r.assetKind) || r.usageMode === 'multi' ? 'چندبارمصرف' : 'یک‌بارمصرف',
+      lotCount: r._count.lots, contentCount: r._count.contents,
+      available: available.get(r.id) ?? 0,
+    }));
+  }
+
   // ───────────────────────── حرکت ─────────────────────────
+
+  /**
+   * انتقالِ یک لات بینِ دو محل — دو حرکتِ `transfer` در یک تراکنش.
+   *
+   * هستهٔ بستهٔ ب: تکمیلِ ست (انبار ← ست)، خرابی (ست/انبار ← «خرابی‌ها»)، برداشت (ست ← انبار) و
+   * تعمیر («خرابی‌ها» ← انبار) همه همین‌اند. موجودیِ مبدأ همین‌جا کنترل می‌شود (`move`).
+   */
+  async relocate(
+    lotId: number, quantity: number, from: string, to: string,
+    meta: { reason?: string | null; transferId?: number | null; visitId?: number | null; reference?: string | null },
+    user: any,
+  ) {
+    if (!Number.isInteger(quantity) || quantity <= 0) throw new BadRequestException('تعداد باید عددِ صحیحِ مثبت باشد');
+    if (from === to) throw new BadRequestException('مبدأ و مقصد یکی است');
+    await this.prisma.$transaction(async (tx) => {
+      await this.move(lotId, 'transfer', -quantity, { ...meta, location: from }, user, tx);
+      await this.move(lotId, 'transfer', quantity, { ...meta, location: to }, user, tx);
+    });
+    return this.lot(lotId);
+  }
+
+  /** خروجِ قطعی از یک محل — اسقاط از «خرابی‌ها» یا گم‌شدهٔ هنگامِ برگشت. روی لاتِ منقضی هم مجاز. */
+  async writeOff(lotId: number, quantity: number, location: string, meta: { reason?: string | null; transferId?: number | null; visitId?: number | null }, user: any) {
+    if (!Number.isInteger(quantity) || quantity <= 0) throw new BadRequestException('تعداد باید عددِ صحیحِ مثبت باشد');
+    return this.move(lotId, 'out', -quantity, { ...meta, location, force: true }, user);
+  }
 
   /** ورودِ کالا — خرید، رسید، یا اضافه‌کردن به لاتِ موجود. */
   async receive(lotId: number, dto: any, user: any) {
@@ -355,7 +425,7 @@ export class InventoryService {
     lotId: number,
     kind: MovementKind,
     signedQty: number,
-    extra: { visitId?: number | null; visitCode?: string | null; chargeId?: number | null; reason?: string | null; reference?: string | null; location?: string | null; transferId?: number | null },
+    extra: { visitId?: number | null; visitCode?: string | null; chargeId?: number | null; reason?: string | null; reference?: string | null; location?: string | null; transferId?: number | null; force?: boolean },
     user: any,
     tx?: any,
   ) {
@@ -368,7 +438,9 @@ export class InventoryService {
       const home = lot.location ?? homeName;
       const where = extra.location ?? home;
 
-      if (kind === 'out' && lot.expires_at && lot.expires_at.getTime() < Date.now()) {
+      /* اسقاط و گم‌شده (`force`) و هر خروجی از «خرابی‌ها» روی لاتِ منقضی هم مجاز است — قفلِ انقضا
+         برای **مصرفِ** سرِ عمل است، نه برای بیرون‌انداختنِ چیزی که دیگر نیست. */
+      if (kind === 'out' && !extra.force && where !== DAMAGED_LOCATION && lot.expires_at && lot.expires_at.getTime() < Date.now()) {
         throw new BadRequestException('این لات منقضی شده و قابلِ مصرف نیست');
       }
 
@@ -904,7 +976,12 @@ export class InventoryService {
    */
   private transferScope(user: any) {
     if ((user?.level ?? 0) >= LEVEL.SUPERVISOR) return {};
-    return { visit: ownVisitWhere(user) };
+    // «مالِ من» برای حواله دو معنا دارد: حوالهٔ مراجعهٔ منتسب به من، و حواله‌ای که
+    // خودم صادر کرده‌ام. بدونِ دومی، انباردارِ سطحِ ۳ حواله را می‌ساخت و همان لحظه
+    // «حواله یافت نشد» می‌گرفت — چون حوالهٔ بی‌مراجعه به هیچ مراجعه‌ای منتسب نیست.
+    const own: Record<string, any>[] = [{ visit: ownVisitWhere(user) }];
+    if (Number.isInteger(user?.id)) own.push({ createdById: user.id });
+    return { OR: own };
   }
 
   private async assertTransfer(id: number, user: any) {

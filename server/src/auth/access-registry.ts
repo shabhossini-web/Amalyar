@@ -400,6 +400,11 @@ export const PERMISSIONS: AccessDef[] = [
     defaultLevel: LEVEL.TECH_ADMIN,
   },
   {
+    key: 'inventory.items', label: 'تعریف و ویرایشِ کالا و محتویاتِ ست (کاتالوگ)', group: 'inventory',
+    hint: 'کالاها از تعاریفِ پایه به کاشیِ «انبار» آمده‌اند (مالک، ۱۴۰۵/۰۷/۱۱) تا انباردار بی‌دسترسیِ مدیریتی کالا تعریف کند. جدا از «تعاریفِ پایه» مانده تا این اجازه، اجازهٔ ویرایشِ جراح و بیمارستان نشود.',
+    defaultLevel: LEVEL.TECH_ADMIN,
+  },
+  {
     key: 'inventory.adjust', label: 'انبارگردانی — بازنویسیِ موجودیِ لات', group: 'inventory',
     hint: 'با یک عدد کلِ موجودیِ یک لات بازنویسی می‌شود و اختلافش دیگر قابلِ ردیابی نیست؛ برای همین از ثبتِ عادیِ انبار بالاتر است.',
     defaultLevel: LEVEL.SUPERVISOR,

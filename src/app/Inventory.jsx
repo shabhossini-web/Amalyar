@@ -4,10 +4,11 @@ import { api } from '../lib/api.js';
 import { faDate, jStr, jStrToIso, jToday, toEnDigits } from '../lib/jalali.js';
 import JDate from './JDate.jsx';
 import './inventory.css';
-import { Box, Close, Plus, Route, Wave } from '../ui/icons.jsx';
+import { Alert, Box, Boxes, Close, Pencil, Plus, Route, Tag, Trash, Wave } from '../ui/icons.jsx';
+import './users.css'; // کلیدِ دوحالتهٔ `us-switch` (قانونِ ۲۱: صریح ایمپورت)
 import PageHeader from '../ui/PageHeader.jsx';
 import Tabs from '../ui/Tabs.jsx';
-import Overlay from '../ui/Overlay.jsx';
+import Overlay, { ConfirmDialog } from '../ui/Overlay.jsx';
 import { useStagger } from '../ui/stagger.js';
 
 
@@ -42,7 +43,11 @@ export default function Inventory() {
   const [adding, setAdding] = useState(false);
   const [moving, setMoving] = useState(null); // {lot, mode}
   const [tracing, setTracing] = useState(null);
-  const [tab, setTab] = useState('lots');
+  /* پیوندِ مستقیم به یک تب (‎?tab=items از تعاریفِ پایه) — کالاها تبِ اول است (مالک، ۱۴۰۵/۰۷/۱۱). */
+  const [tab, setTab] = useState(() => {
+    const key = new URLSearchParams(window.location.search).get('tab');
+    return ['items', 'lots', 'sets', 'transfers', 'assets'].includes(key) ? key : 'items';
+  });
   const [openTransfers, setOpenTransfers] = useState(0);
 
   useEffect(() => {
@@ -89,13 +94,19 @@ export default function Inventory() {
         value={tab}
         onChange={setTab}
         items={[
+          { key: 'items', label: 'کالاها', icon: Tag },
           { key: 'lots', label: 'لات‌ها', icon: Box },
+          { key: 'sets', label: 'ست‌ها', icon: Boxes },
           { key: 'transfers', label: 'حواله‌ها', icon: Route, badge: openTransfers ? num(openTransfers) : null },
           { key: 'assets', label: 'دارایی‌ها', icon: Wave },
         ]}
       />
 
-      {tab === 'assets' ? (
+      {tab === 'items' ? (
+        <Items onToast={setToast} />
+      ) : tab === 'sets' ? (
+        <Sets onToast={setToast} />
+      ) : tab === 'assets' ? (
         <Assets onToast={setToast} />
       ) : tab === 'transfers' ? (
         <Transfers onToast={setToast} onChanged={load} />
@@ -172,6 +183,7 @@ export default function Inventory() {
               <button type="button" onClick={() => setMoving({ lot, mode: 'in' })}>ورود</button>
               <button type="button" onClick={() => setMoving({ lot, mode: 'out' })} disabled={lot.quantity <= 0}>مصرف</button>
               <button type="button" onClick={() => setMoving({ lot, mode: 'adjust' })}>شمارش</button>
+              <button type="button" onClick={() => setMoving({ lot, mode: 'damage' })} disabled={lot.available <= 0}>خرابی</button>
               <button type="button" className="iv-trace" title="ردیابی" onClick={() => setTracing(lot.id)}>
                 <Route width="15" height="15" />
               </button>
@@ -220,6 +232,552 @@ export default function Inventory() {
  */
 const STATE_TONE = { free: 'ok', booked: 'warn', out: 'out', service: 'bad', consigned: 'consign' };
 const COUNT_TONE = { overdue: 'bad', due_soon: 'warn', ok: 'ok', none: '' };
+
+const KINDS = [
+  { v: 'consumable', l: 'مصرفی — یک‌بار می‌رود' },
+  { v: 'set', l: 'ست — برمی‌گردد' },
+  { v: 'device', l: 'دستگاه — برمی‌گردد' },
+];
+
+/**
+ * کالاها — کاتالوگ از نگاهِ انبار (مالک، ۱۴۰۵/۰۷/۱۱: «تعریفِ کالا را از تعاریفِ پایه ببر توی کاشیِ انبار»).
+ *
+ * همان جدولِ تعاریف است (تک‌منبع)؛ فقط درِ ورودش انبار شد تا انباردار (سطح ۳) بی‌دسترسیِ مدیریتی
+ * کالا تعریف کند. دو تیکِ تازه: «نمایش در پنلِ کارشناسی» و «چندبارمصرف».
+ */
+function Items({ onToast }) {
+  const row = useStagger();
+  const [rows, setRows] = useState([]);
+  const [q, setQ] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(null); // null | {} (تازه) | ردیف
+  const [parts, setParts] = useState(null);
+  const [deleting, setDeleting] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const p = q.trim().length >= 2 ? `?q=${encodeURIComponent(q.trim())}` : '';
+      setRows(await api(`/stock/items${p}`));
+    } catch (e) { onToast(e.message); setRows([]); }
+    finally { setLoading(false); }
+  }, [q, onToast]);
+  useEffect(() => {
+    const t = setTimeout(load, q.trim() ? 300 : 0);
+    return () => clearTimeout(t);
+  }, [load, q]);
+
+  const remove = async (it) => {
+    setBusy(true);
+    try {
+      const r = await api(`/stock/items/${it.id}`, { method: 'DELETE' });
+      onToast(r.deactivated ? `«${it.name}» به‌دلیلِ سابقهٔ استفاده فقط غیرفعال شد` : `«${it.name}» حذف شد`);
+      await load();
+    } catch (e) { onToast(e.message); }
+    finally { setBusy(false); setDeleting(null); }
+  };
+
+  const returnable = rows.filter((r) => r.assetKind !== 'consumable').length;
+  const inTech = rows.filter((r) => r.showInTechPanel).length;
+
+  return (
+    <>
+      <div className="iv-stats">
+        <div><b>{num(rows.length)}</b><span>کالا</span></div>
+        <div><b>{num(returnable)}</b><span>ست و دستگاه</span></div>
+        <div><b>{num(inTech)}</b><span>در پنلِ کارشناسی</span></div>
+      </div>
+      <div className="iv-toolbar">
+        <input className="iv-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="جستجو: نام، برند، کد یا دسته" aria-label="جستجو در کالاها" />
+        <button type="button" className="iv-add" onClick={() => setEditing({})}><Plus width="16" height="16" /> کالای جدید</button>
+      </div>
+      <p className="iv-note iv-tabnote">کاتالوگِ کالاست، نه موجودی. «نوع» می‌گوید برمی‌گردد یا نه؛ «چندبارمصرف» می‌گوید با مصرف از موجودی کم شود یا فقط دفعاتِ استفاده شمرده شود (و فقط با خرابی کم شود).</p>
+
+      <div className="iv-list">
+        {loading && <div className="iv-empty">در حال بارگذاری…</div>}
+        {!loading && rows.length === 0 && (
+          <div className="iv-empty">{q.trim() ? 'کالایی با این نام نیست' : 'هنوز کالایی تعریف نشده — با «کالای جدید» شروع کنید'}</div>
+        )}
+        {!loading && rows.map((it, i) => (
+          <motion.article key={it.id} {...row(i)} className={`iv-row iv-item${it.active ? '' : ' zero'}`}>
+            <div className="iv-qty"><b>{num(it.available)}</b><span>{it.unit}</span></div>
+            <div className="iv-row-main">
+              <b>{it.name}{it.size ? ` — ${it.size}` : ''}{!it.active && <i className="iv-off"> (غیرفعال)</i>}</b>
+              <small>{[it.assetLabel, it.brand, it.sku, it.category].filter(Boolean).join(' · ')}</small>
+              <small className="iv-sub2 iv-chips">
+                <span className={`iv-chip${it.usageMode === 'multi' ? ' multi' : ''}`}>{it.usageLabel}</span>
+                {it.showInTechPanel && <span className="iv-chip on">در پنلِ کارشناسی</span>}
+                {it.assetKind !== 'consumable' && <span className="iv-chip">{num(it.contentCount)} قلم در قالب</span>}
+                <span className="iv-chip">{num(it.lotCount)} لات</span>
+              </small>
+            </div>
+            <div className="iv-acts">
+              {it.assetKind !== 'consumable' && <button type="button" onClick={() => setParts(it)}>محتویات</button>}
+              <button type="button" aria-label={`ویرایشِ ${it.name}`} onClick={() => setEditing(it)}><Pencil width="14" height="14" /></button>
+              <button type="button" aria-label={`حذفِ ${it.name}`} className="iv-acts-del" onClick={() => setDeleting(it)}><Trash width="14" height="14" /></button>
+            </div>
+          </motion.article>
+        ))}
+      </div>
+
+      <AnimatePresence>
+        {editing && (
+          <ItemSheet row={editing} onClose={() => setEditing(null)} onSaved={async (m) => { setEditing(null); onToast(m); await load(); }} onError={onToast} />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {parts && <SetContents item={parts} onClose={() => setParts(null)} onToast={onToast} onChanged={load} />}
+      </AnimatePresence>
+      <AnimatePresence>
+        {deleting && (
+          <ConfirmDialog
+            title={`حذفِ «${deleting.name}»؟`}
+            text="اگر لات یا سندی با این کالا ثبت شده باشد پاک نمی‌شود و فقط غیرفعال می‌شود."
+            busy={busy}
+            onConfirm={() => remove(deleting)}
+            onCancel={() => setDeleting(null)}
+          />
+        )}
+      </AnimatePresence>
+    </>
+  );
+}
+
+/** فرمِ کالا — همان فیلدهای تعاریف + دو تیکِ تازه. */
+function ItemSheet({ row, onClose, onSaved, onError }) {
+  const isNew = !row.id;
+  const [f, setF] = useState({
+    name: row.name ?? '', assetKind: row.assetKind ?? 'consumable', brand: row.brand ?? '', size: row.size ?? '',
+    category: row.category ?? '', sku: row.sku ?? '', irc: row.irc ?? '', unit: row.unit ?? 'عدد',
+    price: row.price ?? '', turnaroundHours: row.turnaroundHours ?? '', notes: row.notes ?? '',
+    showInTechPanel: !!row.showInTechPanel,
+    usageMode: row.usageMode ?? (row.assetKind && row.assetKind !== 'consumable' ? 'multi' : 'single'),
+  });
+  const [busy, setBusy] = useState(false);
+  const returnable = f.assetKind !== 'consumable';
+  const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
+  const txt = (v) => (String(v ?? '').trim() ? String(v).trim() : null);
+
+  const submit = async () => {
+    if (busy) return;
+    if (f.name.trim().length < 2) { onError('نامِ کالا را کامل وارد کنید'); return; }
+    setBusy(true);
+    try {
+      const body = {
+        name: f.name.trim(), assetKind: f.assetKind, brand: txt(f.brand), size: txt(f.size), category: txt(f.category),
+        sku: txt(f.sku), irc: txt(f.irc), unit: txt(f.unit) ?? 'عدد', notes: txt(f.notes),
+        price: String(f.price).trim() === '' ? null : int(f.price),
+        turnaroundHours: String(f.turnaroundHours).trim() === '' ? null : int(f.turnaroundHours),
+        showInTechPanel: f.showInTechPanel,
+        usageMode: returnable ? 'multi' : f.usageMode,
+      };
+      await api(isNew ? '/stock/items' : `/stock/items/${row.id}`, { method: isNew ? 'POST' : 'PATCH', body });
+      await onSaved(isNew ? 'کالا تعریف شد' : 'کالا ویرایش شد');
+    } catch (e) { onError(e.message); } finally { setBusy(false); }
+  };
+
+  return (
+    <TitledSheet onClose={() => !busy && onClose()} title={isNew ? 'کالای جدید' : `ویرایشِ «${row.name}»`}>
+      <div className="iv-form">
+        <label className="iv-field"><span>نامِ کالا *</span>
+          <input value={f.name} onChange={set('name')} autoFocus />
+        </label>
+        <div className="iv-grid2">
+          <label className="iv-field"><span>نوع *</span>
+            <select value={f.assetKind} onChange={set('assetKind')}>
+              {KINDS.map((k) => <option key={k.v} value={k.v}>{k.l}</option>)}
+            </select>
+          </label>
+          <label className="iv-field"><span>واحد</span>
+            <input value={f.unit} onChange={set('unit')} />
+          </label>
+        </div>
+
+        {/* دو تیکِ مالک (۱۴۰۵/۰۷/۱۱) — کلیدِ دوحالتهٔ مشترکِ سامانه. کنارِ «نوع» نشسته‌اند چون به آن
+            بسته‌اند: ست و دستگاه همیشه چندبارمصرف‌اند و این‌جا همان لحظه دیده می‌شود، نه تهِ فرم. */}
+        <label className="us-switch iv-switch">
+          <input type="checkbox" role="switch" checked={f.showInTechPanel} onChange={(e) => setF((s) => ({ ...s, showInTechPanel: e.target.checked }))} />
+          <span className="us-track" aria-hidden="true" />
+          <span className="iv-switch-t">نمایش در پنلِ کارشناسی<small>کارشناس این قلم را در بلوکِ «ثبتِ مصرفی» می‌بیند</small></span>
+        </label>
+        <label className="us-switch iv-switch">
+          <input type="checkbox" role="switch" checked={returnable || f.usageMode === 'multi'} disabled={returnable}
+                 onChange={(e) => setF((s) => ({ ...s, usageMode: e.target.checked ? 'multi' : 'single' }))} />
+          <span className="us-track" aria-hidden="true" />
+          <span className="iv-switch-t">چندبارمصرف
+            <small>
+              {returnable
+                ? 'ست و دستگاه همیشه چندبارمصرف‌اند — با مصرف از موجودی کم نمی‌شوند'
+                : f.usageMode === 'multi'
+                  ? 'فقط دفعاتِ استفاده شمرده می‌شود؛ تنها با خرابی از موجودی کم می‌شود'
+                  : 'یک‌بارمصرف: هر مصرف از موجودی کم می‌شود'}
+            </small>
+          </span>
+        </label>
+
+        <div className="iv-grid2">
+          <label className="iv-field"><span>برند</span><input value={f.brand} onChange={set('brand')} /></label>
+          <label className="iv-field"><span>اندازه / مشخصه</span><input value={f.size} onChange={set('size')} /></label>
+          <label className="iv-field"><span>دسته (پیچ، راد، کیج…)</span><input value={f.category} onChange={set('category')} /></label>
+          <label className="iv-field"><span>کدِ کالا (SKU)</span><input dir="ltr" value={f.sku} onChange={set('sku')} /></label>
+          <label className="iv-field"><span>کد IRC</span><input dir="ltr" value={f.irc} onChange={set('irc')} /></label>
+          <label className="iv-field"><span>قیمتِ پایه (تومان)</span><input dir="ltr" inputMode="numeric" value={f.price} onChange={set('price')} /></label>
+          {returnable && (
+            <label className="iv-field"><span>ساعتِ آماده‌سازی پس از برگشت</span><input dir="ltr" inputMode="numeric" value={f.turnaroundHours} onChange={set('turnaroundHours')} /></label>
+          )}
+        </div>
+
+        <label className="iv-field"><span>یادداشت</span><input value={f.notes} onChange={set('notes')} /></label>
+      </div>
+      <Foot busy={busy} onClose={onClose} onSubmit={submit} />
+    </TitledSheet>
+  );
+}
+
+/**
+ * قالبِ محتویاتِ یک ست — «ستِ SDN بیست الکترود و پنج سوزن دارد».
+ *
+ * قلمی که به یک کالای تعریف‌شده وصل شود **ردیابی** می‌شود (تبِ «ست‌ها» موجودیِ داخلِ ست را از
+ * دفتر می‌خواند و تکمیل/خرابی دارد)؛ قلمِ فقط‌نام در شمارش می‌آید ولی موجودی ندارد.
+ */
+function SetContents({ item, onClose, onToast, onChanged }) {
+  const [rows, setRows] = useState([]);
+  const [items, setItems] = useState([]);
+  const [label, setLabel] = useState('');
+  const [partId, setPartId] = useState('');
+  const [qty, setQty] = useState('1');
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try { setRows(await api(`/assets/items/${item.id}/contents`)); }
+    catch (e) { onToast(e.message); }
+  }, [item.id, onToast]);
+  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    api('/stock/items').then((r) => setItems(r.filter((i) => i.id !== item.id && i.active))).catch(() => {});
+  }, [item.id]);
+
+  const add = async () => {
+    if (busy || (!label.trim() && !partId)) return;
+    setBusy(true);
+    try {
+      await api(`/assets/items/${item.id}/contents`, {
+        method: 'POST',
+        body: { label: label.trim() || undefined, partId: partId ? Number(partId) : undefined, quantity: int(qty) || 1 },
+      });
+      setLabel(''); setPartId(''); setQty('1');
+      await load(); onChanged?.();
+    } catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
+  const remove = async (id) => {
+    setBusy(true);
+    try { await api(`/assets/contents/${id}`, { method: 'DELETE' }); await load(); onChanged?.(); }
+    catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
+
+  return (
+    <TitledSheet onClose={() => !busy && onClose()} title={`محتویاتِ «${item.name}»`}>
+      <div className="iv-form">
+        <p className="iv-hint">این فهرست «استاندارد»ِ هر ستِ سریالیِ این کالاست: تبِ «ست‌ها» داخلِ ست را با آن می‌سنجد و کسری را حساب می‌کند. قلمی که به کالای تعریف‌شده وصل باشد قابلِ تکمیل از انبار است.</p>
+        <div className="iv-list iv-parts">
+          {rows.length === 0 && <div className="iv-empty">هنوز قلمی تعریف نشده</div>}
+          {rows.map((r) => (
+            <article key={r.id} className="iv-row sm">
+              <div className="iv-row-main">
+                <b>{r.label}</b>
+                <small>{num(r.quantity)} عدد · {r.partId ? 'کالای تعریف‌شده — ردیابی می‌شود' : 'فقط نام — ردیابی نمی‌شود'}</small>
+              </div>
+              <button type="button" className="iv-del" disabled={busy} onClick={() => remove(r.id)}>حذف</button>
+            </article>
+          ))}
+        </div>
+        <div className="iv-grid2">
+          <label className="iv-field"><span>از کالاهای تعریف‌شده</span>
+            <select value={partId} onChange={(e) => { setPartId(e.target.value); if (e.target.value) setLabel(''); }} disabled={busy}>
+              <option value="">— انتخاب —</option>
+              {items.map((i) => <option key={i.id} value={i.id}>{[i.name, i.size].filter(Boolean).join(' ')}</option>)}
+            </select>
+          </label>
+          <label className="iv-field"><span>یا عنوانِ دستی</span>
+            <input value={label} disabled={busy || !!partId} onChange={(e) => setLabel(e.target.value)} />
+          </label>
+          <label className="iv-field"><span>تعداد در هر ست</span>
+            <input inputMode="numeric" dir="ltr" value={qty} onChange={(e) => setQty(e.target.value)} disabled={busy} />
+          </label>
+        </div>
+      </div>
+      <Foot busy={busy || (!label.trim() && !partId)} onClose={onClose} onSubmit={add} label="افزودنِ قلم" />
+    </TitledSheet>
+  );
+}
+
+/**
+ * ست‌ها — هر ستِ سریالی یک بستهٔ موجودی (مالک، ۱۴۰۵/۰۷/۱۱).
+ *
+ * «استاندارد» از قالب، «داخلِ ست» از دفتر، «کسری» حساب‌شده. تکمیل از انبار (FEFO)، خرابی به
+ * «خرابی‌ها»، برداشت به انبار — همه حرکتِ دفتری. پایینِ صفحه «خرابی‌ها» است: اسقاط یا تعمیر.
+ */
+function Sets({ onToast }) {
+  const row = useStagger();
+  const [rows, setRows] = useState(null);
+  const [damaged, setDamaged] = useState([]);
+  const [q, setQ] = useState('');
+  const [busy, setBusy] = useState(null); // شناسهٔ ستِ در حالِ تکمیل
+  const [move, setMove] = useState(null); // { set, line, mode: 'damage' | 'withdraw' }
+  const [decide, setDecide] = useState(null); // { row, mode: 'scrap' | 'repair' }
+  const [report, setReport] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const p = q.trim().length >= 2 ? `?q=${encodeURIComponent(q.trim())}` : '';
+      const [s, d] = await Promise.all([api(`/stock/sets${p}`), api('/stock/damaged')]);
+      setRows(s); setDamaged(d);
+    } catch (e) { onToast(e.message); setRows([]); }
+  }, [q, onToast]);
+  useEffect(() => {
+    const t = setTimeout(load, q.trim() ? 300 : 0);
+    return () => clearTimeout(t);
+  }, [load, q]);
+
+  const fill = async (set) => {
+    setBusy(set.lotId);
+    try {
+      const r = await api(`/stock/sets/${set.lotId}/fill`, { method: 'POST', body: {} });
+      const got = r.filled.reduce((a, x) => a + x.quantity, 0);
+      onToast(r.short.length
+        ? `${num(got)} قلم تکمیل شد؛ انبار برای ${r.short.map((x) => `${x.label} (${num(x.missing)})`).join('، ')} کم دارد`
+        : `${num(got)} قلم از انبار تکمیل شد`);
+      await load();
+    } catch (e) { onToast(e.message); } finally { setBusy(null); }
+  };
+
+  const total = rows ?? [];
+  const incomplete = total.filter((s) => !s.totals.complete && s.totals.lines > 0).length;
+
+  return (
+    <>
+      <div className="iv-stats">
+        <div><b>{num(total.length)}</b><span>ستِ سریالی</span></div>
+        <div className={incomplete ? 'iv-warn' : ''}><b>{num(incomplete)}</b><span>ناقص</span></div>
+        <div className={damaged.length ? 'iv-warn' : ''}><b>{num(damaged.reduce((a, d) => a + d.quantity, 0))}</b><span>در خرابی‌ها</span></div>
+      </div>
+      <div className="iv-toolbar">
+        <input className="iv-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="جستجو: سریال یا نامِ ست" aria-label="جستجو در ست‌ها" />
+        <button type="button" className="iv-ghost" onClick={() => setReport(true)}>گزارشِ کسری</button>
+      </div>
+      <p className="iv-note iv-tabnote">فقط ستی که سریال دارد محتویاتِ ردیابی‌شده دارد: هر ست یک محل در دفترِ انبار است و قلمی که داخلِ آن است در انبار «در دسترس» نیست.</p>
+
+      <div className="iv-list">
+        {rows === null && <div className="iv-empty">در حال بارگذاری…</div>}
+        {rows !== null && rows.length === 0 && (
+          <div className="iv-empty">{q.trim() ? 'ستی با این نام نیست' : 'هنوز ستِ سریالی ثبت نشده — در تبِ «لات‌ها» برای کالای نوعِ «ست» لاتی با شمارهٔ سریال بسازید'}</div>
+        )}
+        {rows !== null && rows.map((s, i) => (
+          <motion.article key={s.lotId} {...row(i)} className={`iv-set${s.totals.complete ? ' ok' : s.totals.shortage ? ' warn' : ''}`}>
+            <header className="iv-set-head">
+              <b><Boxes width="15" height="15" /> {s.itemName} <bdi dir="ltr">{s.serialNo}</bdi></b>
+              <span className={`iv-tag ${s.totals.lines === 0 ? '' : s.totals.complete ? 's-closed' : 's-received'}`}>
+                {s.totals.lines === 0 ? 'بی‌قالب' : s.totals.complete ? 'کامل' : `${num(s.totals.shortage)} کسری`}
+              </span>
+              <small>{s.consignedTo ? `امانیِ ${s.consignedTo}` : s.atHome ? 'در انبار' : `الان در: ${s.at ?? '—'}`}</small>
+            </header>
+            {s.totals.lines === 0 ? (
+              <p className="iv-note">قالبِ محتویات تعریف نشده — در تبِ «کالاها» روی «محتویات» بزنید.</p>
+            ) : (
+              <div className="iv-settbl">
+                <div className="iv-setrow head"><span>قلم</span><span>استاندارد</span><span>داخلِ ست</span><span>کسری</span><span /></div>
+                {s.contents.map((c) => (
+                  <div key={c.componentId} className={`iv-setrow${(c.shortage ?? 0) > 0 ? ' short' : ''}${c.tracked ? '' : ' untracked'}`}>
+                    <span className="iv-setlabel">{c.label}{!c.tracked && <i> (ردیابی نمی‌شود)</i>}{c.extra > 0 && <i> (+{num(c.extra)} بیش از استاندارد)</i>}</span>
+                    <span>{num(c.standard)}</span>
+                    <span>{c.tracked ? num(c.inside) : '—'}</span>
+                    <span className={(c.shortage ?? 0) > 0 ? 'iv-setmiss' : ''}>{c.tracked ? (c.shortage ? num(c.shortage) : '—') : '—'}</span>
+                    <span className="iv-setacts">
+                      <button type="button" disabled={!c.tracked || !c.inside} onClick={() => setMove({ set: s, line: c, mode: 'damage' })}>خرابی</button>
+                      <button type="button" disabled={!c.tracked || !c.inside} onClick={() => setMove({ set: s, line: c, mode: 'withdraw' })}>برداشت</button>
+                    </span>
+                  </div>
+                ))}
+                {s.extras.map((c) => (
+                  <div key={`x${c.partId}`} className="iv-setrow extra">
+                    <span className="iv-setlabel">{c.label}<i> (خارج از قالب)</i></span>
+                    <span>—</span>
+                    <span>{num(c.inside)}</span>
+                    <span>—</span>
+                    <span className="iv-setacts">
+                      <button type="button" onClick={() => setMove({ set: s, line: { ...c, standard: 0, tracked: true }, mode: 'withdraw' })}>برداشت</button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <footer className="iv-set-foot">
+              <button type="button" className="iv-mini" disabled={busy === s.lotId || !s.totals.shortage} onClick={() => fill(s)}>
+                {busy === s.lotId ? 'در حال تکمیل…' : 'تکمیل از انبار'}
+              </button>
+              {s.totals.untracked > 0 && <small className="iv-none">{num(s.totals.untracked)} قلمِ فقط‌نام — برای ردیابی، در «محتویات» به کالای تعریف‌شده وصلش کنید</small>}
+            </footer>
+          </motion.article>
+        ))}
+      </div>
+
+      <section className="iv-dmg">
+        <h2><Alert width="15" height="15" /> خرابی‌ها</h2>
+        <p className="iv-note">قلمِ خراب از ست یا انبار این‌جا می‌نشیند تا تصمیم گرفته شود: اسقاط (خروجِ قطعی) یا تعمیر و برگشت به انبار.</p>
+        <div className="iv-list">
+          {damaged.length === 0 && <div className="iv-empty">چیزی در خرابی‌ها نیست</div>}
+          {damaged.map((d) => (
+            <article key={d.lotId} className="iv-row">
+              <div className="iv-qty"><b>{num(d.quantity)}</b><span>{d.unit}</span></div>
+              <div className="iv-row-main">
+                <b>{d.itemName}</b>
+                <small>{d.serialNo ? <>سریال <span dir="ltr">{d.serialNo}</span></> : d.lotNo ? <>لات <span dir="ltr">{d.lotNo}</span></> : 'بدونِ شمارهٔ لات'}{d.reason ? ` · ${d.reason}` : ''}{d.since ? ` · ${faDate(d.since)}` : ''}</small>
+              </div>
+              <div className="iv-acts">
+                <button type="button" onClick={() => setDecide({ row: d, mode: 'repair' })}>تعمیر و برگشت</button>
+                <button type="button" className="iv-acts-del" onClick={() => setDecide({ row: d, mode: 'scrap' })}>اسقاط</button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <AnimatePresence>
+        {move && (
+          <QtySheet
+            title={move.mode === 'damage' ? `خرابی — ${move.line.label}` : `برداشت به انبار — ${move.line.label}`}
+            hint={move.mode === 'damage' ? `از ${move.set.location} به «خرابی‌ها»` : `از ${move.set.location} به ${move.set.home}`}
+            max={move.line.inside}
+            lots={move.line.lots}
+            onClose={() => setMove(null)}
+            onSubmit={async ({ quantity, lotId, note }) => {
+              await api(`/stock/sets/${move.set.lotId}/${move.mode}`, { method: 'POST', body: { partLotId: lotId, quantity, note } });
+              onToast(move.mode === 'damage' ? 'به «خرابی‌ها» منتقل شد' : 'به انبار برگشت');
+              setMove(null); await load();
+            }}
+            onError={onToast}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {decide && (
+          <QtySheet
+            title={decide.mode === 'scrap' ? `اسقاط — ${decide.row.itemName}` : `تعمیر و برگشت — ${decide.row.itemName}`}
+            hint={decide.mode === 'scrap' ? 'خروجِ قطعی از «خرابی‌ها»؛ در دفتر با دلیلِ «اسقاط» می‌ماند' : 'به انبار برمی‌گردد و دوباره در دسترس است'}
+            max={decide.row.quantity}
+            onClose={() => setDecide(null)}
+            onSubmit={async ({ quantity, note }) => {
+              await api(`/stock/damaged/${decide.row.lotId}/${decide.mode}`, { method: 'POST', body: { quantity, note } });
+              onToast(decide.mode === 'scrap' ? 'اسقاط ثبت شد' : 'به انبار برگشت');
+              setDecide(null); await load();
+            }}
+            onError={onToast}
+          />
+        )}
+      </AnimatePresence>
+      <AnimatePresence>
+        {report && <ShortageReport onClose={() => setReport(false)} onError={onToast} />}
+      </AnimatePresence>
+    </>
+  );
+}
+
+/** تعداد (+ لاتِ مبدأ وقتی بیش از یکی است) + یادداشت — برای خرابی/برداشت/اسقاط/تعمیر. */
+function QtySheet({ title, hint, max, lots, onClose, onSubmit, onError }) {
+  const multi = Array.isArray(lots) && lots.length > 1;
+  const [lotId, setLotId] = useState(() => (Array.isArray(lots) && lots.length ? String(lots[0].lotId) : ''));
+  const cap = multi ? (lots.find((l) => String(l.lotId) === lotId)?.quantity ?? max) : max;
+  const [qty, setQty] = useState('1');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const submit = async () => {
+    if (busy) return;
+    const n = int(qty);
+    if (n <= 0) { onError('تعداد را وارد کنید'); return; }
+    if (cap != null && n > cap) { onError(`بیشتر از ${num(cap)} عدد این‌جا نیست`); return; }
+    setBusy(true);
+    try { await onSubmit({ quantity: n, lotId: lotId ? Number(lotId) : undefined, note: note.trim() || undefined }); }
+    catch (e) { onError(e.message); } finally { setBusy(false); }
+  };
+  return (
+    <TitledSheet onClose={() => !busy && onClose()} title={title}>
+      <div className="iv-form">
+        {hint && <p className="iv-hint">{hint}</p>}
+        {multi && (
+          <label className="iv-field"><span>از کدام لات</span>
+            <select value={lotId} onChange={(e) => { setLotId(e.target.value); setQty('1'); }}>
+              {lots.map((l) => <option key={l.lotId} value={l.lotId}>{l.serialNo || l.lotNo || `#${l.lotId}`} — {num(l.quantity)} عدد</option>)}
+            </select>
+          </label>
+        )}
+        <label className="iv-field"><span>تعداد{cap != null ? ` (حداکثر ${num(cap)})` : ''}</span>
+          <input dir="ltr" inputMode="numeric" value={qty} onChange={(e) => setQty(e.target.value)} autoFocus />
+        </label>
+        <label className="iv-field"><span>یادداشت (اختیاری)</span>
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="مثلاً «کابل پاره بود»" />
+        </label>
+      </div>
+      <Foot busy={busy} onClose={onClose} onSubmit={submit} label="ثبت" />
+    </TitledSheet>
+  );
+}
+
+/** گزارشِ کسری و خرابی — کدام ست، کدام بیمارستان، کِی و در کدام مرحله (تحویل یا برگشت). */
+function ShortageReport({ onClose, onError }) {
+  const [days, setDays] = useState(90);
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    const from = new Date(Date.now() - days * 864e5).toISOString();
+    api(`/assets/shortages/report?from=${encodeURIComponent(from)}`).then(setData).catch((e) => onError(e.message));
+  }, [days, onError]);
+  const STAGE = { receipt: 'هنگامِ تحویل', return: 'هنگامِ برگشت' };
+  const KIND = { missing: 'کسری', damaged: 'خرابی' };
+  const csv = () => {
+    if (!data) return;
+    const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+    const head = ['تاریخ', 'حواله', 'بیمارستان', 'ست', 'سریال', 'قلم', 'تعداد', 'نوع', 'مرحله', 'یادداشت'];
+    const lines = data.rows.map((r) => [faDate(r.at), r.transferCode, r.hospital, r.itemName, r.serialNo, r.label, r.missing, KIND[r.kind] ?? r.kind, STAGE[r.stage] ?? r.stage, r.notes].map(esc).join(','));
+    const blob = new Blob(['﻿' + [head.map(esc).join(','), ...lines].join('\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = `kasri-${days}.csv`; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+  return (
+    <TitledSheet onClose={onClose} title="گزارشِ کسری و خرابی">
+      <div className="iv-form">
+        <div className="iv-filters">
+          {[30, 90, 365].map((d) => <button key={d} type="button" className={days === d ? 'on' : ''} onClick={() => setDays(d)}>{num(d)} روزِ اخیر</button>)}
+        </div>
+        {!data ? <div className="iv-empty">در حال بارگذاری…</div> : (
+          <>
+            <div className="iv-stats">
+              <div><b>{num(data.total)}</b><span>قلم کم یا خراب</span></div>
+              <div><b>{data.byItem[0]?.label ?? '—'}</b><span>بیشترین ست</span></div>
+              <div><b>{data.byHospital[0]?.label ?? '—'}</b><span>بیشترین بیمارستان</span></div>
+            </div>
+            <div className="iv-list">
+              {data.rows.length === 0 && <div className="iv-empty">در این بازه کسری ثبت نشده</div>}
+              {data.rows.map((r) => (
+                <article key={r.id} className="iv-row sm">
+                  <div className="iv-qty"><b>{num(r.missing)}</b><span>{KIND[r.kind] ?? r.kind}</span></div>
+                  <div className="iv-row-main">
+                    <b>{r.label} — {r.itemName}{r.serialNo ? ` (${r.serialNo})` : ''}</b>
+                    <small>{faDate(r.at)} · {r.hospital} · حوالهٔ <span dir="ltr">{r.transferCode}</span> · {STAGE[r.stage] ?? r.stage}{r.notes ? ` · ${r.notes}` : ''}</small>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+      <footer className="iv-foot">
+        <button type="button" className="iv-ghost" onClick={onClose}>بستن</button>
+        <button type="button" className="iv-save" disabled={!data?.rows?.length} onClick={csv}>خروجیِ CSV</button>
+      </footer>
+    </TitledSheet>
+  );
+}
 
 /**
  * دارایی‌های برگشتی — ست و دستگاه.
@@ -842,6 +1400,8 @@ function TransferDetail({ id, onClose, onChanged, onError }) {
   const [check, setCheck] = useState(null);
   const [miss, setMiss] = useState({});
   const [used, setUsed] = useState({}); // lotId → مقدارِ در حالِ ویرایش
+  const [sets, setSets] = useState([]); // ست‌های سریالیِ همین حواله (بستهٔ ب: شمارشِ برگشت)
+  const [cnt, setCnt] = useState({}); // `${lotId}:${partId}` → { counted, damaged }
 
   const load = useCallback(async () => {
     try {
@@ -869,6 +1429,25 @@ function TransferDetail({ id, onClose, onChanged, onError }) {
     if (!t || t.status === 'planned') { setCheck(null); return; }
     api(`/assets/transfers/${id}/return-check`).then(setCheck).catch(() => setCheck(null));
   }, [t, id]);
+  /* ستِ سریالی = بستهٔ موجودی: شمارشِ برگشتش ردیف‌به‌ردیف است (استاندارد / داخلِ ست / شمردم / خرابی)،
+     نه «یک کسری ثبت کن». هر خطِ سریال‌دار پرسیده می‌شود؛ آنچه ست نیست `null` برمی‌گردد. */
+  useEffect(() => {
+    if (!t || t.status === 'planned') { setSets([]); return; }
+    let on = true;
+    Promise.all(t.lines.filter((l) => l.serialNo).map((l) => api(`/stock/sets/${l.lotId}`).catch(() => null)))
+      .then((rs) => { if (on) setSets(rs.filter((x) => x && x.totals.lines > 0)); });
+    return () => { on = false; };
+  }, [t, id]);
+  const refreshSets = async () => {
+    const rs = await Promise.all(sets.map((x) => api(`/stock/sets/${x.lotId}`).catch(() => null)));
+    setSets(rs.filter((x) => x && x.totals.lines > 0));
+    setCnt({});
+  };
+  const cell = (lotId, partId, k, fallback) => {
+    const v = cnt[`${lotId}:${partId}`]?.[k];
+    return v === undefined ? String(fallback) : v;
+  };
+  const setCell = (lotId, partId, k, v) => setCnt((m) => ({ ...m, [`${lotId}:${partId}`]: { ...(m[`${lotId}:${partId}`] ?? {}), [k]: v } }));
 
   return (
     <TitledSheet title={t ? `حوالهٔ ${t.code}` : 'حواله'} onClose={onClose}>
@@ -958,16 +1537,64 @@ function TransferDetail({ id, onClose, onChanged, onError }) {
             )
           )}
 
+          {/* شمارشِ برگشتِ ستِ سریالی (بستهٔ ب): شمردم/خرابی را دفتر می‌زند؛ گم‌شده حساب می‌شود و از ست
+              خارج می‌شود (نه مصرف — مصرف را کارشناس سرِ عمل زده)؛ بعد «تکمیل از انبار». */}
+          {t.status !== 'closed' && sets.map((st) => {
+            const tracked = st.contents.filter((c) => c.tracked);
+            const lines = tracked.map((c) => {
+              const counted = int(cell(st.lotId, c.partId, 'counted', c.inside));
+              const damaged = int(cell(st.lotId, c.partId, 'damaged', 0));
+              return { c, counted, damaged, lost: Math.max(0, (c.inside ?? 0) - counted - damaged), over: counted + damaged > (c.inside ?? 0) };
+            });
+            const totalLost = lines.reduce((a, l) => a + l.lost, 0);
+            const totalDamaged = lines.reduce((a, l) => a + l.damaged, 0);
+            const bad = lines.some((l) => l.over);
+            return (
+              <div key={st.lotId} className="iv-check iv-retcount">
+                <b><Boxes width="14" height="14" /> شمارشِ برگشتِ {st.itemName} <bdi dir="ltr">{st.serialNo}</bdi></b>
+                <div className="iv-settbl">
+                  <div className="iv-setrow head cnt"><span>قلم</span><span>استاندارد</span><span>داخلِ ست</span><span>شمردم</span><span>خرابی</span><span>گم‌شده</span></div>
+                  {lines.map(({ c, lost, over }) => (
+                    <div key={c.componentId} className={`iv-setrow cnt${lost || over ? ' short' : ''}`}>
+                      <span className="iv-setlabel">{c.label}</span>
+                      <span>{num(c.standard)}</span>
+                      <span>{num(c.inside)}</span>
+                      <input dir="ltr" inputMode="numeric" aria-label={`شمردم — ${c.label}`} value={cell(st.lotId, c.partId, 'counted', c.inside)} onChange={(e) => setCell(st.lotId, c.partId, 'counted', e.target.value)} />
+                      <input dir="ltr" inputMode="numeric" aria-label={`خرابی — ${c.label}`} value={cell(st.lotId, c.partId, 'damaged', 0)} onChange={(e) => setCell(st.lotId, c.partId, 'damaged', e.target.value)} />
+                      <span className={lost ? 'iv-setmiss' : ''}>{over ? 'بیش از داخل' : lost ? num(lost) : '—'}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="iv-tracts">
+                  <button type="button" className="iv-mini" disabled={busy || bad || !tracked.length}
+                          onClick={() => act(
+                            `/stock/transfers/${id}/return-count`,
+                            { lines: lines.map((l) => ({ lotId: st.lotId, partId: l.c.partId, counted: l.counted, damaged: l.damaged })) },
+                            totalLost || totalDamaged ? `شمارش ثبت شد — ${num(totalLost)} گم‌شده، ${num(totalDamaged)} خرابی` : 'شمارش ثبت شد — ست کامل است',
+                            'POST',
+                            () => refreshSets(),
+                          )}>
+                    ثبتِ شمارش{totalLost ? ` (${num(totalLost)} گم‌شده)` : ''}
+                  </button>
+                  <button type="button" className="iv-mini" disabled={busy || !st.totals.shortage}
+                          onClick={() => act(`/stock/sets/${st.lotId}/fill`, {}, 'ست از انبار تکمیل شد', 'POST', () => refreshSets())}>
+                    تکمیل از انبار{st.totals.shortage ? ` (${num(st.totals.shortage)} کسری)` : ''}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+
           {/* چک‌لیستِ برگشت — فقط **کسری** ثبت می‌شود نه کلِ شمارش. ثبتِ ۲۰
               ردیفِ «سالم» یعنی هیچ‌کس این کار را نمی‌کند. */}
-          {check && check.lots.length > 0 && (
+          {check && check.lots.filter((l) => !sets.some((x) => x.lotId === l.lotId)).length > 0 && (
             <div className="iv-check">
               <b>محتویاتِ ست هنگام برگشت</b>
-              {check.lots.map((l) => (
+              {check.lots.filter((l) => !sets.some((x) => x.lotId === l.lotId)).map((l) => (
                 <div key={l.lotId} className="iv-checklot">
                   <span className="iv-checkname">{l.itemName}{l.serialNo ? ` (${l.serialNo})` : ''}</span>
                   {l.contents.length === 0
-                    ? <em className="iv-none">فهرستِ محتویات تعریف نشده — از تعاریفِ پایه ← کالاها اضافه کنید</em>
+                    ? <em className="iv-none">فهرستِ محتویات تعریف نشده — از تبِ «کالاها» ← «محتویات» اضافه کنید</em>
                     : <em className="iv-none">{num(l.contents.length)} قلم</em>}
                   {l.shortages.map((sh) => (
                     <span key={sh.id} className="iv-short">
@@ -1197,6 +1824,8 @@ const MOVE_META = {
   in: { title: 'ورودِ کالا', label: 'تعدادِ ورودی', path: 'receive', ok: 'ورود ثبت شد' },
   out: { title: 'مصرف / خروج', label: 'تعدادِ مصرفی', path: 'consume', ok: 'مصرف ثبت شد' },
   adjust: { title: 'اصلاحِ شمارش', label: 'چند عدد شمردید؟', path: 'adjust', ok: 'موجودی اصلاح شد' },
+  /* خرابی در خودِ انبار: به «خرابی‌ها» می‌رود تا همان‌جا اسقاط یا تعمیر شود (بستهٔ ب). */
+  damage: { title: 'ثبتِ خرابی', label: 'چند عدد خراب شد؟', path: 'damage', ok: 'به «خرابی‌ها» منتقل شد' },
 };
 
 function MoveSheet({ lot, mode, onClose, onSaved, onError }) {
@@ -1215,7 +1844,9 @@ function MoveSheet({ lot, mode, onClose, onSaved, onError }) {
         method: 'POST',
         body: mode === 'adjust'
           ? { counted: n, reason: reason.trim() || undefined }
-          : { quantity: n, reason: reason.trim() || undefined },
+          : mode === 'damage'
+            ? { quantity: n, note: reason.trim() || undefined }
+            : { quantity: n, reason: reason.trim() || undefined },
       });
       await onSaved(meta.ok);
     } catch (e) { onError(e.message); } finally { setBusy(false); }
@@ -1244,6 +1875,9 @@ function MoveSheet({ lot, mode, onClose, onSaved, onError }) {
           <p className="iv-hint">
             مصرفِ حینِ عمل را از صورت‌حسابِ همان مراجعه ثبت کنید تا به بیمار گره بخورد؛ این‌جا برای ضایعات و خروجِ بدونِ عمل است.
           </p>
+        )}
+        {mode === 'damage' && (
+          <p className="iv-hint">قلمِ خراب به محلِ «خرابی‌ها» می‌رود و در تبِ «ست‌ها» همان‌جا اسقاط یا تعمیر می‌شود — از موجودیِ در دسترس کم می‌شود، گم نمی‌شود.</p>
         )}
       </div>
       <Foot busy={busy} onClose={onClose} onSubmit={submit} label="ثبت" />

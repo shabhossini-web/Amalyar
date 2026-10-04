@@ -6,7 +6,10 @@ import { PermissionGuard } from '../auth/permission.guard';
 import { RequirePermissions } from '../auth/permission.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { InventoryService } from './inventory.service';
-import { AdjustDto, LotCreateDto, LotPatchDto, MovementDto, ReleaseDto, TransferReceiptDto, TransferReceiveDto, TransferSendDto, TransferUsageDto } from './dto/inventory.dto';
+import { AdjustDto, LotCreateDto, LotPatchDto, MovementDto, QuantityNoteDto, ReleaseDto, ReturnCountDto, SetFillDto, SetMoveDto, TransferReceiptDto, TransferReceiveDto, TransferSendDto, TransferUsageDto } from './dto/inventory.dto';
+import { SetStockService } from './set-stock.service';
+import { DefinitionsService } from './definitions.service';
+import { ItemCreateDto, ItemPatchDto } from './definitions.controller';
 
 /**
  * انبار — لات، سریال، دفترِ حرکت و ردیابی.
@@ -18,7 +21,93 @@ import { AdjustDto, LotCreateDto, LotPatchDto, MovementDto, ReleaseDto, Transfer
 @UseGuards(JwtAuthGuard, FeatureGuard, PermissionGuard)
 @Feature('inventory')
 export class InventoryController {
-  constructor(private inv: InventoryService) {}
+  constructor(private inv: InventoryService, private sets: SetStockService, private defs: DefinitionsService) {}
+
+  // ── کالاها (کاتالوگ) — از تعاریفِ پایه به انبار آمده (مالک، ۱۴۰۵/۰۷/۱۱) ──
+
+  /**
+   * ⚠️ همان جدولِ `items` است که `/items` می‌دهد (تک‌منبع)؛ فقط درِ ورودش `inventory.items` (سطح ۳)
+   * شد، نه `definitions.manage` (سطح ۵): انباردار باید بی‌دسترسیِ مدیریتی کالا تعریف کند.
+   */
+  @RequirePermissions('inventory.read')
+  @Get('items')
+  catalog(@Query('q') q?: string) {
+    return this.inv.catalog(q);
+  }
+
+  @RequirePermissions('inventory.items')
+  @Post('items')
+  addItem(@Body() dto: ItemCreateDto) {
+    return this.defs.createItem(dto);
+  }
+
+  @RequirePermissions('inventory.items')
+  @Patch('items/:id')
+  patchItem(@Param('id', ParseIntPipe) id: number, @Body() dto: ItemPatchDto) {
+    return this.defs.updateItem(id, dto);
+  }
+
+  @RequirePermissions('inventory.items')
+  @Delete('items/:id')
+  removeItem(@Param('id', ParseIntPipe) id: number) {
+    return this.defs.deleteItem(id);
+  }
+
+  // ── ست به‌عنوانِ بستهٔ موجودی (بستهٔ ب) ──
+
+  @RequirePermissions('inventory.read')
+  @Get('sets')
+  setsList(@Query('q') q?: string) {
+    return this.sets.sets({ q });
+  }
+
+  @RequirePermissions('inventory.read')
+  @Get('sets/:lotId')
+  async setOne(@Param('lotId', ParseIntPipe) lotId: number) {
+    const [set] = await this.sets.sets({ lotId });
+    return set ?? null;
+  }
+
+  /// تکمیل از انبار — بی‌بدنه یعنی همهٔ کسری‌ها (FEFO).
+  @RequirePermissions('inventory.write')
+  @Post('sets/:lotId/fill')
+  setFill(@Param('lotId', ParseIntPipe) lotId: number, @Body() dto: SetFillDto, @CurrentUser() user: any) {
+    return this.sets.fill(lotId, dto ?? {}, user);
+  }
+
+  /// خرابیِ قلمِ داخلِ ست → محلِ «خرابی‌ها».
+  @RequirePermissions('inventory.write')
+  @Post('sets/:lotId/damage')
+  setDamage(@Param('lotId', ParseIntPipe) lotId: number, @Body() dto: SetMoveDto, @CurrentUser() user: any) {
+    return this.sets.damage(lotId, dto, user);
+  }
+
+  /// برداشتِ قلم از ست به انبار.
+  @RequirePermissions('inventory.write')
+  @Post('sets/:lotId/withdraw')
+  setWithdraw(@Param('lotId', ParseIntPipe) lotId: number, @Body() dto: SetMoveDto, @CurrentUser() user: any) {
+    return this.sets.withdraw(lotId, dto, user);
+  }
+
+  // ── «خرابی‌ها»: اسقاط یا تعمیر ──
+
+  @RequirePermissions('inventory.read')
+  @Get('damaged')
+  damaged() {
+    return this.sets.damaged();
+  }
+
+  @RequirePermissions('inventory.write')
+  @Post('damaged/:lotId/scrap')
+  scrap(@Param('lotId', ParseIntPipe) lotId: number, @Body() dto: QuantityNoteDto, @CurrentUser() user: any) {
+    return this.sets.scrap(lotId, dto, user);
+  }
+
+  @RequirePermissions('inventory.write')
+  @Post('damaged/:lotId/repair')
+  repair(@Param('lotId', ParseIntPipe) lotId: number, @Body() dto: QuantityNoteDto, @CurrentUser() user: any) {
+    return this.sets.repair(lotId, dto, user);
+  }
 
   @RequirePermissions('inventory.read')
   @Get('lots')
@@ -104,6 +193,13 @@ export class InventoryController {
   @Post('lots/:id/adjust')
   adjust(@Param('id', ParseIntPipe) id: number, @Body() dto: AdjustDto, @CurrentUser() user: any) {
     return this.inv.adjust(id, dto.counted, dto.reason, user);
+  }
+
+  /// خرابیِ قلمی در خودِ انبار → «خرابی‌ها» (اسقاط یا تعمیر بعداً همان‌جا).
+  @RequirePermissions('inventory.write')
+  @Post('lots/:id/damage')
+  lotDamage(@Param('id', ParseIntPipe) id: number, @Body() dto: QuantityNoteDto, @CurrentUser() user: any) {
+    return this.sets.lotDamage(id, dto, user);
   }
 
   // ── حواله‌ها: سفرِ ست به بیمارستان و برگشتش ──
@@ -203,6 +299,13 @@ export class InventoryController {
   @Post('transfers/:id/return')
   back(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
     return this.inv.returnTransfer(id, user);
+  }
+
+  /// شمارشِ برگشتِ ستِ سریالی — شمردم/خرابی؛ گم‌شده حساب می‌شود (بستهٔ ب).
+  @RequirePermissions('inventory.write')
+  @Post('transfers/:id/return-count')
+  returnCount(@Param('id', ParseIntPipe) id: number, @Body() dto: ReturnCountDto, @CurrentUser() user: any) {
+    return this.sets.returnCount(id, dto, user);
   }
 }
 

@@ -58,13 +58,14 @@ export class AssetsController {
     return this.assets.contents(id);
   }
 
-  @RequirePermissions('definitions.manage')
+  /// محتویاتِ ست با کالا به انبار آمد (بستهٔ ب): همان مجوزِ تعریفِ کالا، سطح ۳.
+  @RequirePermissions('inventory.items')
   @Post('items/:id/contents')
   addContent(@Param('id', ParseIntPipe) id: number, @Body() dto: ComponentDto) {
     return this.assets.addContent(id, dto);
   }
 
-  @RequirePermissions('definitions.manage')
+  @RequirePermissions('inventory.items')
   @Delete('contents/:id')
   removeContent(@Param('id', ParseIntPipe) id: number) {
     return this.assets.removeContent(id);

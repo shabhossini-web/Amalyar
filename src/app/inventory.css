@@ -240,8 +240,9 @@
 .iv-tracts { display: flex; gap: 8px; }
 .iv-mini {
   padding: 9px 13px; border-radius: 11px; font: inherit; font-size: 12px; cursor: pointer;
-  color: #fff; background: rgba(var(--veil-rgb), .07); border: 1px solid rgba(var(--veil-rgb), .16);
+  color: var(--text1); background: rgba(var(--veil-rgb), .07); border: 1px solid rgba(var(--veil-rgb), .16);
 }
+.iv-mini:disabled { opacity: .45; cursor: not-allowed; }
 .iv-mini.warn { color: var(--amber-text); border-color: rgba(251, 191, 36, .3); }
 
 /* برگهٔ مصرف — کارِ کارشناسِ سرِ عمل */
@@ -352,3 +353,76 @@
   font-size: 12px; color: var(--text2);
   background: rgba(var(--brand-rgb), .08); border: 1px dashed rgba(var(--brand-soft-rgb), .3);
 }
+
+/* ── بستهٔ ب: کالاها در انبار، ست به‌عنوانِ بستهٔ موجودی، خرابی‌ها ── */
+.iv-tabnote { max-width: var(--page-w); margin: -4px auto 12px; }
+.iv-off { font-style: normal; font-weight: 400; color: var(--text3); }
+/* ردیفِ چیپ‌ها: `small`ِ ردیف `display:block` دارد و بر این کلاس می‌چربید — چیپ‌ها داخلِ هم می‌شکستند و
+   «۱ قلم در قالب» دو خط می‌شد. انتخابگرِ هم‌وزن + چیپِ یک‌خطی. */
+.iv-chips, .iv-row-main .iv-chips { display: flex; flex-wrap: wrap; gap: 4px 6px; margin-top: 6px; }
+.iv-chip {
+  padding: 1px 8px; border-radius: 8px; font-size: 10px; color: var(--text2); white-space: nowrap;
+  background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .12);
+}
+.iv-chip.on { color: var(--green-text); background: rgba(52, 211, 153, .1); border-color: rgba(52, 211, 153, .3); }
+.iv-chip.multi { color: var(--brand-text); background: rgba(var(--brand-rgb), .1); border-color: rgba(var(--brand-2-rgb), .3); }
+.iv-acts .iv-acts-del { color: var(--red-text); border-color: rgba(248, 113, 113, .28); }
+.iv-row.sm { padding: 9px 12px; }
+.iv-parts { margin-block-end: 4px; }
+
+/* کلیدِ دوحالته با نوشته و توضیح — همان `us-switch`، چیدمانِ ردیفی. */
+.iv-switch { gap: 12px; align-items: flex-start; padding: 4px 0; }
+.iv-switch .us-track { flex: 0 0 auto; margin-top: 3px; }
+.iv-switch-t { display: grid; gap: 2px; font-size: 13px; color: var(--text1); }
+.iv-switch-t small { font-size: 11px; line-height: 1.8; color: var(--text3); }
+
+/* ست — کارتِ جدول‌دار */
+.iv-set {
+  display: grid; gap: 10px; padding: 13px 15px; border-radius: 15px;
+  background: rgba(var(--surface-rgb), .8); border: 1px solid rgba(var(--brand-soft-rgb), .16);
+}
+.iv-set.warn { border-inline-start: 3px solid rgba(251, 191, 36, .75); }
+.iv-set.ok { border-inline-start: 3px solid rgba(52, 211, 153, .6); }
+.iv-set-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.iv-set-head b { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; }
+.iv-set-head b svg { color: var(--brand-2); }
+.iv-set-head small { margin-inline-start: auto; font-size: 11px; color: var(--text3); }
+.iv-settbl { display: grid; gap: 3px; }
+.iv-setrow {
+  display: grid; grid-template-columns: minmax(0, 1fr) 64px 64px 56px auto; gap: 6px; align-items: center;
+  padding: 5px 0; font-size: 12.5px; border-block-start: 1px solid rgba(var(--veil-rgb), .06);
+}
+.iv-setrow.head { font-size: 10.5px; color: var(--text3); border: 0; }
+.iv-setrow > span:not(:first-child) { text-align: center; font-variant-numeric: tabular-nums; }
+.iv-setrow.cnt { grid-template-columns: minmax(0, 1fr) 52px 56px 60px 60px 56px; }
+.iv-setrow.cnt input {
+  width: 100%; min-width: 0; padding: 6px 4px; text-align: center; font: inherit; font-size: 13px; border-radius: 9px;
+  color: var(--text1); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .14);
+}
+.iv-setrow.cnt input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+.iv-setlabel { min-width: 0; overflow-wrap: anywhere; }
+.iv-setlabel i { font-style: normal; font-size: 10.5px; color: var(--text3); }
+.iv-setrow.short .iv-setlabel { color: var(--amber-text); }
+.iv-setrow.untracked { opacity: .7; }
+.iv-setmiss { color: var(--amber-text); font-weight: 800; }
+.iv-setacts { display: flex; gap: 4px; justify-content: flex-end; }
+.iv-setacts button {
+  padding: 5px 9px; border-radius: 9px; font: inherit; font-size: 11px; cursor: pointer;
+  color: var(--text1); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--brand-soft-rgb), .2);
+}
+.iv-setacts button:disabled { opacity: .35; cursor: not-allowed; }
+.iv-set-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.iv-retcount .iv-settbl { margin-block: 8px; }
+@media (max-width: 520px) {
+  /* ردیفِ کالا روی گوشی: دکمه‌ها زیرِ متن می‌روند تا نام و چیپ‌ها جا داشته باشند (ستونِ میانی ۱۱۰px شده بود). */
+  .iv-item { flex-wrap: wrap; }
+  .iv-item .iv-acts { flex-basis: 100%; justify-content: flex-start; }
+  .iv-setrow { grid-template-columns: minmax(0, 1fr) 48px 52px 44px auto; gap: 4px; font-size: 12px; }
+  .iv-setrow.cnt { grid-template-columns: minmax(0, 1fr) 40px 44px 50px 50px 44px; }
+  .iv-setacts { flex-direction: column; }
+}
+
+/* خرابی‌ها */
+.iv-dmg { max-width: var(--page-w); margin: 22px auto 0; display: grid; gap: 8px; }
+.iv-dmg h2 { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 14px; }
+.iv-dmg h2 svg { color: var(--amber-text); }

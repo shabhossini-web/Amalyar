@@ -169,3 +169,65 @@ export class TransferReceiptDto {
   @IsOptional() @IsArray({ message: 'ردیف‌های شمارش نامعتبر است' }) @ValidateNested({ each: true }) @Type(() => ReceiptLineDto)
   lines?: ReceiptLineDto[];
 }
+
+// ───────────────────────── بستهٔ ب: ست به‌عنوانِ بستهٔ موجودی ─────────────────────────
+
+/** یک قلمِ تکمیل: از این کالا این‌قدر از انبار به ست. */
+export class SetFillLineDto {
+  @Type(() => Number) @IsInt({ message: 'کالای قلم نامعتبر است' }) @Min(1)
+  partId!: number;
+
+  @Type(() => Number) @IsInt({ message: 'تعداد باید عدد باشد' }) @Min(1, { message: 'تعداد باید دستِ‌کم ۱ باشد' })
+  quantity!: number;
+}
+
+/** تکمیل از انبار — بی‌ردیف یعنی همهٔ کسری‌ها. */
+export class SetFillDto {
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => SetFillLineDto)
+  lines?: SetFillLineDto[];
+}
+
+/** خرابی یا برداشتِ یک قلمِ داخلِ ست — از کدام لات، چند تا. */
+export class SetMoveDto {
+  @Type(() => Number) @IsInt({ message: 'لاتِ قلم نامعتبر است' }) @Min(1)
+  partLotId!: number;
+
+  @Type(() => Number) @IsInt({ message: 'تعداد باید عدد باشد' }) @Min(1, { message: 'تعداد باید دستِ‌کم ۱ باشد' })
+  quantity!: number;
+
+  @IsOptional() @IsString() @MaxLength(200, { message: 'یادداشت طولانی است' })
+  note?: string;
+}
+
+/** خرابی در خودِ انبار، اسقاط، تعمیر — تعداد و یادداشت. */
+export class QuantityNoteDto {
+  @Type(() => Number) @IsInt({ message: 'تعداد باید عدد باشد' }) @Min(1, { message: 'تعداد باید دستِ‌کم ۱ باشد' })
+  quantity!: number;
+
+  @IsOptional() @IsString() @MaxLength(200, { message: 'یادداشت طولانی است' })
+  note?: string;
+}
+
+/** یک ردیفِ شمارشِ برگشتِ ست: این ست، این قلم، چند تا شمردم، چند تا خراب. */
+export class ReturnCountLineDto {
+  @Type(() => Number) @IsInt({ message: 'ستِ انتخابی نامعتبر است' }) @Min(1)
+  lotId!: number;
+
+  @Type(() => Number) @IsInt({ message: 'کالای قلم نامعتبر است' }) @Min(1)
+  partId!: number;
+
+  @Type(() => Number) @IsInt({ message: 'تعدادِ شمرده‌شده باید عدد باشد' }) @Min(0, { message: 'تعدادِ شمرده‌شده نمی‌تواند منفی باشد' })
+  counted!: number;
+
+  @IsOptional() @Type(() => Number) @IsInt({ message: 'تعدادِ خرابی باید عدد باشد' }) @Min(0, { message: 'تعدادِ خرابی نمی‌تواند منفی باشد' })
+  damaged?: number;
+}
+
+export class ReturnCountDto {
+  @IsOptional() @IsString() @MaxLength(300, { message: 'یادداشت طولانی است' })
+  note?: string;
+
+  @IsArray({ message: 'ردیف‌های شمارش نامعتبر است' }) @ArrayMinSize(1, { message: 'دستِ‌کم یک ردیف لازم است' })
+  @ValidateNested({ each: true }) @Type(() => ReturnCountLineDto)
+  lines!: ReturnCountLineDto[];
+}

@@ -342,3 +342,13 @@
 .df-subdef.on { color: var(--text1); background: rgba(var(--brand-rgb), .14); border-color: rgba(var(--brand-2-rgb), .6); }
 .df-subdef:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .df-subdef { transition: none; } }
+
+/* بخشی که به کاشیِ دیگری رفته (کالاها → انبار) — فقط پیوند. */
+.df-moved {
+  max-width: var(--page-w, var(--maxw)); margin: 0 auto; display: grid; gap: 8px; justify-items: start;
+  padding: 18px 20px; border-radius: 16px;
+  background: rgba(var(--surface-rgb), .7); border: 1px dashed rgba(var(--brand-soft-rgb), .3);
+}
+.df-moved b { font-size: 14px; }
+.df-moved p { margin: 0; font-size: 12.5px; line-height: 1.9; color: var(--text2); }
+.df-moved .df-add { text-decoration: none; }

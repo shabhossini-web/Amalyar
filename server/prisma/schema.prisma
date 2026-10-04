@@ -353,6 +353,13 @@ model Item {
   price    Int?
   notes    String?
   active   Boolean @default(true)
+  /// دو تیکِ تعریفِ کالا (مالک، ۱۴۰۵/۰۷/۱۱):
+  /// «نمایش در پنلِ کارشناسی» — کارشناس این قلم را در بلوکِ «ثبتِ مصرفی» می‌بیند.
+  showInTechPanel Boolean @default(false) @map("show_in_tech_panel")
+  /// single | multi — یک‌بارمصرف با هر مصرف از موجودی کم می‌شود؛ چندبارمصرف فقط دفعاتِ
+  /// استفاده‌اش شمرده می‌شود و فقط با **خرابی** از موجودی کم می‌شود (به محلِ «خرابی‌ها»).
+  /// ست و دستگاه ذاتاً چندبارمصرف‌اند.
+  usageMode String  @default("single") @map("usage_mode")
 
   createdAt DateTime @default(now()) @map("created_at")
 

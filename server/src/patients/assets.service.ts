@@ -688,6 +688,8 @@ export class AssetsService {
         label: r.label,
         missing: r.missing,
         kind: r.kind,
+        /* کجا شمرده شد: هنگامِ تحویل (کارشناس) یا هنگامِ برگشت (دفتر) — بستهٔ الف/ب. */
+        stage: r.stage,
         notes: r.notes,
         at: r.createdAt,
         serialNo: r.lot.serialNo || r.lot.lotNo,

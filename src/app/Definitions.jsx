@@ -1,6 +1,7 @@
 import HospitalDirectory from './HospitalDirectory.jsx';
 import AssistedTextarea from '../ui/AssistedTextarea.jsx';
 import { createPortal } from 'react-dom';
+import { Link } from 'react-router-dom';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../lib/api.js';
@@ -19,7 +20,6 @@ import { hasService } from '../lib/profile.js';
 
 
 const faNum = (n) => new Intl.NumberFormat('fa-IR').format(n ?? 0);
-const ASSET_FA = { set: 'ست', device: 'دستگاه' }; // «مصرفی» پیش‌فرض است و برچسب نمی‌خواهد
 
 /**
  * ساختارِ هر بخش در یک جا تعریف می‌شود تا افزودنِ بخشِ جدید یک ورودی به این
@@ -138,31 +138,16 @@ const SECTIONS = [
     ],
   },
   {
+    /* کالاها به کاشیِ «انبار» رفت (مالک، ۱۴۰۵/۰۷/۱۱؛ بستهٔ ب) — این‌جا فقط پیوند، تا کسی دنبالِ آن
+       این‌جا نگردد. تعریف همان جدول است؛ انباردارِ سطح ۳ هم می‌تواند بسازد. */
     key: 'items',
     label: 'کالاها',
     path: '/items',
+    movedTo: '/app/inventory?tab=items',
     title: (r) => r.name,
-    sub: (r) => [ASSET_FA[r.assetKind], r.brand, r.size, r.sku, r.price && `${Number(r.price).toLocaleString('fa-IR')} تومان`]
-      .filter(Boolean).join(' · '),
-    empty: 'هنوز کالایی تعریف نشده',
-    hint: 'کاتالوگِ کالاست، نه انبار. «نوع» تعیین می‌کند برمی‌گردد یا نه: ست و دستگاه برمی‌گردند و تقویمِ در دسترس‌بودن می‌گیرند، مصرفی نه.',
-    fields: [
-      { key: 'name', label: 'نامِ کالا *', required: true },
-      { key: 'assetKind', label: 'نوع *', options: [
-        { v: 'consumable', l: 'مصرفی — یک‌بار می‌رود' },
-        { v: 'set', l: 'ست — برمی‌گردد' },
-        { v: 'device', l: 'دستگاه — برمی‌گردد' },
-      ] },
-      { key: 'turnaroundHours', label: 'ساعتِ آماده‌سازی پس از برگشت', dir: 'ltr' },
-      { key: 'brand', label: 'برند' },
-      { key: 'size', label: 'اندازه / مشخصه' },
-      { key: 'category', label: 'دسته (پیچ، راد، کیج…)' },
-      { key: 'sku', label: 'کدِ کالا (SKU)', dir: 'ltr' },
-      { key: 'irc', label: 'کد IRC', dir: 'ltr' },
-      { key: 'unit', label: 'واحد' },
-      { key: 'price', label: 'قیمتِ پایه (تومان)', dir: 'ltr' },
-      { key: 'notes', label: 'یادداشت', textarea: true },
-    ],
+    sub: () => '',
+    empty: '',
+    fields: [],
   },
   {
     key: 'delivery-places',
@@ -273,7 +258,6 @@ export default function Definitions() {
   const stagger = useStagger();
   const [tab, setTab] = useState(() => { const key = new URLSearchParams(window.location.search).get('section'); return SECTIONS.some((s) => s.key === key) ? key : 'surgeons'; });
   const [merging, setMerging] = useState(false);
-  const [parts, setParts] = useState(null); // کالایی که محتویاتش باز است
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [toast, setToast] = useState('');
@@ -382,7 +366,13 @@ export default function Definitions() {
         ]}
       />
 
-      {merging ? <NameMerge onToast={setToast} /> : (
+      {merging ? <NameMerge onToast={setToast} /> : section.movedTo ? (
+        <div className="df-moved">
+          <b>کالاها به کاشیِ «انبار» منتقل شد</b>
+          <p>تعریفِ کالا، نوع و محتویاتِ ست حالا در انبار است تا انباردار هم بی‌دسترسیِ مدیریتی بسازد. همان کاتالوگ است، فقط جایش عوض شده.</p>
+          <Link to={section.movedTo} className="df-add">رفتن به انبار ← کالاها</Link>
+        </div>
+      ) : (
       <>
       {section.hint && <p className="df-note">{section.hint}</p>}
 
@@ -405,10 +395,6 @@ export default function Definitions() {
             </div>
             <span className="df-uses">{section.uses ? section.uses(row) : `${faNum(row.visitCount)} مراجعه`}</span>
             <div className="df-acts">
-              {/* فقط ست و دستگاه محتویات دارند؛ قلمِ مصرفی جزء ندارد. */}
-              {tab === 'items' && row.assetKind && row.assetKind !== 'consumable' && (
-                <button type="button" className="df-parts" onClick={() => setParts(row)}>محتویات</button>
-              )}
               <button type="button" className="df-edit" title="ویرایش" aria-label={`ویرایشِ ${section.title(row)}`} onClick={() => setEditing(row)}><Pencil width="15" height="15" /></button>
               {/* کلیدِ دوحالتهٔ نوشته‌دار به‌جای نقطهٔ سبزِ بی‌متن (surgery-18) — حالت روی خودِ کلید خوانده می‌شود. */}
               <label className="us-switch df-switch" title={row.active ? 'غیرفعال کن' : 'فعال کن'}>
@@ -445,10 +431,6 @@ export default function Definitions() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {parts && <SetContents item={parts} onClose={() => setParts(null)} onToast={setToast} />}
-      </AnimatePresence>
-
-      <AnimatePresence>
         {editing && (
           <EditSheet
             section={section}
@@ -464,98 +446,6 @@ export default function Definitions() {
     </div>
   );
 }
-
-/**
- * محتویاتِ یک ست.
- *
- * ⚠️ بدونِ این فهرست، ست یک واحدِ اتمی است و کسریِ برگشت دیده نمی‌شود: ستی که
- * با ۲۰ قلم رفت و با ۱۹ برگشت، در دفتر همان «۱ ست» است.
- */
-function SetContents({ item, onClose, onToast }) {
-  const [rows, setRows] = useState([]);
-  const [items, setItems] = useState([]);
-  const [label, setLabel] = useState('');
-  const [partId, setPartId] = useState('');
-  const [qty, setQty] = useState('1');
-  const [busy, setBusy] = useState(false);
-
-  const load = useCallback(async () => {
-    try { setRows(await api(`/assets/items/${item.id}/contents`)); }
-    catch (e) { onToast(e.message); }
-  }, [item.id, onToast]);
-  useEffect(() => { load(); }, [load]);
-  useEffect(() => { api('/items').then((r) => setItems(r.filter((i) => i.id !== item.id))).catch(() => {}); }, [item.id]);
-
-  const add = async () => {
-    if (busy || (!label.trim() && !partId)) return;
-    setBusy(true);
-    try {
-      await api(`/assets/items/${item.id}/contents`, {
-        method: 'POST',
-        body: { label: label.trim() || undefined, partId: partId ? Number(partId) : undefined, quantity: Number(qty) || 1 },
-      });
-      setLabel(''); setPartId(''); setQty('1');
-      await load();
-    } catch (e) { onToast(e.message); } finally { setBusy(false); }
-  };
-
-  const remove = async (id) => {
-    setBusy(true);
-    try { await api(`/assets/contents/${id}`, { method: 'DELETE' }); await load(); }
-    catch (e) { onToast(e.message); } finally { setBusy(false); }
-  };
-
-  return (
-    <Overlay backdrop="df-overlay" panel="df-sheet" as="section" onClose={onClose} closable={!busy}>
-      <header className="df-sheet-head">
-        <b>محتویاتِ «{item.name}»</b>
-        <button type="button" className="df-x" onClick={onClose} aria-label="بستن"><Close width="18" height="18" /></button>
-      </header>
-      <div className="df-sheet-body">
-        <p className="df-note" style={{ marginTop: 0 }}>
-          هنگام برگشتِ ست، همین فهرست چک‌لیستِ شمارش می‌شود و فقط <b>کسری</b> ثبت می‌شود.
-        </p>
-        <div className="df-list">
-          {rows.length === 0 && <div className="df-empty">هنوز قلمی تعریف نشده</div>}
-          {rows.map((r) => (
-            <article key={r.id} className="df-row">
-              <div className="df-row-main">
-                <b>{r.label}</b>
-                <small>{faNum(r.quantity)} عدد{r.partName ? ` · کالای تعریف‌شده` : ''}</small>
-              </div>
-              <button type="button" className="df-del" disabled={busy} onClick={() => remove(r.id)}>
-                <Trash width="15" height="15" />
-              </button>
-            </article>
-          ))}
-        </div>
-
-        <div className="pf-row2" style={{ marginTop: 12 }}>
-          <label className="pf-field">
-            <span>از کالاهای تعریف‌شده</span>
-            <select value={partId} onChange={(e) => { setPartId(e.target.value); if (e.target.value) setLabel(''); }} disabled={busy}>
-              <option value="">— انتخاب —</option>
-              {items.map((i) => <option key={i.id} value={i.id}>{[i.name, i.size].filter(Boolean).join(' ')}</option>)}
-            </select>
-          </label>
-          <label className="pf-field">
-            <span>یا عنوانِ دستی</span>
-            <input type="text" value={label} disabled={busy || !!partId} onChange={(e) => setLabel(e.target.value)} />
-          </label>
-          <label className="pf-field">
-            <span>تعداد</span>
-            <input type="text" inputMode="numeric" dir="ltr" value={qty} onChange={(e) => setQty(e.target.value)} disabled={busy} />
-          </label>
-        </div>
-      </div>
-      <footer className="df-sheet-foot">
-        <button type="button" className="df-ghost" onClick={onClose} disabled={busy}>بستن</button>
-        <button type="button" className="df-save" onClick={add} disabled={busy || (!label.trim() && !partId)}>افزودنِ قلم</button>
-      </footer>
-    </Overlay>
-  );
-}
-
 
 /**
  * یکسان‌سازیِ نامِ بیمارستان.

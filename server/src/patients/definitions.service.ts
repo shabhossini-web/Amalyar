@@ -761,6 +761,7 @@ export class DefinitionsService {
       id: r.id, name: r.name, sku: r.sku, irc: r.irc, brand: r.brand, size: r.size,
       category: r.category, unit: r.unit, price: r.price, notes: r.notes, active: r.active,
       assetKind: r.assetKind, turnaroundHours: r.turnaroundHours,
+      showInTechPanel: r.showInTechPanel, usageMode: ['set', 'device'].includes(r.assetKind) ? 'multi' : r.usageMode,
       usedCount: r._count.charges,
     }));
   }
@@ -850,6 +851,14 @@ function itemPatch(dto: any, forCreate: boolean): Record<string, unknown> {
   if (dto.unit !== undefined) out.unit = text(dto.unit) || 'عدد';
   if (dto.active !== undefined) out.active = !!dto.active;
   if (dto.assetKind !== undefined) out.assetKind = text(dto.assetKind) || 'consumable';
+  /* دو تیکِ کالا (بستهٔ ب). ست و دستگاه ذاتاً چندبارمصرف‌اند — تیکِ کاربر نمی‌تواند یک ست را
+     «یک‌بارمصرف» کند، وگرنه برگشتِ ست با مصرفش از موجودی کم می‌شد. */
+  if (dto.showInTechPanel !== undefined) out.showInTechPanel = !!dto.showInTechPanel;
+  if (dto.usageMode !== undefined) {
+    if (!['single', 'multi'].includes(dto.usageMode)) throw new BadRequestException('نوعِ مصرف نامعتبر است');
+    out.usageMode = dto.usageMode;
+  }
+  if (['set', 'device'].includes(String(out.assetKind ?? ''))) out.usageMode = 'multi';
   if (dto.turnaroundHours !== undefined) {
     const h = dto.turnaroundHours === null || dto.turnaroundHours === '' ? null : Number(dto.turnaroundHours);
     if (h !== null && (!Number.isInteger(h) || h < 0)) throw new BadRequestException('ساعتِ آماده‌سازی باید عددِ صحیحِ نامنفی باشد');

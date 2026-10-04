@@ -38,6 +38,7 @@ import { RecordController } from './record.controller';
 import { RecordService } from './record.service';
 import { InventoryController, VisitStockController } from './inventory.controller';
 import { InventoryService } from './inventory.service';
+import { SetStockService } from './set-stock.service';
 import { SettlementController } from './settlement.controller';
 import { SettlementService } from './settlement.service';
 import { LedgerController } from './ledger.controller';
@@ -103,7 +104,7 @@ import { WaitlistService } from './waitlist.service';
     WaitlistService,
     VitalsService,
     PatientsService, DefinitionsService, RecordService, BillingService, InvoicesService, SurgeonPortalService,
-    ServiceCodesService, InventoryService, SettlementService, LedgerService, TreasuryService, ReportsService, AssetsService, RoutesService, TransportBoardService, NameMergeService,
+    ServiceCodesService, InventoryService, SetStockService, SettlementService, LedgerService, TreasuryService, ReportsService, AssetsService, RoutesService, TransportBoardService, NameMergeService,
     CalendarService, AvailabilityService, AppointmentsService, DispatchService, TechService, TransportService, PlacesService, IntakeService, FormsService, SurveyService, SummaryService, RemindersService, PortalService, LettersService, OrdersService, RepairService, RateLimitService, PermissionGuard,
   ],
   /* برای دستیارِ AI (پیشنهادِ کد از شرح) — کتابِ ارزش نسبی در همین سرویس است. */

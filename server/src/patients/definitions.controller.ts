@@ -285,6 +285,9 @@ export class ItemCreateDto {
   /// consumable | set | device — «برگشتی» بودن اینجا تعیین می‌شود.
   @IsOptional() @IsIn(['consumable', 'set', 'device'], { message: 'نوعِ کالا نامعتبر است' })
   assetKind?: string;
+  /// دو تیکِ کالا (بستهٔ ب): نمایش در بلوکِ «ثبتِ مصرفی»ِ پنلِ کارشناسی، و یک‌بار/چندبارمصرف.
+  @IsOptional() @IsBoolean({ message: 'تیکِ نمایش نامعتبر است' }) showInTechPanel?: boolean;
+  @IsOptional() @IsIn(['single', 'multi'], { message: 'نوعِ مصرف نامعتبر است' }) usageMode?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0, { message: 'ساعتِ آماده‌سازی نمی‌تواند منفی باشد' })
   turnaroundHours?: number;
   @IsOptional() @IsString() @MaxLength(300) notes?: string;
