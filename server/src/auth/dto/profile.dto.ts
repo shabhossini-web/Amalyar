@@ -43,4 +43,8 @@ export class UpdatePrefsDto {
 
   @IsOptional() @IsArray({ message: 'ابزارک‌های منتخب نامعتبر است' }) @ArrayMaxSize(3, { message: 'حداکثر سه ابزارکِ منتخب' })
   todayPins?: (string | null)[];
+
+  /** پیش‌فرض‌های مصرفیِ کارشناس (بستهٔ ج): `[{ name, lines: [{ itemId, quantity }] }]` — شکلش را سرویس می‌سنجد. */
+  @IsOptional() @IsArray({ message: 'پیش‌فرض‌های مصرفی نامعتبر است' }) @ArrayMaxSize(12, { message: 'حداکثر دوازده پیش‌فرضِ مصرفی' })
+  usagePresets?: unknown[];
 }

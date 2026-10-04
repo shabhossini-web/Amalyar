@@ -286,3 +286,35 @@
 /* مراجعه‌های آزادِ همان بیمارستان و روزِ برنامهٔ حضور — فقط پذیرش‌پذیرها. */
 .tk-open-visit { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid rgba(var(--veil-rgb), .12); }
 .tk-open-visit small { display: block; opacity: .7; margin-top: 6px; }
+
+/* ── ثبتِ مصرفی (بستهٔ ج) ── بلوکِ روی کارت: تا ثبت نشده خط‌چین، بعد توپُر. */
+.tk-usage { border-style: dashed; }
+.tk-usage.has { border-style: solid; }
+.tk-usage .tk-set-head { flex-wrap: wrap; }
+.tk-usage .tk-set-head span { flex: 1 1 100%; order: 3; white-space: normal; line-height: 1.7; }
+.tk-group { display: grid; gap: 6px; }
+.tk-group > small { font-size: 11px; color: var(--text3); }
+.tk-uline2 { display: flex; align-items: center; gap: 10px; }
+.tk-uinfo { min-width: 0; flex: 1; display: grid; gap: 2px; }
+.tk-uinfo b { font-size: 12.5px; }
+.tk-uinfo small { font-size: 11px; line-height: 1.7; color: var(--text3); }
+.tk-presets { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tk-preset { display: inline-flex; align-items: center; gap: 2px; }
+.tk-chip.dash { border-style: dashed; }
+.tk-chip-x {
+  width: 28px; height: 28px; display: grid; place-items: center; border-radius: 99px; cursor: pointer;
+  color: var(--text3); background: transparent; border: 1px solid rgba(var(--veil-rgb), .13);
+}
+.tk-chip-x:hover { color: var(--red-text); border-color: rgba(248, 113, 113, .4); }
+.tk-chip-x:focus-visible, .tk-chip:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.tk-preset-name { display: flex; gap: 6px; }
+.tk-preset-name input {
+  flex: 1; min-width: 0; font: inherit; font-size: 13px; color: var(--text1); padding: 8px 10px; border-radius: 10px;
+  background: var(--field-bg); border: 1px solid rgba(var(--veil-rgb), .14); outline: none;
+}
+.tk-preset-name input:focus { border-color: rgba(var(--brand-2-rgb), .6); }
+.tk-preset-name .tk-ghost { padding: 8px 12px; }
+/* عنوانِ برگهٔ مصرفی: کدِ لاتین نشکند («AM-0070-» / «V1» دو خط می‌شد) و زیرِ نام بنشیند. */
+.tk-sheet-title { display: grid; gap: 1px; }
+.tk-sheet-title small { font-size: 11px; font-weight: 400; color: var(--text3); }
+.tk-sheet-title bdi { white-space: nowrap; }

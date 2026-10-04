@@ -64,6 +64,8 @@ const VISIT_SELECT = {
   // بستهٔ ۷ج: فقط نامِ عمل‌های همزمان، برای برچسب — هیچ فیلدِ دیگری.
   otherProcedures: OTHER_PX,
   documents: { where: { category: 'report' }, select: { id: true, createdAt: true } },
+  // بستهٔ ج: مصرفیِ ثبت‌شدهٔ همین عمل — فقط برای خلاصهٔ روی کارت.
+  usages: { where: { quantity: { gt: 0 } }, select: { mode: true, quantity: true, updatedAt: true, item: { select: { name: true, size: true, unit: true } } } },
   stockTransfers: {
     where: { status: { not: 'closed' } },
     orderBy: { id: 'asc' },
@@ -232,6 +234,13 @@ export class TechService {
       reportAt: v.documents[0]?.createdAt ?? null,
       /* نامِ گزارشِ همین خدمت از سرور (قانونِ ۱۵) — «گزارشِ نورومانیتورینگ»، نه «گزارشِ عمل». */
       reportLabel: reportTitle(v.service),
+      /* بستهٔ ج: خلاصهٔ مصرفیِ ثبت‌شده + «می‌شود شروع کرد؟» — تا ستی منتظرِ تأییدِ کارشناس است، نه
+         (ستی که نگرفته‌ای مصرف ندارد). متن را رابط می‌سازد، عدد و حالت از این‌جا (قانونِ ۱۵). */
+      usage: {
+        recordedAt: v.usages.reduce((m: Date | null, u: any) => (!m || u.updatedAt > m ? u.updatedAt : m), null),
+        lines: v.usages.map((u: any) => ({ name: [u.item.name, u.item.size].filter(Boolean).join(' '), unit: u.item.unit, mode: u.mode, quantity: u.quantity })),
+        canStart: !v.stockTransfers.some((t: any) => deliveryState(t, t.stop) === 'awaiting'),
+      },
       transfers: v.stockTransfers.map((t: any) => ({
         id: t.id,
         code: t.code,

@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsISO8601, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsISO8601, IsOptional, IsString, MaxLength, Min, ValidateNested } from 'class-validator';
 import { RUN_STATUSES, STOP_KINDS } from '../routes.service';
 
 export class RunCreateDto {
@@ -44,9 +44,26 @@ export class StopPatchDto {
 }
 
 /** ثبتِ تحویل توسط خودِ راننده در پرتال. */
+/** یک بستهٔ شمرده‌شده هنگامِ جمع‌آوری (بستهٔ ج): این حواله، این لات، چند تا تحویل گرفتم. */
+export class PickupCountLineDto {
+  @Type(() => Number) @IsInt({ message: 'حوالهٔ قلم نامعتبر است' }) @Min(1)
+  transferId!: number;
+
+  @Type(() => Number) @IsInt({ message: 'لاتِ قلم نامعتبر است' }) @Min(1)
+  lotId!: number;
+
+  @Type(() => Number) @IsInt({ message: 'تعدادِ شمرده‌شده باید عدد باشد' }) @Min(0, { message: 'تعدادِ شمرده‌شده نمی‌تواند منفی باشد' })
+  counted!: number;
+}
+
 export class StopDoneDto {
   @IsOptional() @IsString() @MaxLength(80) handedActual?: string;
   @IsOptional() @IsString() @MaxLength(300) notes?: string;
+  /** شمارشِ راننده — فقط روی توقفِ جمع‌آوری معنا دارد؛ روی تحویل نادیده گرفته می‌شود (ستِ استریل شمرده نمی‌شود). */
+  @IsOptional() @IsArray({ message: 'شمارش نامعتبر است' }) @ValidateNested({ each: true }) @Type(() => PickupCountLineDto)
+  counts?: PickupCountLineDto[];
+  @IsOptional() @IsBoolean({ message: 'وضعِ پلمب نامعتبر است' })
+  sealIntact?: boolean;
 }
 
 export class ReorderDto {

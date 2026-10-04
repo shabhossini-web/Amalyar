@@ -4,10 +4,12 @@ import FileDrop from '../ui/FileDrop.jsx';
 import { api, apiUpload } from '../lib/api.js';
 import { faDate, jStrToIso, toEnDigits, todayJStr } from '../lib/jalali.js';
 import './tech.css';
-import { Alert, Arrive, CheckCircle, Clock, Close, Hospital, Doctor, Box, Truck, User, Users, Wave } from '../ui/icons.jsx';
+import { Alert, Arrive, Boxes, CheckCircle, Clock, Close, Hospital, Doctor, Box, Truck, User, Users, Wave } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import PageHeader from '../ui/PageHeader.jsx';
 import Overlay from '../ui/Overlay.jsx';
+import Stepper from '../ui/Stepper.jsx';
+import { usePrefs } from './usePrefs.jsx';
 import TimePick from '../ui/TimePick.jsx';
 import CancelReason from '../ui/CancelReason.jsx';
 import JDate from './JDate.jsx';
@@ -139,6 +141,7 @@ export default function Tech() {
   const [err, setErr] = useState('');
   const [toast, setToast] = useState('');
   const [usageFor, setUsageFor] = useState(null); // {visit, transfer}
+  const [consumeFor, setConsumeFor] = useState(null); // visit — برگهٔ «ثبتِ مصرفی» (بستهٔ ج)
   const [receiptFor, setReceiptFor] = useState(null); // {visit, transfer} — برگهٔ شمارشِ «با مغایرت»
   const [receiving, setReceiving] = useState(null); // شناسهٔ حواله‌ای که «تحویل گرفتم»ش در راه است
   const [timesFor, setTimesFor] = useState(null); // visit
@@ -308,6 +311,9 @@ export default function Tech() {
               </div>
             )}
 
+            {/* بستهٔ ج (مالک، ۱۴۰۵/۰۷/۱۱): ثبتِ مصرفی بالای آپلودِ گزارش — تا ستی منتظرِ تأیید است، بسته. */}
+            {v.usage && v.status !== 'cancelled' && <UsageBlock visit={v} onOpen={() => setConsumeFor(v)} />}
+
             <footer className="tk-acts">
               {/* مالک (۱۴۰۵/۰۷/۰۵): «کارشناس باید وضعیتِ عمل را تعیین کند — انجام شد، موکول شد یا کلاً
                   لغو شد». فقط برای عملِ در انتظار؛ برگرداندنِ وضعیتِ ثبت‌شده کارِ مدیر است. */}
@@ -340,6 +346,14 @@ export default function Tech() {
             transferId={usageFor.transfer.id}
             onClose={() => setUsageFor(null)}
             onToast={(m) => { setToast(m); load(scope); }}
+          />
+        )}
+        {consumeFor && (
+          <ConsumeSheet
+            visit={consumeFor}
+            onClose={() => setConsumeFor(null)}
+            onToast={setToast}
+            onDone={(m) => { setConsumeFor(null); setToast(m); load(scope); }}
           />
         )}
       </AnimatePresence>
@@ -616,7 +630,7 @@ function SetCard({ transfer: t, team, busy, onReceive, onCount, onUsage }) {
           <button type="button" className="tk-ghost tk-recv-issue" disabled={busy} onClick={onCount}>با مغایرت</button>
         </div>
       ) : t.status !== 'planned' && (
-        <button type="button" className="tk-mini" onClick={onUsage}>برگهٔ مصرف و پایانِ عمل</button>
+        <button type="button" className="tk-mini" onClick={onUsage}>{t.releasedAt ? 'جزئیاتِ جمع‌آوری' : 'پایانِ عمل و جمع‌آوری'}</button>
       )}
     </div>
   );
@@ -762,7 +776,6 @@ function ReportButton({ visit, onDone, onError }) {
  */
 function UsageSheet({ transferId, onClose, onToast }) {
   const [t, setT] = useState(null);
-  const [used, setUsed] = useState({});
   const [note, setNote] = useState('');
   const [pickupAt, setPickupAt] = useState('');
   const [leftAt, setLeftAt] = useState('');
@@ -800,34 +813,15 @@ function UsageSheet({ transferId, onClose, onToast }) {
             <div className={t.totals.remaining ? 'warn' : ''}><b>{num(t.totals.remaining)}</b><span>مانده</span></div>
           </div>
 
+          {/* بستهٔ ج: عددِ مصرف این‌جا فقط خوانده می‌شود — ثبت و اصلاحش در بلوکِ «ثبتِ مصرفی»ِ کارت است
+              (یک جا برای مصرف، نه دو برگه با دو عدد). */}
           {t.lines.map((l) => (
             <div key={l.movementId} className="tk-line">
               <b>{l.itemName}{l.itemSize ? ` — ${l.itemSize}` : ''}</b>
               <small dir="ltr">{l.serialNo || l.lotNo || `#${l.lotId}`}</small>
-              {t.status === 'closed' ? (
-                <span>ارسال {num(l.sent)} · مصرف {num(l.used)}</span>
-              ) : (
-                <label>
-                  <span>ارسال {num(l.sent)}</span>
-                  مصرف شد
-                  <input dir="ltr" inputMode="numeric"
-                         value={used[l.lotId] ?? String(l.used)}
-                         onChange={(e) => setUsed((s) => ({ ...s, [l.lotId]: e.target.value }))} />
-                </label>
-              )}
+              <span>ارسال {num(l.sent)} · مصرف {num(l.used)}</span>
             </div>
           ))}
-
-          {t.status !== 'closed' && (
-            <button type="button" className="tk-save" disabled={busy}
-                    onClick={() => act(
-                      `/stock/transfers/${transferId}/usage`,
-                      { lines: t.lines.map((l) => ({ lotId: l.lotId, used: Number(toEnDigits(used[l.lotId] ?? String(l.used))) || 0 })) },
-                      'برگهٔ مصرف ثبت شد',
-                    )}>
-              ثبتِ برگهٔ مصرف
-            </button>
-          )}
 
           {/* اعلامِ پایان هم دارایی را آزاد می‌کند هم صفِ جمع‌آوری را می‌سازد —
               دفتر خودش نمی‌داند عمل کِی واقعاً تمام شد. */}
@@ -874,6 +868,170 @@ function UsageSheet({ transferId, onClose, onToast }) {
                 </button>
               </div>
             )
+          )}
+        </div>
+      )}
+    </Overlay>
+  );
+}
+
+/* خلاصهٔ مصرفی روی کارت — «۸ الکترود · ۱ ژل · پروب ۱ بار»؛ عدد و حالت از سرور (قانونِ ۱۵)، متن این‌جا. */
+const usageText = (lines) => lines.map((l) => (l.mode === 'use' ? `${l.name} ${num(l.quantity)} بار` : `${num(l.quantity)} ${l.name}`)).join(' · ');
+
+/**
+ * بلوکِ «ثبتِ مصرفی» (مالک، ۱۴۰۵/۰۷/۱۱، بندِ ۶ — بستهٔ ج) — بالای آپلودِ گزارش.
+ *
+ * تا ستی «منتظرِ تأییدِ» کارشناس است دکمه بسته است (ستی که نگرفته‌ای مصرف ندارد)؛ پس از ثبت،
+ * خلاصه و ساعتِ ثبت روی همین بلوک می‌نشیند و دکمه «ویرایشِ مصرفی» می‌شود.
+ */
+function UsageBlock({ visit: v, onOpen }) {
+  const u = v.usage;
+  const has = u.lines.length > 0;
+  return (
+    <div className={`tk-set tk-usage${has ? ' has' : ''}`}>
+      <div className="tk-set-head">
+        <b><Boxes width="14" height="14" /> ثبتِ مصرفی</b>
+        <span>{has ? usageText(u.lines) : u.canStart ? 'هنوز چیزی ثبت نشده' : 'پس از تحویل‌گرفتن فعال می‌شود'}</span>
+        {has && u.recordedAt && <i className="tk-tag ok">ثبت شد {clock(u.recordedAt)}</i>}
+      </div>
+      <button type="button" className={has ? 'tk-ghost' : 'tk-mini'} disabled={!u.canStart} onClick={onOpen}>
+        {has ? 'ویرایشِ مصرفی' : 'ثبتِ مصرفیِ این بیمار'}
+      </button>
+    </div>
+  );
+}
+
+const allUsageLines = (sheet) => [...sheet.sets.flatMap((b) => b.lines), ...sheet.transfers.flatMap((b) => b.lines), ...sheet.warehouse];
+const usageSub = (l) => {
+  if (l.mode === 'use') return `چندبارمصرف · تا امروز ${num(l.usesTotal)} بار — فقط شمرده می‌شود`;
+  if (l.source === 'set') return `${num(l.limit)} در ست · یک‌بارمصرف — از ست کم می‌شود`;
+  if (l.source === 'transfer') return `${num(l.limit)} ارسالی · یک‌بارمصرف — از حواله کم می‌شود`;
+  return `${num(l.limit)} در انبار · یک‌بارمصرف — از موجودیِ انبار کم می‌شود`;
+};
+
+/**
+ * برگهٔ ثبتِ مصرفی — سه گروه (از ست، ارسالیِ حواله، از کیف/انبار) + پیش‌فرض‌های شخصیِ کارشناس.
+ *
+ * عدد «جمعِ این عمل» است نه «چقدر کم کن»؛ سرور تفاوت را می‌زند و تا بسته‌شدنِ حواله قابلِ اصلاح
+ * است. پیش‌فرض‌ها در `/auth/prefs` می‌نشینند (همراهِ حساب، نه گوشی): یک لمس همهٔ عددها را می‌نشاند.
+ */
+function ConsumeSheet({ visit, onClose, onToast, onDone }) {
+  const [sheet, setSheet] = useState(null);
+  const [qty, setQty] = useState({});
+  const [busy, setBusy] = useState(false);
+  const [naming, setNaming] = useState(false);
+  const [presetName, setPresetName] = useState('');
+  const { prefs, save: savePrefs } = usePrefs();
+  const presets = prefs.usagePresets ?? [];
+
+  useEffect(() => {
+    api(`/stock/visits/${visit.id}/usage`)
+      .then((sh) => { setSheet(sh); setQty(Object.fromEntries(allUsageLines(sh).map((l) => [l.key, l.quantity]))); })
+      .catch((e) => onToast(e.message));
+  }, [visit.id, onToast]);
+
+  const lines = sheet ? allUsageLines(sheet) : [];
+  const locked = !!sheet && (!sheet.editable || sheet.awaiting);
+  const val = (l) => qty[l.key] ?? l.quantity;
+  const setVal = (l, n) => setQty((s) => ({ ...s, [l.key]: Math.max(0, l.limit !== null && l.limit !== undefined ? Math.min(l.limit, n) : n) }));
+  const applyPreset = (p) => {
+    setQty((s) => {
+      const next = { ...s };
+      for (const pl of p.lines) {
+        const target = lines.find((l) => l.itemId === pl.itemId);
+        if (target) next[target.key] = target.limit !== null && target.limit !== undefined ? Math.min(target.limit, pl.quantity) : pl.quantity;
+      }
+      return next;
+    });
+    onToast(`پیش‌فرضِ «${p.name}» نشست — اگر درست است، ثبت کنید`);
+  };
+  const savePreset = async () => {
+    const name = presetName.trim();
+    if (!name) { onToast('برای پیش‌فرض یک نام بنویسید'); return; }
+    const pl = lines.filter((l) => val(l) > 0).map((l) => ({ itemId: l.itemId, quantity: val(l) }));
+    if (!pl.length) { onToast('اول عددها را بزنید، بعد ذخیره کنید'); return; }
+    try {
+      await savePrefs('usagePresets', [...presets.filter((p) => p.name !== name), { name, lines: pl }]);
+      setNaming(false); setPresetName('');
+      onToast(`پیش‌فرضِ «${name}» ذخیره شد`);
+    } catch (e) { onToast(e.message); }
+  };
+  const removePreset = async (p) => {
+    try { await savePrefs('usagePresets', presets.filter((x) => x.name !== p.name)); onToast(`پیش‌فرضِ «${p.name}» حذف شد`); }
+    catch (e) { onToast(e.message); }
+  };
+  const submit = async () => {
+    setBusy(true);
+    try {
+      await api(`/stock/visits/${visit.id}/usage`, {
+        method: 'POST',
+        body: { lines: lines.map((l) => ({ source: l.source, itemId: l.itemId, ...(l.setLotId ? { setLotId: l.setLotId } : {}), ...(l.lotId ? { lotId: l.lotId } : {}), quantity: val(l) })) },
+      });
+      onDone('مصرفی ثبت شد');
+    } catch (e) { onToast(e.message); setBusy(false); }
+  };
+
+  const consumed = lines.filter((l) => l.mode === 'consume' && val(l) > 0);
+  const counted = lines.filter((l) => l.mode === 'use' && val(l) > 0);
+  const group = (key, title, items) => items.length > 0 && (
+    <div key={key} className="tk-group">
+      <small>{title}</small>
+      {items.map((l) => (
+        <div key={l.key} className="tk-line tk-uline2">
+          <div className="tk-uinfo"><b>{l.name}</b><small>{usageSub(l)}</small></div>
+          <Stepper value={val(l)} onChange={(n) => setVal(l, n)} max={l.limit ?? null} unit={l.mode === 'use' ? 'بار' : l.unit} label={l.name} disabled={locked} />
+        </div>
+      ))}
+    </div>
+  );
+
+  return (
+    <Overlay backdrop="tk-overlay" panel="tk-sheet" as="section" onClose={onClose} closable={!busy}>
+      <header className="tk-sheet-head">
+        <b className="tk-sheet-title">ثبتِ مصرفی — {visit.patientName} <small><bdi dir="ltr">{visit.code}</bdi></small></b>
+        <button type="button" className="tk-x" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
+      </header>
+      {!sheet ? <div className="tk-empty">در حال بارگذاری…</div> : (
+        <div className="tk-sheet-body">
+          {sheet.awaiting && <p className="tk-note warn">اول «تحویل گرفتم» یا «با مغایرت» را روی ست بزنید؛ ستی که هنوز نگرفته‌اید مصرف ندارد.</p>}
+          {!sheet.editable && <p className="tk-note">حوالهٔ این عمل بسته شده؛ مصرفیِ ثبت‌شده فقط خواندنی است.</p>}
+
+          {lines.length === 0 ? (
+            <p className="tk-note">کالایی برای ثبتِ مصرفی نیست — در انبار برای کالا تیکِ «نمایش در پنلِ کارشناسی» را بزنید، یا ستِ همین عمل را تحویل بگیرید.</p>
+          ) : (
+            <>
+              {!locked && (
+                <div className="tk-group">
+                  <small>پیش‌فرض‌های من</small>
+                  <div className="tk-presets">
+                    {presets.map((p) => (
+                      <span key={p.name} className="tk-preset">
+                        <button type="button" className="tk-chip" onClick={() => applyPreset(p)}>{p.name}</button>
+                        <button type="button" className="tk-chip-x" aria-label={`حذفِ پیش‌فرضِ ${p.name}`} onClick={() => removePreset(p)}><Close width="12" height="12" /></button>
+                      </span>
+                    ))}
+                    {!naming && <button type="button" className="tk-chip dash" onClick={() => setNaming(true)}>ذخیرهٔ این ترکیب</button>}
+                  </div>
+                  {naming && (
+                    <div className="tk-preset-name">
+                      <input value={presetName} onChange={(e) => setPresetName(e.target.value)} placeholder="نامِ پیش‌فرض، مثلاً «ستونِ فقرات»" aria-label="نامِ پیش‌فرض" />
+                      <button type="button" className="tk-ghost" onClick={savePreset}>ذخیره</button>
+                      <button type="button" className="tk-ghost" onClick={() => { setNaming(false); setPresetName(''); }}>انصراف</button>
+                    </div>
+                  )}
+                </div>
+              )}
+              {sheet.sets.map((b) => group(`set:${b.setLotId}`, <>از ستِ <bdi dir="ltr">{b.serialNo || b.name}</bdi> (همراهِ همین عمل) · حوالهٔ <bdi dir="ltr">{b.code}</bdi></>, b.lines))}
+              {sheet.transfers.map((b) => group(`transfer:${b.transferId}`, <>ارسالیِ حوالهٔ <bdi dir="ltr">{b.code}</bdi> (خارج از ست)</>, b.lines))}
+              {group('warehouse', 'مصرفی‌های پنلِ کارشناسی (از کیف/انبار)', sheet.warehouse)}
+              <p className="tk-note">
+                {consumed.length ? `جمع: ${consumed.map((l) => `${num(val(l))} ${l.name}`).join(' و ')} از موجودی کم می‌شود` : 'هنوز چیزی از موجودی کم نمی‌شود'}
+                {counted.length ? `؛ ${counted.map((l) => l.name).join(' و ')} فقط شمرده می‌شود` : ''}. اصلاح تا بسته‌شدنِ حواله ممکن است.
+              </p>
+              {!locked && (
+                <button type="button" className="tk-save" disabled={busy} onClick={submit}>{busy ? 'در حال ثبت…' : 'ثبتِ مصرفی'}</button>
+              )}
+            </>
           )}
         </div>
       )}

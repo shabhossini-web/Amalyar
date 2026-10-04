@@ -731,7 +731,7 @@ function ShortageReport({ onClose, onError }) {
     const from = new Date(Date.now() - days * 864e5).toISOString();
     api(`/assets/shortages/report?from=${encodeURIComponent(from)}`).then(setData).catch((e) => onError(e.message));
   }, [days, onError]);
-  const STAGE = { receipt: 'هنگامِ تحویل', return: 'هنگامِ برگشت' };
+  const STAGE = { receipt: 'هنگامِ تحویل', pickup: 'هنگامِ جمع‌آوری', return: 'هنگامِ برگشت' };
   const KIND = { missing: 'کسری', damaged: 'خرابی' };
   const csv = () => {
     if (!data) return;
@@ -1263,6 +1263,7 @@ function Transfers({ onToast, onChanged }) {
                 {' '}ارسال: {faDate(t.sentAt)}
                 {t.receivedBy && ` · تحویل: ${t.receivedBy}`}
                 {t.receipt && ` · کارشناس ${t.receipt.issue ? 'با مغایرت ' : ''}تحویل گرفت`}
+                {t.pickup && ` · راننده ${t.pickup.issue ? 'با کسری ' : ''}جمع‌آوری کرد`}
               </small>
             </div>
             <div className="iv-acts">
@@ -1504,6 +1505,14 @@ function TransferDetail({ id, onClose, onChanged, onError }) {
           {t.receipt && (
             <p className={`iv-note ${t.receipt.issue ? 'warn' : 'ok'}`}>
               کارشناس {t.receipt.issue ? 'با مغایرت ' : ''}تحویل گرفت — {faDate(t.receipt.at)}{t.receipt.note ? ` · ${t.receipt.note}` : ''}
+            </p>
+          )}
+          {/* شمارشِ راننده هنگامِ جمع‌آوری (بستهٔ ج) — پلمبِ سالم یعنی ست باز نشده و تکمیل نمی‌خواهد. */}
+          {t.pickup && (
+            <p className={`iv-note ${t.pickup.issue ? 'warn' : 'ok'}`}>
+              راننده هنگامِ جمع‌آوری شمرد — {faDate(t.pickup.at)}{t.pickup.issue ? ' · با کسری' : ' · بی‌کسری'}
+              {t.pickup.sealIntact === true ? ' · پلمب سالم (ست باز نشده)' : t.pickup.sealIntact === false ? ' · پلمب باز' : ''}
+              {t.pickup.note ? ` · ${t.pickup.note}` : ''}
             </p>
           )}
           {t.receivedBy ? (

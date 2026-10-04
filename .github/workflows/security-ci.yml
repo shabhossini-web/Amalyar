@@ -1063,7 +1063,8 @@ jobs:
           }
 
           // ② موجودی موقعِ *ارسال* بررسی می‌شود نه موقعِ برنامه‌ریزی.
-          const ship = inv.split('async shipTransfer(')[1].split(/\n  \}/)[0];
+          //    (تحویلِ دوطرفه: قاعده در \`ship()\` نشست و \`shipTransfer()\` پوستهٔ آن است — نگهبان روی قاعده است نه نامِ تابع.)
+          const ship = (inv.includes('async ship(') ? inv.split('async ship(')[1] : inv.split('async shipTransfer(')[1]).split(/\n  \}/)[0];
           if (!/status !== 'planned'/.test(ship)) { console.error('ارسالِ دوباره باید مسدود شود'); process.exit(1); }
           if (!/this\.move\(/.test(ship)) { console.error('ارسال باید دفتر را بزند'); process.exit(1); }
 
@@ -3215,6 +3216,9 @@ jobs:
 
       - name: Verify sets as stock packages (fill from warehouse, damage to the damaged bin, scrap/repair, return count)
         run: node scripts/e2e/warehouse-sets.mjs
+
+      - name: Verify the tech's consumables sheet and the driver's pickup count (package ج)
+        run: node scripts/e2e/consumables.mjs
 
       - name: Verify isolated test accounts sharing one phone
         run: node scripts/e2e/test-accounts.mjs

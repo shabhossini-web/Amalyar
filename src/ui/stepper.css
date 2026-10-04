@@ -1,0 +1,13 @@
+/* شمارندهٔ لمسی — `src/ui/Stepper.jsx` (بستهٔ ج). استایل همراهِ خودش می‌آید (قانونِ ۲۱). */
+.ui-step { display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+.ui-step button {
+  width: 40px; height: 40px; display: grid; place-items: center; border-radius: 10px; cursor: pointer;
+  color: var(--text1); background: rgba(var(--veil-rgb), .06); border: 1px solid rgba(var(--veil-rgb), .16);
+  transition: background .2s, border-color .2s;
+}
+.ui-step button:hover:not(:disabled) { background: rgba(var(--brand-2-rgb), .18); border-color: rgba(var(--brand-2-rgb), .45); }
+.ui-step button:disabled { opacity: .35; cursor: not-allowed; }
+.ui-step button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.ui-step b { min-width: 36px; text-align: center; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--text1); }
+.ui-step small { font-size: 10.5px; color: var(--text3); margin-inline-end: 4px; }
+@media (prefers-reduced-motion: reduce) { .ui-step button { transition: none; } }

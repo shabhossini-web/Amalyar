@@ -1,13 +1,28 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: idle
-branch: claude/warehouse-sets
+status: active
+branch: claude/consumables
 since: 2026-10-04
-paths: []
+paths:
+  - server/src/patients/usage.service.ts
+  - server/src/patients/inventory.service.ts
+  - server/src/patients/inventory.controller.ts
+  - server/src/patients/transport.service.ts
+  - server/src/patients/tech.service.ts
+  - server/src/patients/handover.ts
+  - server/src/patients/dto/inventory.dto.ts
+  - server/src/patients/dto/routes.dto.ts
+  - server/src/auth/auth.service.ts
+  - server/src/auth/dto/profile.dto.ts
+  - server/prisma/schema.prisma
+  - src/app/Tech.jsx
+  - src/app/Transport.jsx
+  - src/app/Inventory.jsx
+  - src/ui/Stepper.jsx
 note: >-
-  بستهٔ بِ طرحِ انبار/ست (کالاها در کاشیِ انبار با مجوزِ سطح ۳، دو تیکِ کالا، ستِ سریالی = بستهٔ موجودی با
-  محتویات/تکمیل/خرابی/برداشت، محلِ «خرابی‌ها» با اسقاط/تعمیر، شمارشِ برگشت روی حواله، گزارشِ کسری) روی main
-  رفت. بعدی: بستهٔ ج (بلوکِ «ثبتِ مصرفی» با پیش‌فرضِ هر کارشناس + برگهٔ شمارشِ راننده هنگامِ جمع‌آوری).
+  بستهٔ جِ طرحِ انبار/ست (مالک، ۱۴۰۵/۰۷/۱۱): بلوکِ «ثبتِ مصرفی» در پنلِ کارشناسی (از ست، ارسالیِ حواله، از
+  انبار؛ چندبارمصرف فقط شمرده می‌شود) با پیش‌فرض‌های شخصی در /auth/prefs + شمارشِ راننده هنگامِ جمع‌آوری
+  (باید برگردد = ارسالی − مصرف؛ کسریِ مرحلهٔ جمع‌آوری). بسته‌های الف و ب روی main هستند.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

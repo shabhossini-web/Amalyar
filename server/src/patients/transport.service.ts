@@ -6,7 +6,7 @@ import { clinicDateIso, dayUtc } from '../common/clinic-day';
 import { PlacesService } from './places.service';
 import { RoutesService } from './routes.service';
 import { InventoryService } from './inventory.service';
-import { deliveryState, receiptOf } from './handover';
+import { deliveryState, receiptOf, pickupOf } from './handover';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -99,12 +99,14 @@ export class TransportService {
                 releasedAt: true, pickupAt: true, leftAt: true,
                 // دستِ دومِ تحویل — راننده باید ببیند کارشناس «تحویل گرفتم» زده یا نه.
                 techReceivedAt: true, techReceiptIssue: true, techReceiptNote: true,
+                // شمارشِ راننده هنگامِ جمع‌آوری (بستهٔ ج) — تا توقفِ انجام‌شده بگوید چه شمرده شد.
+                driverCountedAt: true, driverCountIssue: true, driverSealIntact: true, driverCountNote: true,
                 // حوالهٔ برنامه‌ریزی‌شده (تختهٔ روز) هنوز حرکتی ندارد؛ قلم‌هایش این‌جاست.
                 plannedLines: true,
-                // ⚠️ فقط عنوانِ کالا و تعداد. نه بیمار، نه مبلغ.
+                // ⚠️ فقط عنوانِ کالا و تعداد. نه بیمار، نه مبلغ. همهٔ حرکت‌ها می‌آیند تا «چقدر باید برگردد»
+                //    (ارسالی − مصرفِ سرِ عمل) برای شمارشِ جمع‌آوری حساب شود.
                 movements: {
-                  where: { kind: 'transfer', quantity: { gt: 0 } },
-                  select: { quantity: true, lot: { select: { serialNo: true, lotNo: true, item: { select: { name: true, size: true } } } } },
+                  select: { kind: true, lotId: true, quantity: true, location: true, lot: { select: { serialNo: true, lotNo: true, item: { select: { name: true, size: true } } } } },
                 },
                 visit: { select: { techArriveTime: true, opStartTime: true, tech: { select: { person: { select: { firstName: true, lastName: true, phone: true } } } } } },
               },
@@ -141,6 +143,21 @@ export class TransportService {
     };
   }
 
+  /** قلم‌های حوالهٔ ارسال‌شده + «چقدر باید برگردد» (ارسالی − مصرفِ سرِ عمل) — پیش‌فرضِ شمارشِ جمع‌آوری. */
+  private cargoItems(t: any) {
+    const usedOf = new Map<number, number>();
+    for (const m of t.movements) if (m.kind === 'out' || m.kind === 'return') usedOf.set(m.lotId, (usedOf.get(m.lotId) ?? 0) - m.quantity);
+    return t.movements
+      .filter((m: any) => m.kind === 'transfer' && m.quantity > 0 && m.location === t.toLocation)
+      .map((m: any) => ({
+        lotId: m.lotId,
+        name: [m.lot?.item?.name, m.lot?.item?.size].filter(Boolean).join(' '),
+        serialNo: m.lot?.serialNo ?? m.lot?.lotNo ?? null,
+        quantity: m.quantity,
+        remaining: Math.max(0, m.quantity - (usedOf.get(m.lotId) ?? 0)),
+      }));
+  }
+
   private shapeStop(s: any) {
     const techs = new Map<string, string | null>();
     for (const t of s.transfers) {
@@ -172,15 +189,12 @@ export class TransportService {
            ردِ «من دادم، او می‌گوید نگرفتم» (`handover.ts`، یک منبع برای سه پنل). */
         delivery: deliveryState(t, s),
         receipt: receiptOf(t),
+        pickup: pickupOf(t),
         /* ⚠️ تختهٔ روز همهٔ تحویل‌ها را **planned** می‌سازد و حوالهٔ planned حرکتی ندارد؛ تا
            ۱۴۰۵/۰۷/۰۹ راننده فقط شمارهٔ حواله را می‌دید، نه اینکه چه چیزی ببرد. */
         items: t.status === 'planned' && this.routes
-          ? this.routes.linesOf(t).map((l: any) => ({ name: l.itemName, serialNo: l.serialNo, quantity: l.quantity }))
-          : t.movements.map((m: any) => ({
-            name: [m.lot?.item?.name, m.lot?.item?.size].filter(Boolean).join(' '),
-            serialNo: m.lot?.serialNo ?? m.lot?.lotNo ?? null,
-            quantity: m.quantity,
-          })),
+          ? this.routes.linesOf(t).map((l: any) => ({ lotId: l.lotId, name: l.itemName, serialNo: l.serialNo, quantity: l.quantity }))
+          : this.cargoItems(t),
       })),
     };
   }
@@ -192,7 +206,11 @@ export class TransportService {
    * کارشناس»، ولی راننده زودتر رسیده و به CSR داده. اگر همان فیلد بازنویسی
    * می‌شد، فردا معلوم نبود برنامه چه بود و واقعیت چه شد.
    */
-  async markDone(stopId: number, dto: { handedActual?: string; notes?: string }, user: any) {
+  async markDone(
+    stopId: number,
+    dto: { handedActual?: string; notes?: string; counts?: { transferId: number; lotId: number; counted: number }[]; sealIntact?: boolean },
+    user: any,
+  ) {
     /* سوپرادمین توقفِ **هر مسیری** را از طرفِ نیروی همان مسیر ثبت می‌کند — بی‌آنکه
        پروفایل عوض کند یا از راننده بخواهد وارد شود. ردِ ممیزی بازیگر را خودِ
        سوپرادمین و صاحبِ مسیر را `staffId` نگه می‌دارد. توقفِ بی‌مسیر (صفِ
@@ -203,7 +221,16 @@ export class TransportService {
       where: { id: stopId, ...(staff ? { run: { staffId: staff.id } } : { runId: { not: null } }) },
       select: {
         id: true, kind: true, doneAt: true, run: { select: { staffId: true } },
-        transfers: { select: { id: true, code: true, status: true }, orderBy: { id: 'asc' } },
+        transfers: {
+          select: {
+            id: true, code: true, status: true, toLocation: true,
+            // همهٔ حرکت‌های حواله: ارسالی (transfer) و مصرفِ سرِ عمل (out/return) — «چقدر باید برگردد» = ارسالی − مصرف.
+            movements: {
+              select: { kind: true, lotId: true, quantity: true, location: true, lot: { select: { serialNo: true, lotNo: true, item: { select: { name: true, size: true } } } } },
+            },
+          },
+          orderBy: { id: 'asc' },
+        },
       },
     });
     if (!stop) throw new NotFoundException(team ? 'این توقف در هیچ مسیری نیست' : 'این توقف در مسیرِ شما نیست');
@@ -228,6 +255,51 @@ export class TransportService {
       }
     }
 
+    /* **شمارشِ راننده هنگامِ جمع‌آوری** (مالک، بستهٔ ج): «موقعِ تحویل‌گرفتن از کارشناس بشمرد؛ موقعِ
+       تحویل‌دادن که استریل است، نه». هر بسته‌ای که شمرده شد با ارسالیِ همان حواله سنجیده می‌شود؛ کمتر =
+       ردیفِ کسری با `stage = pickup` (در گزارشِ کسریِ انبار دیده می‌شود)، بیشتر = خطا. موجودی جابه‌جا
+       نمی‌شود — این امضای راننده است؛ شمارشِ داخلِ ست و تکمیلش کارِ انبار است (بستهٔ ب). */
+    let pickup: { lines: number; missing: number; issue: boolean } | null = null;
+    if (stop.kind === 'pickup' && dto.counts) {
+      const counted = new Map(dto.counts.map((c) => [`${Number(c.transferId)}:${Number(c.lotId)}`, c]));
+      pickup = { lines: 0, missing: 0, issue: false };
+      const note = dto.notes?.trim() || null;
+      for (const t of stop.transfers) {
+        if (t.status === 'planned' || t.status === 'closed') continue;
+        const rows: { transferId: number; lotId: number; label: string; missing: number; kind: string; stage: string; notes: string | null; reportedById: number | null }[] = [];
+        let touched = false;
+        /* مصرفِ سرِ عمل از همین حواله کم شده؛ راننده «آنچه باید برگردد» را می‌شمارد، نه ارسالی را. */
+        const usedOf = new Map<number, number>();
+        for (const m of t.movements) if (m.kind === 'out' || m.kind === 'return') usedOf.set(m.lotId, (usedOf.get(m.lotId) ?? 0) - m.quantity);
+        for (const m of t.movements) {
+          if (m.kind !== 'transfer' || m.quantity <= 0 || m.location !== t.toLocation) continue;
+          const c = counted.get(`${t.id}:${m.lotId}`);
+          if (!c) continue;
+          const label = [[m.lot?.item?.name, m.lot?.item?.size].filter(Boolean).join(' '), m.lot?.serialNo ?? m.lot?.lotNo].filter(Boolean).join(' ');
+          const expected = Math.max(0, m.quantity - (usedOf.get(m.lotId) ?? 0));
+          const n = Math.trunc(Number(c.counted));
+          if (!Number.isInteger(n) || n < 0) throw new BadRequestException(`«${label}»: تعدادِ شمرده‌شده نامعتبر است`);
+          if (n > expected) throw new BadRequestException(`«${label}»: بیشتر از آنچه باید برگردد شمرده شد (باید ${expected} عدد باشد)`);
+          touched = true;
+          pickup.lines += 1;
+          if (n < expected) {
+            rows.push({ transferId: t.id, lotId: m.lotId, label, missing: expected - n, kind: 'missing', stage: 'pickup', notes: note, reportedById: user?.id ?? null });
+            pickup.missing += expected - n;
+          }
+        }
+        if (!touched) continue;
+        if (rows.length) await this.prisma.setShortage.createMany({ data: rows });
+        await this.prisma.stockTransfer.update({
+          where: { id: t.id },
+          data: {
+            driverCountedAt: new Date(), driverCountedById: user?.id ?? null, driverCountIssue: rows.length > 0,
+            driverSealIntact: typeof dto.sealIntact === 'boolean' ? dto.sealIntact : null, driverCountNote: note,
+          },
+        });
+        if (rows.length) pickup.issue = true;
+      }
+    }
+
     await this.prisma.transportStop.update({
       where: { id: stopId },
       data: {
@@ -238,7 +310,7 @@ export class TransportService {
     });
     await this.audit.record({
       actorId: user?.id, action: 'transport.stop.done', entityType: 'transport_stop', entityId: stopId,
-      after: { handedActual, shipped, ...(team ? { staffId: stop.run?.staffId ?? null } : {}) },
+      after: { handedActual, shipped, pickup, ...(team ? { staffId: stop.run?.staffId ?? null } : {}) },
     });
     return this.agenda(user, 'today');
   }

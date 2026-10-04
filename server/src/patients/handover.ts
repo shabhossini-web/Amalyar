@@ -30,6 +30,15 @@ export function receiptOf(t: TransferLike) {
 }
 
 /** دستِ اولِ تحویل — راننده کِی و به چه کسی داد؛ `null` تا توقفِ تحویل انجام نشده. */
+/**
+ * **شمارشِ راننده هنگامِ جمع‌آوری** (بستهٔ ج) — امضای رانندهٔ جمع‌آور: کِی شمرد، مغایرت داشت، پلمب سالم بود.
+ * مثلِ `receiptOf`، موجودی را جابه‌جا نمی‌کند؛ شمارشِ داخلِ ست کارِ انبار است (شمارشِ برگشت).
+ */
+export function pickupOf(t: { driverCountedAt?: Date | null; driverCountIssue?: boolean | null; driverSealIntact?: boolean | null; driverCountNote?: string | null }) {
+  if (!t.driverCountedAt) return null;
+  return { at: t.driverCountedAt, issue: !!t.driverCountIssue, sealIntact: t.driverSealIntact ?? null, note: t.driverCountNote ?? null };
+}
+
 export function handoverOf(stop: StopLike) {
   if (!stop || stop.kind !== 'deliver' || !stop.doneAt) return null;
   const p = stop.run?.staff?.person;

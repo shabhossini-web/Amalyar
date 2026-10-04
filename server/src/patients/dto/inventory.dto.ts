@@ -231,3 +231,27 @@ export class ReturnCountDto {
   @ValidateNested({ each: true }) @Type(() => ReturnCountLineDto)
   lines!: ReturnCountLineDto[];
 }
+
+/** یک ردیفِ برگهٔ مصرفی (بستهٔ ج): از کدام منبع، کدام کالا، چند تا — عدد «جمع» است، نه «چقدر کم کن». */
+export class VisitUsageLineDto {
+  @IsIn(['set', 'warehouse', 'transfer'], { message: 'منبعِ قلم نامعتبر است' })
+  source!: 'set' | 'warehouse' | 'transfer';
+
+  @Type(() => Number) @IsInt({ message: 'کالای قلم نامعتبر است' }) @Min(1)
+  itemId!: number;
+
+  @IsOptional() @Type(() => Number) @IsInt({ message: 'ستِ انتخابی نامعتبر است' }) @Min(1)
+  setLotId?: number;
+
+  @IsOptional() @Type(() => Number) @IsInt({ message: 'لاتِ انتخابی نامعتبر است' }) @Min(1)
+  lotId?: number;
+
+  @Type(() => Number) @IsInt({ message: 'تعداد باید عدد باشد' }) @Min(0, { message: 'تعداد نمی‌تواند منفی باشد' })
+  quantity!: number;
+}
+
+export class VisitUsageDto {
+  @IsArray({ message: 'ردیف‌های مصرفی نامعتبر است' }) @ArrayMinSize(1, { message: 'دستِ‌کم یک ردیف لازم است' })
+  @ValidateNested({ each: true }) @Type(() => VisitUsageLineDto)
+  lines!: VisitUsageLineDto[];
+}

@@ -6,8 +6,9 @@ import { PermissionGuard } from '../auth/permission.guard';
 import { RequirePermissions } from '../auth/permission.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { InventoryService } from './inventory.service';
-import { AdjustDto, LotCreateDto, LotPatchDto, MovementDto, QuantityNoteDto, ReleaseDto, ReturnCountDto, SetFillDto, SetMoveDto, TransferReceiptDto, TransferReceiveDto, TransferSendDto, TransferUsageDto } from './dto/inventory.dto';
+import { AdjustDto, LotCreateDto, LotPatchDto, MovementDto, QuantityNoteDto, ReleaseDto, ReturnCountDto, SetFillDto, SetMoveDto, TransferReceiptDto, TransferReceiveDto, TransferSendDto, TransferUsageDto, VisitUsageDto } from './dto/inventory.dto';
 import { SetStockService } from './set-stock.service';
+import { VisitUsageService } from './usage.service';
 import { DefinitionsService } from './definitions.service';
 import { ItemCreateDto, ItemPatchDto } from './definitions.controller';
 
@@ -21,7 +22,7 @@ import { ItemCreateDto, ItemPatchDto } from './definitions.controller';
 @UseGuards(JwtAuthGuard, FeatureGuard, PermissionGuard)
 @Feature('inventory')
 export class InventoryController {
-  constructor(private inv: InventoryService, private sets: SetStockService, private defs: DefinitionsService) {}
+  constructor(private inv: InventoryService, private sets: SetStockService, private defs: DefinitionsService, private usages: VisitUsageService) {}
 
   // ── کالاها (کاتالوگ) — از تعاریفِ پایه به انبار آمده (مالک، ۱۴۰۵/۰۷/۱۱) ──
 
@@ -257,6 +258,25 @@ export class InventoryController {
   @Post('transfers/:id/receipt')
   confirmReceipt(@Param('id', ParseIntPipe) id: number, @Body() dto: TransferReceiptDto, @CurrentUser() user: any) {
     return this.inv.confirmReceipt(id, dto, user);
+  }
+
+  /**
+   * ثبتِ مصرفیِ کارشناس (مالک، ۱۴۰۵/۰۷/۱۱، بستهٔ ج) — برگهٔ یک عمل: از ست، ارسالیِ حواله، از انبار.
+   *
+   * مجوزِ سبکِ خودش (`stock.consume`) و `@Feature('tech')` — کارشناسِ سطح ۲ نباید پشتِ ماژولِ انبار بماند.
+   */
+  @Feature('tech')
+  @RequirePermissions('stock.consume')
+  @Get('visits/:visitId/usage')
+  usageSheet(@Param('visitId', ParseIntPipe) visitId: number, @CurrentUser() user: any) {
+    return this.usages.sheet(visitId, user);
+  }
+
+  @Feature('tech')
+  @RequirePermissions('stock.consume')
+  @Post('visits/:visitId/usage')
+  saveUsage(@Param('visitId', ParseIntPipe) visitId: number, @Body() dto: VisitUsageDto, @CurrentUser() user: any) {
+    return this.usages.save(visitId, dto, user);
   }
 
   @RequirePermissions('inventory.write')

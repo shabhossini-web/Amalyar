@@ -59,6 +59,7 @@ export const ArrowDown = (p) => <Svg {...p}><path d="M12 5v14M5 12l7 7 7-7" /></
 
 // ── کنش‌ها ───────────────────────────────────────────────────
 export const Plus = (p) => <Svg {...p}><path d="M12 5v14M5 12h14" /></Svg>;
+export const Minus = (p) => <Svg {...p}><path d="M5 12h14" /></Svg>;
 /** بستن. جایگزینِ نویسهٔ `✕`. */
 export const Close = (p) => <Svg {...p}><path d="M18 6 6 18M6 6l12 12" /></Svg>;
 export const Trash = (p) => (

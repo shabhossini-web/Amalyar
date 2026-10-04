@@ -171,3 +171,11 @@
   .tr { padding: 20px 10px 32px; }
   .tr-card { padding: 11px; }
 }
+
+/* ── شمارشِ جمع‌آوری (بستهٔ ج) ── هر بسته یک ردیف با شمارنده؛ ردیفِ کم‌شمرده کهربایی. */
+.tr-count-items li { align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid rgba(var(--veil-rgb), .07); }
+.tr-count-items li:last-child { border-bottom: 0; }
+.tr-count-items li.short .tr-count-name small { color: var(--amber-text); }
+.tr-count-name { min-width: 0; flex: 1; display: grid; gap: 2px; color: var(--text1); }
+.tr-count-name small { font-size: 10.5px; color: var(--text3); }
+.tr-count .tr-hint { margin: 0; font-size: 11px; color: var(--text3); }

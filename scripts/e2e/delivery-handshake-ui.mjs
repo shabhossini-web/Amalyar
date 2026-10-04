@@ -9,7 +9,7 @@
  *   - «ثبتِ تحویل»ِ راننده از رابط حواله را ارسال می‌کند (دفتر: انبار ← بیمارستان) و کارتش
  *     «منتظرِ تأییدِ کارشناس» می‌گیرد
  *   - کارشناس در پنلِ خودش «راننده (…) ساعتِ … تحویل داد» و «منتظرِ تأییدِ شما» می‌بیند؛ تا تأیید
- *     نکرده برگهٔ مصرف ندارد
+ *     نکرده نه «پایانِ عمل» دارد نه «ثبتِ مصرفی»
  *   - «با مغایرت» برگهٔ شمارش را باز می‌کند: استاندارد از قالبِ ست، کسری **حساب** می‌شود؛ ثبتش
  *     ردیف‌های کسری/خرابی با `stage = receipt` می‌سازد و هر دو پنل «تحویل با مغایرت» می‌شوند
  *   - «تحویل گرفتم» بی‌مغایرت: کارت سبز، بی‌ردیفِ کسری؛ نمای سرپرستی «کارشناس تحویل گرفت» می‌گوید
@@ -190,12 +190,12 @@ try {
     await p.waitForSelector(`.tk-card:has-text("آرمانی${tag}")`, { timeout: 15000 });
   };
   await openTech(pageA);
-  const setA = pageA.locator('article.tk-card', { hasText: `آرمانی${tag}` }).locator('.tk-set');
+  const setA = pageA.locator('article.tk-card', { hasText: `آرمانی${tag}` }).locator('.tk-set:not(.tk-usage)');
   ok(await setA.count() === 1 && /d-awaiting/.test(await setA.getAttribute('class')), 'کارتِ ست کهربایی (awaiting) است');
   const hand = (await setA.locator('.tk-hand').innerText()).replace(/\s+/g, ' ').trim();
   ok(/^راننده \(رضا احمدیِ/.test(hand) && /تحویل داد/.test(hand) && /کارشناسِ حاضر/.test(hand), `«${hand}»`);
   ok((await setA.locator('.tk-tag.warn').innerText()).trim() === 'منتظرِ تأییدِ شما', 'برچسب: «منتظرِ تأییدِ شما»');
-  ok(await setA.locator('button', { hasText: 'برگهٔ مصرف' }).count() === 0, 'تا تأیید نکرده برگهٔ مصرف ندارد');
+  ok(await setA.locator('button', { hasText: 'پایانِ عمل' }).count() === 0 && await pageA.locator('article.tk-card', { hasText: `آرمانی${tag}` }).locator('.tk-usage button').isDisabled(), 'تا تأیید نکرده نه «پایانِ عمل» دارد نه «ثبتِ مصرفی» (بستهٔ ج)');
   ok(await setA.locator('button', { hasText: 'تحویل گرفتم' }).count() === 1 && await setA.locator('button', { hasText: 'با مغایرت' }).count() === 1, 'دو دکمه: «تحویل گرفتم» و «با مغایرت»');
 
   if (SHOTS) {
@@ -249,7 +249,7 @@ try {
   ok(atHospital(setLot, hA.name) === 1, 'تأیید موجودی را جابه‌جا نمی‌کند');
   await pageA.waitForSelector(`article.tk-card:has-text("آرمانی${tag}") .tk-set.d-received_issue`, { timeout: 8000 });
   ok((await setA.locator('.tk-tag.warn').innerText()).trim() === 'تحویل با مغایرت' && await setA.locator('.tk-note.warn').count() === 1, 'کارت: «تحویل با مغایرت» + یادداشتِ رسید');
-  ok(await setA.locator('button', { hasText: 'برگهٔ مصرف' }).count() === 1, 'حالا برگهٔ مصرف باز است');
+  ok(await setA.locator('button', { hasText: 'پایانِ عمل' }).count() === 1, 'حالا «پایانِ عمل و جمع‌آوری» باز است (مصرف در بلوکِ «ثبتِ مصرفی»، بستهٔ ج)');
   await openTransport(pageD);
   ok((await cardA.locator('.tr-bag .tr-tag.warn').innerText()).trim() === 'تحویل با مغایرت' && await cardA.locator('.tr-recv.warn').count() === 1, 'پنلِ راننده هم «تحویل با مغایرت» و ساعتِ رسید را می‌گوید');
 
@@ -257,7 +257,7 @@ try {
   const doneB = await asD(`/transport/stops/${tB.stopId}/done`, 'POST', { handedActual: 'CSR' });
   ok(doneB.status === 201 && sql(`SELECT status FROM stock_transfers WHERE id=${tB.id}`) === 'sent', `ثبتِ تحویلِ دوم از API هم حواله را ارسال می‌کند (${doneB.status})`);
   await openTech(pageA);
-  const setB = pageA.locator('article.tk-card', { hasText: `میلادی${tag}` }).locator('.tk-set');
+  const setB = pageA.locator('article.tk-card', { hasText: `میلادی${tag}` }).locator('.tk-set:not(.tk-usage)');
   await setB.locator('button', { hasText: 'تحویل گرفتم' }).click();
   await pageA.waitForFunction(() => /^تحویل ثبت شد/.test(document.querySelector('.tk-toast.on')?.textContent ?? ''), null, { timeout: 8000 });
   await pageA.waitForSelector(`article.tk-card:has-text("میلادی${tag}") .tk-set.d-received`, { timeout: 8000 });

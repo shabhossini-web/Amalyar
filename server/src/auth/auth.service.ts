@@ -448,12 +448,13 @@ export class AuthService {
     return AuthService.normPrefs(a?.prefs);
   }
 
-  async setPrefs(id: number, dto: { subformPins?: unknown; todayPins?: unknown }) {
+  async setPrefs(id: number, dto: { subformPins?: unknown; todayPins?: unknown; usagePresets?: unknown }) {
     const cur = await this.prefs(id);
     const next = {
       ...cur,
       ...(dto.subformPins !== undefined ? { subformPins: AuthService.pins(dto.subformPins, 'فرمِ منتخب') } : {}),
       ...(dto.todayPins !== undefined ? { todayPins: AuthService.pins(dto.todayPins, 'ابزارکِ منتخب') } : {}),
+      ...(dto.usagePresets !== undefined ? { usagePresets: AuthService.presets(dto.usagePresets, true) } : {}),
     };
     await this.prisma.account.update({ where: { id }, data: { prefs: next } });
     return next;
@@ -481,7 +482,41 @@ export class AuthService {
       while (a.length < 3) a.push(null);
       return a;
     };
-    return { subformPins: three(o.subformPins), todayPins: three(o.todayPins) };
+    return { subformPins: three(o.subformPins), todayPins: three(o.todayPins), usagePresets: AuthService.presets(o.usagePresets, false) };
+  }
+
+  /**
+   * **پیش‌فرض‌های مصرفیِ کارشناس** (بستهٔ ج): `[{ name, lines: [{ itemId, quantity }] }]` — هر کارشناس
+   * ترکیبِ همیشگی‌اش را یک‌بار می‌سازد («ستونِ فقرات · ۸ الکترود + ۱ ژل») و سرِ هر عمل با یک لمس
+   * می‌نشاند. `strict` یعنی ورودیِ کاربر (خطای فارسی)، وگرنه خواندنِ مقدارِ ذخیره‌شده (ردِ بی‌صدا).
+   */
+  private static presets(v: unknown, strict: boolean): { name: string; lines: { itemId: number; quantity: number }[] }[] {
+    const bad = (msg: string) => { if (strict) throw new BadRequestException(msg); return null; };
+    if (!Array.isArray(v)) { bad('پیش‌فرض‌های مصرفی نامعتبر است'); return []; }
+    if (v.length > 12) { bad('حداکثر دوازده پیش‌فرضِ مصرفی'); v = v.slice(0, 12); }
+    const out: { name: string; lines: { itemId: number; quantity: number }[] }[] = [];
+    const names = new Set<string>();
+    for (const p of v as unknown[]) {
+      const o = p && typeof p === 'object' && !Array.isArray(p) ? (p as Record<string, unknown>) : null;
+      const name = typeof o?.name === 'string' ? o.name.trim().slice(0, 40) : '';
+      if (!o || !name) { bad('پیش‌فرضِ مصرفی نام می‌خواهد'); continue; }
+      if (!Array.isArray(o.lines) || !o.lines.length || o.lines.length > 40) { bad(`«${name}»: دستِ‌کم یک و حداکثر چهل قلم`); continue; }
+      const seen = new Set<number>();
+      const lines: { itemId: number; quantity: number }[] = [];
+      for (const l of o.lines as unknown[]) {
+        const lo = l && typeof l === 'object' ? (l as Record<string, unknown>) : {};
+        const itemId = Math.trunc(Number(lo.itemId));
+        const quantity = Math.trunc(Number(lo.quantity));
+        if (!Number.isInteger(itemId) || itemId <= 0 || !Number.isInteger(quantity) || quantity < 0) { bad(`«${name}»: قلمِ نامعتبر`); continue; }
+        if (seen.has(itemId)) continue;
+        seen.add(itemId);
+        lines.push({ itemId, quantity });
+      }
+      if (!lines.length || names.has(name)) { if (names.has(name)) bad(`«${name}»: نامِ تکراری`); continue; }
+      names.add(name);
+      out.push({ name, lines });
+    }
+    return out;
   }
 
   // ── بازیابیِ رمز با کدِ پیامکی (بازبینیِ UX، بندِ ۱۹) ─────────

@@ -10,7 +10,7 @@ import { useAuth } from './auth.jsx';
  * ⚠️ یک انبارِ مشترک برای همهٔ صفحه‌ها، **به‌ازای حساب**: سوییچِ حساب (`/auth/switch`)
  * صفحه را از نو سوار نمی‌کند، پس بی کلیدِ `uid` منتخب‌های حسابِ قبلی می‌ماندند.
  */
-const EMPTY = Object.freeze({ subformPins: [null, null, null], todayPins: [null, null, null] });
+const EMPTY = Object.freeze({ subformPins: [null, null, null], todayPins: [null, null, null], usagePresets: [] });
 const store = { uid: null, value: null, inflight: null, subs: new Set() };
 const emit = () => store.subs.forEach((fn) => fn(store.value));
 

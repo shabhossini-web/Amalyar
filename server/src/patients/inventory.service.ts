@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { EventsService } from '../work/events.service';
 import { AssetsService, RETURNABLE, windowOf } from './assets.service';
-import { receiptOf } from './handover';
+import { pickupOf, receiptOf } from './handover';
 import { balanceByLocation, balanceOf, DAMAGED_LOCATION, HOME_FALLBACK, setLocationOf } from './stock-math';
 import { SettingsService } from '../config/settings.service';
 import { RoutesService, normalizeTime } from './routes.service';
@@ -245,13 +245,24 @@ export class InventoryService {
 
     await this.prisma.$transaction(async (tx) => {
       await tx.stockLot.update({ where: { id }, data });
-      /* ستِ سریالی یک محل است («ست SE-07»): با تغییرِ سریال، محتویاتش نباید در دفتر یتیم بمانند. */
+      /* ستِ سریالی یک محل است («ست SE-07»): با تغییرِ سریال، محتویاتش نباید در دفتر یتیم بمانند.
+         ⚠️ دفتر فقط اضافه می‌شود (نگهبانِ CI): حرکت‌های قبلی ویرایش نمی‌شوند؛ هر قلمِ داخلِ ست با یک
+         جابه‌جاییِ جبرانی از محلِ قدیمی به محلِ تازه می‌رود — ردِ «ست SE-07 شد SE-07B» در دفتر می‌ماند. */
       const serialChanged = data.serialNo !== undefined && data.serialNo !== before.serialNo;
       const lotNoChanged = data.lotNo !== undefined && data.lotNo !== before.lotNo;
       if (serialChanged || lotNoChanged) {
         const from = setLocationOf(before);
         const to = setLocationOf({ id, serialNo: data.serialNo !== undefined ? data.serialNo : before.serialNo, lotNo: data.lotNo !== undefined ? data.lotNo : before.lotNo });
-        if (from !== to) await tx.stockMovement.updateMany({ where: { location: from }, data: { location: to } });
+        if (from !== to) {
+          const inside = await tx.stockMovement.groupBy({ by: ['lotId'], where: { location: from }, _sum: { quantity: true } });
+          for (const row of inside) {
+            const q = row._sum.quantity ?? 0;
+            if (q <= 0) continue;
+            const meta = { reason: `تغییرِ سریالِ ست: ${from} ← ${to}` };
+            await this.move(row.lotId, 'transfer', -q, { ...meta, location: from }, user, tx);
+            await this.move(row.lotId, 'transfer', q, { ...meta, location: to }, user, tx);
+          }
+        }
       }
     });
     await this.audit.record({
@@ -361,7 +372,7 @@ export class InventoryService {
    * قابلِ رد کردن گذشت. اگر تاریخ اشتباه وارد شده، همان را اصلاح می‌کنند.
    */
   async consume(
-    dto: { lotId: number; quantity: number; visitId?: number; chargeId?: number; reason?: string; location?: string },
+    dto: { lotId: number; quantity: number; visitId?: number; chargeId?: number; reason?: string; location?: string; transferId?: number | null },
     user: any,
   ) {
     const quantity = positiveInt(dto.quantity, 'تعداد');
@@ -376,7 +387,8 @@ export class InventoryService {
     }
     // محل را کاربر معمولاً نمی‌داند و نباید بداند: اگر ستِ همین عمل جایی رفته،
     // مصرف از همان‌جاست. صریح‌بودنِ `dto.location` فقط برای اصلاحِ دستی است.
-    const at = text(dto.location) ? { location: text(dto.location)!, transferId: null } : await this.consumeLocationFor(dto.lotId, dto.visitId);
+    // محلِ صریح + حوالهٔ صریح: مصرف از داخلِ ستِ همراهِ عمل (بستهٔ ج) به همان حواله گره می‌خورد.
+    const at = text(dto.location) ? { location: text(dto.location)!, transferId: dto.transferId ?? null } : await this.consumeLocationFor(dto.lotId, dto.visitId);
     return this.move(
       dto.lotId, 'out', -quantity,
       { visitId: dto.visitId ?? null, visitCode, chargeId: dto.chargeId ?? null, reason: text(dto.reason), location: at?.location ?? null, transferId: at?.transferId ?? null },
@@ -386,13 +398,13 @@ export class InventoryService {
 
   /** برگشت به انبار — جبرانِ مصرفِ اشتباه یا کالای مصرف‌نشده. */
   async returnToStock(
-    dto: { lotId: number; quantity: number; visitId?: number; chargeId?: number; reason?: string; location?: string },
+    dto: { lotId: number; quantity: number; visitId?: number; chargeId?: number; reason?: string; location?: string; transferId?: number | null },
     user: any,
   ) {
     const quantity = positiveInt(dto.quantity, 'تعداد');
     // برگشت به همان‌جایی که مصرف از آن بود؛ وگرنه کالا از بیمارستان مصرف می‌شود
     // و به انبار برمی‌گردد، یعنی یک قلم از هوا در انبار پیدا می‌شود.
-    const at = text(dto.location) ? { location: text(dto.location)!, transferId: null } : await this.consumeLocationFor(dto.lotId, dto.visitId);
+    const at = text(dto.location) ? { location: text(dto.location)!, transferId: dto.transferId ?? null } : await this.consumeLocationFor(dto.lotId, dto.visitId);
     return this.move(
       dto.lotId, 'return', quantity,
       { visitId: dto.visitId ?? null, chargeId: dto.chargeId ?? null, reason: text(dto.reason), location: at?.location ?? null, transferId: at?.transferId ?? null },
@@ -700,6 +712,7 @@ export class InventoryService {
     return {
       transferId: t.id, code: t.code, status: t.status, toLocation: t.toLocation,
       receipt: receiptOf(t),
+      pickup: pickupOf(t),
       lots: movements.map((m) => {
         const name = [m.lot.item.name, m.lot.item.size].filter(Boolean).join(' ');
         const contents = comps.filter((c) => c.setId === m.lot.itemId);
@@ -1013,6 +1026,7 @@ export class InventoryService {
       plannedFor: t.plannedFor,
       sentAt: t.sentAt, receivedAt: t.receivedAt, receivedBy: t.receivedBy, notes: t.notes,
       receipt: receiptOf(t),
+      pickup: pickupOf(t),
       lineCount: t.status === 'planned'
         ? new Set(((t.plannedLines as any[] | null) ?? []).map((l) => l.lotId)).size
         : new Set(t.movements.map((m) => m.lotId)).size,
@@ -1108,6 +1122,7 @@ export class InventoryService {
       sentAt: t.sentAt, receivedAt: t.receivedAt, receivedBy: t.receivedBy, notes: t.notes,
       /* دستِ دومِ تحویل — «کارشناس تحویل گرفت» کنارِ رسیدِ CSR، نه به‌جایش. */
       receipt: receiptOf(t),
+      pickup: pickupOf(t),
       lines,
       totals: {
         sent: lines.reduce((s, l) => s + l.sent, 0),

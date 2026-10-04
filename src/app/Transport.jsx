@@ -7,6 +7,7 @@ import { Alert, Arrive, Box, CheckCircle, Clock, Close, Hospital, Phone, Truck, 
 import Tabs from '../ui/Tabs.jsx';
 import PageHeader from '../ui/PageHeader.jsx';
 import Overlay from '../ui/Overlay.jsx';
+import Stepper from '../ui/Stepper.jsx';
 import { faTime, minToTime } from '../lib/time.js';
 import { useStagger } from '../ui/stagger.js';
 import { usePlaces } from '../lib/places.js';
@@ -159,7 +160,7 @@ export default function Transport() {
                 </small>
               </div>
               {s.doneAt
-                ? <span className="tr-tag ok">تحویل شد</span>
+                ? <span className="tr-tag ok">{s.kind === 'pickup' ? 'جمع‌آوری شد' : 'تحویل شد'}</span>
                 : <span className="tr-tag">مانده</span>}
             </header>
 
@@ -196,6 +197,14 @@ export default function Transport() {
                         کارشناس ساعتِ {clock(c.receipt.at)} تحویل گرفت{c.receipt.issue ? ' — با مغایرت' : ''}
                       </p>
                     )}
+                    {/* شمارشِ راننده هنگامِ جمع‌آوری (بستهٔ ج) — امضای راننده، نه جابه‌جاییِ موجودی. */}
+                    {c.pickup && (
+                      <p className={`tr-recv${c.pickup.issue ? ' warn' : ''}`}>
+                        ساعتِ {clock(c.pickup.at)} شمرده و تحویل گرفته شد{c.pickup.issue ? ' — با کسری' : ''}
+                        {c.pickup.sealIntact === true ? ' · پلمب سالم' : c.pickup.sealIntact === false ? ' · پلمب باز' : ''}
+                        {c.pickup.note ? ` · ${c.pickup.note}` : ''}
+                      </p>
+                    )}
                     {c.leftAt && <p className="tr-left">کارشناس گذاشته در: <b>{c.leftAt}</b></p>}
                   </div>
                 ))}
@@ -229,7 +238,7 @@ export default function Transport() {
             {s.notes && <p className="tr-note">{s.notes}</p>}
 
             {!s.doneAt && (
-              <button type="button" className="tr-do" onClick={() => setDoneFor(s)}>ثبتِ تحویل</button>
+              <button type="button" className="tr-do" onClick={() => setDoneFor(s)}>{s.kind === 'pickup' ? 'ثبتِ جمع‌آوری' : 'ثبتِ تحویل'}</button>
             )}
           </motion.article>
         ))}
@@ -266,20 +275,34 @@ export default function Transport() {
  * بی‌«شما» می‌پرسد — ناظر خودش چیزی تحویل نداده است.
  */
 function DoneSheet({ stop, team, onClose, onSaved, onError }) {
+  const pickup = stop.kind === 'pickup';
   const [who, setWho] = useState(stop.handedTo ?? '');
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   const places = usePlaces();
+  /* شمارشِ جمع‌آوری (مالک، بستهٔ ج): «موقعِ تحویل‌گرفتن از کارشناس بشمرد؛ موقعِ تحویل‌دادن که استریل است،
+     نه». هر بسته با ارسالیِ همان حواله شروع می‌شود؛ کمتر = کسری (ردیفِ کسریِ انبار)، بیشتر را سرور رد می‌کند. */
+  const bags = pickup ? (stop.cargo ?? []).filter((c) => c.status !== 'planned' && c.status !== 'closed' && c.items?.some((it) => it.lotId)) : [];
+  const expect = (it) => (it.remaining ?? it.quantity);
+  const [counts, setCounts] = useState(() => Object.fromEntries(bags.flatMap((c) => c.items.filter((it) => it.lotId).map((it) => [`${c.id}:${it.lotId}`, expect(it)]))));
+  const [seal, setSeal] = useState(null); // true = پلمب سالم (باز نشده) · false = باز است · null = نگفته
+  const missing = bags.reduce((a, c) => a + c.items.filter((it) => it.lotId).reduce((b, it) => b + Math.max(0, expect(it) - (counts[`${c.id}:${it.lotId}`] ?? expect(it))), 0), 0);
 
   const save = async () => {
     setBusy(true);
     try {
       await api(`/transport/stops/${stop.id}/done`, {
         method: 'POST',
-        body: { handedActual: who.trim(), notes: notes.trim() },
+        body: {
+          handedActual: who.trim(), notes: notes.trim(),
+          ...(pickup && bags.length ? {
+            counts: bags.flatMap((c) => c.items.filter((it) => it.lotId).map((it) => ({ transferId: c.id, lotId: it.lotId, counted: counts[`${c.id}:${it.lotId}`] ?? expect(it) }))),
+            ...(seal === null ? {} : { sealIntact: seal }),
+          } : {}),
+        },
       });
       /* تحویلِ دوطرفه: ثبتِ راننده بار را ارسال می‌کند و دستِ دوم با کارشناس است. */
-      onSaved(stop.kind === 'deliver' && stop.cargo?.length ? 'تحویل ثبت شد — منتظرِ تأییدِ کارشناس' : 'تحویل ثبت شد');
+      onSaved(pickup ? (missing ? `جمع‌آوری ثبت شد — ${num(missing)} قلم کسری` : 'جمع‌آوری ثبت شد') : stop.cargo?.length ? 'تحویل ثبت شد — منتظرِ تأییدِ کارشناس' : 'تحویل ثبت شد');
     } catch (e) { onError(e.message); setBusy(false); }
   };
 
@@ -291,9 +314,42 @@ function DoneSheet({ stop, team, onClose, onSaved, onError }) {
       </header>
       <div className="tr-sheet-body">
         {team && <p className="tr-owner"><Truck width="14" height="14" /> ثبت از طرفِ <b>{stop.staffName || '—'}</b></p>}
-        {stop.handedTo && <p className="tr-hint">برنامه: تحویل به «{stop.handedTo}»</p>}
+        {stop.handedTo && <p className="tr-hint">{pickup ? `برنامه: تحویل از «${stop.handedTo}»` : `برنامه: تحویل به «${stop.handedTo}»`}</p>}
+        {pickup && stop.cargo?.some((c) => c.leftAt) && (
+          <p className="tr-hint">کارشناس گذاشته در: <b>{stop.cargo.filter((c) => c.leftAt).map((c) => c.leftAt).join('، ')}</b></p>
+        )}
+        {pickup && bags.length > 0 && (
+          <div className="tr-bag tr-count">
+            <div className="tr-bag-head"><b><Box width="14" height="14" /> چه تحویل گرفتید؟</b><span>هر بسته را بشمارید؛ کسری خودش حساب می‌شود</span></div>
+            <ul className="tr-items tr-count-items">
+              {bags.flatMap((c) => c.items.filter((it) => it.lotId).map((it) => {
+                const k = `${c.id}:${it.lotId}`;
+                const want = expect(it);
+                const got = counts[k] ?? want;
+                return (
+                  <li key={k} className={got < want ? 'short' : ''}>
+                    <div className="tr-count-name">
+                      {it.name}{it.serialNo && <em dir="ltr">{it.serialNo}</em>}
+                      <small>
+                        حوالهٔ <bdi dir="ltr">{c.code}</bdi> · باید برگردد {num(want)}
+                        {want !== it.quantity ? ` (ارسالی ${num(it.quantity)}، مصرف ${num(it.quantity - want)})` : ''}
+                        {got < want ? ` · کسری ${num(want - got)}` : ''}
+                      </small>
+                    </div>
+                    <Stepper value={got} onChange={(n) => setCounts((st) => ({ ...st, [k]: n }))} max={want} label={it.name} />
+                  </li>
+                );
+              }))}
+            </ul>
+            <div className="tr-chips">
+              <button type="button" className={`tr-chip${seal === false ? ' on' : ''}`} onClick={() => setSeal(seal === false ? null : false)}>پلمبِ ست باز است</button>
+              <button type="button" className={`tr-chip${seal === true ? ' on' : ''}`} onClick={() => setSeal(seal === true ? null : true)}>پلمب سالم است</button>
+            </div>
+            <p className="tr-hint">شمارشِ داخلِ ست کارِ انبار است، نه راننده — فقط بسته‌ها شمرده می‌شوند.</p>
+          </div>
+        )}
         <label className="tr-field">
-          <span>{team ? 'به چه کسی تحویل داده شد؟' : 'به چه کسی تحویل دادید؟'}</span>
+          <span>{pickup ? (team ? 'از چه کسی تحویل گرفته شد؟' : 'از چه کسی تحویل گرفتید؟') : team ? 'به چه کسی تحویل داده شد؟' : 'به چه کسی تحویل دادید؟'}</span>
           <input value={who} onChange={(e) => setWho(e.target.value)} placeholder="نام یا بخش" />
         </label>
         <div className="tr-chips">
@@ -306,7 +362,7 @@ function DoneSheet({ stop, team, onClose, onSaved, onError }) {
           <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="مثلاً ترافیک، تأخیر، …" />
         </label>
         <button type="button" className="tr-save" disabled={busy} onClick={save}>
-          {busy ? 'در حال ثبت…' : 'ثبتِ تحویل'}
+          {busy ? 'در حال ثبت…' : pickup ? (missing ? `ثبتِ جمع‌آوری با ${num(missing)} کسری` : 'ثبتِ جمع‌آوری') : 'ثبتِ تحویل'}
         </button>
       </div>
     </Overlay>

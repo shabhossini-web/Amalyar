@@ -368,6 +368,7 @@ model Item {
   hospitalNeeds HospitalItem[]
   contents      ItemComponent[] @relation("SetContents")
   partOf        ItemComponent[] @relation("PartOfSets")
+  usages        VisitUsage[]
 
   @@index([name])
   @@index([category])
@@ -540,6 +541,14 @@ model StockTransfer {
   /// «با مغایرت»: برگهٔ شمارشِ کارشناس کسری یا خرابی داشت (ردیف‌هایش در `SetShortage` با `stage = receipt`).
   techReceiptIssue Boolean   @default(false) @map("tech_receipt_issue")
   techReceiptNote  String?   @map("tech_receipt_note")
+  /// **شمارشِ راننده هنگامِ جمع‌آوری** (مالک، بستهٔ ج): راننده هنگامِ تحویل‌گرفتن از کارشناس بسته‌ها را
+  /// می‌شمارد (ستِ استریلِ هنگامِ تحویل شمرده نمی‌شود). کسری‌اش در `SetShortage` با `stage = pickup`.
+  driverCountedAt   DateTime? @map("driver_counted_at")
+  driverCountedById Int?      @map("driver_counted_by_id")
+  driverCountIssue  Boolean   @default(false) @map("driver_count_issue")
+  /// پلمبِ ست هنگامِ جمع‌آوری سالم بود؟ (`null` = نگفته). پلمبِ سالم یعنی ست باز نشده و تکمیل نمی‌خواهد.
+  driverSealIntact  Boolean?  @map("driver_seal_intact")
+  driverCountNote   String?   @map("driver_count_note")
   sentAt     DateTime  @default(now()) @map("sent_at")
   receivedAt DateTime? @map("received_at")
   /// نامِ تحویل‌گیرندهٔ CSR.
@@ -1515,6 +1524,7 @@ model Visit {
   payments       Payment[]
   stockMovements StockMovement[]
   stockTransfers StockTransfer[]
+  usages         VisitUsage[]
   settlements    Settlement[]
   payouts        Payout[]
 
@@ -2199,6 +2209,38 @@ model SetShortage {
 
   @@index([transferId])
   @@map("set_shortages")
+}
+
+/// **ثبتِ مصرفیِ کارشناس** (مالک، ۱۴۰۵/۰۷/۱۱، بستهٔ ج) — هر ردیف «این عمل از این کالا چقدر» است.
+///
+/// چرا جدولِ جدا و نه فقط حرکتِ دفتر: چندبارمصرف (`mode = use`) از موجودی کم نمی‌شود و فقط
+/// **شمرده** می‌شود، پس حرکتی ندارد که از آن خوانده شود؛ و خلاصهٔ روی کارتِ کارشناس باید از یک
+/// منبع بیاید. یک‌بارمصرف (`mode = consume`) علاوه بر این ردیف، حرکتِ `out` در دفتر دارد.
+/// `key` = `منبع:لنگر:کالا` (`set:<لاتِ ست>`, `transfer:<لات>`, `warehouse:0`) تا یک کالا هم از ست و
+/// هم از انبار ثبت‌شدنی باشد.
+model VisitUsage {
+  id      Int   @id @default(autoincrement())
+  visit   Visit @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  visitId Int   @map("visit_id")
+  item    Item  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemId  Int   @map("item_id")
+
+  /// set | warehouse | transfer
+  source     String @default("warehouse")
+  setLotId   Int?   @map("set_lot_id")
+  transferId Int?   @map("transfer_id")
+  /// consume (از موجودی کم شد) | use (فقط دفعات شمرده شد)
+  mode     String @default("consume")
+  quantity Int    @default(0)
+  key      String
+
+  recordedById Int?     @map("recorded_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@unique([visitId, key])
+  @@index([itemId])
+  @@map("visit_usages")
 }
 
 /// صورت‌برداریِ دوره‌ای از یک داراییِ امانی.
