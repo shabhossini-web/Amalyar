@@ -1,29 +1,13 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: active
+status: idle
 branch: claude/tenant-access
 since: 2026-10-07
-paths:
-  - server/prisma/control/
-  - server/src/tenant/
-  - server/src/platform/
-  - server/src/scripts/provisioning-worker.ts
-  - server/src/config/config.service.ts
-  - server/src/auth/auth.service.ts
-  - src/app/PlatformAdmin.jsx
-  - src/app/platform.css
-  - src/app/Shell.jsx
-  - src/app/shell.css
-  - src/app/assistant.css
-  - src/app/chat.css
-  - scripts/e2e/ci-live.txt
-  - src/app/Login.jsx
-  - src/app/config.jsx
-  - scripts/e2e/tenant-access.mjs
-  - scripts/e2e/tenant-access-ui.mjs
+paths: []
 note: >-
-  چرخهٔ عمرِ شرکت در پنلِ پلتفرم (خواستهٔ مالک ۱۴۰۵/۰۷/۱۵): فعال/معلق، مهلتِ اشتراک، حالتِ دمو با
-  تاریخِ پایان، یادداشت؛ اعمال در میان‌افزارِ tenant (معلق → ۴۰۳، منقضی → فقط‌خواندنی) و بنر در اپ.
+  چرخهٔ عمرِ تجاریِ شرکت در پنلِ پلتفرم (فعال/معلق، دمو/اشتراک، مهلت، یادداشت؛ اعمال در میان‌افزار؛ بنر در اپ)
+  با 438659b + 93d5e88 + 28d0e0b روی main رفت و رانِ ۶۵۳ سبز شد. بررسیِ آمادگیِ فروش به مطب در STATUS.
+  بعدی: پاسخِ مالک به چهار بندِ عملیاتی (volume/پشتیبان/پیامک/روالِ راه‌اندازی).
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
