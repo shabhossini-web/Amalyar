@@ -1,5 +1,5 @@
 import { ORDER_LABELS, EXCLUSIVE_DECISION } from './labels';
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { createHash, randomBytes } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { SettingsService } from '../config/settings.service';
@@ -377,32 +377,51 @@ export class OrdersService {
     const brand = await this.settings.brand().catch(() => ({ name: null as string | null }));
     const prefix = brand?.name ? `${brand.name}\n` : '';
     const text = `${prefix}${FA[kind]}:\n${this.summary(kind, row)}\n${url}`;
-    const res = await this.sms.send(to, text);
-    await this.prisma.$transaction(async tx => {
-      const current = await this.locked(kind, id, tx);
-      await this.table(kind, tx).update({ where: { id }, data: {
-        status: current.status === 'draft' ? 'sent' : current.status, sentAt: new Date(),
-      } });
-    });
+    /* ⚠️ `sendForStaff` نه `send`: این دکمهٔ پنلِ کارکنان است و باید **علتِ واقعیِ** ردِ پیامک را ببیند (کلید/خط تنظیم
+       نیست، اعتبار، متنِ ردِ ملی‌پیامک)، نه ۵۰۳ِ کلیِ عمومی که برای ورودِ ناشناس ساخته شده — گزارشِ آمادگیِ فروش،
+       بندِ ۳. ردِ قطعی در production **پرتاب** می‌شود؛ تا امروز همین‌جا قورت داده نمی‌شد و ثبتِ «نرفت» و کارِ
+       «ارسالِ دوباره»ی پایین فقط بیرون از production می‌دوید. «نتیجه نامعلوم» (قطعِ شبکه) عمداً ثبت نمی‌شود: شاید
+       پیام رفته باشد و «ارسالِ دوباره» تکراری می‌سازد؛ همان خطا به کارمند می‌رسد. */
+    let res: { sent: boolean; stub: boolean; detail?: string };
+    try {
+      res = await this.sms.sendForStaff(to, text);
+    } catch (e: any) {
+      if (e?.smsOutcome !== 'rejected' && e?.smsOutcome !== 'unconfigured') throw e;
+      res = { sent: false, stub: false, detail: String(e.message ?? '') };
+    }
+    const delivered = res.sent || res.stub;
+    const reason = (res.detail || 'سرویس پیامک ارسال را نپذیرفت').slice(0, 300);
+    /* سفارش فقط وقتی «فرستاده‌شده» است که پیامک واقعاً (یا آزمایشی) رفته باشد — پیامِ نرفته آن را «ارسال‌شده» نمی‌کند. */
+    if (delivered) {
+      await this.prisma.$transaction(async tx => {
+        const current = await this.locked(kind, id, tx);
+        await this.table(kind, tx).update({ where: { id }, data: {
+          status: current.status === 'draft' ? 'sent' : current.status, sentAt: new Date(),
+        } });
+      });
+    }
     const rem = await this.prisma.reminder.create({
       data: {
         patientId: row.patientId, visitId: row.visitId ?? null, kind: 'notice',
         dueAt: new Date(), phone: to, text,
-        status: res.sent || res.stub ? 'sent' : 'failed', sentAt: new Date(),
+        status: delivered ? 'sent' : 'failed', sentAt: delivered ? new Date() : null,
+        ...(delivered ? {} : { error: reason }),
       },
     }).catch(() => null);
     /* W2.2: پیامکی که همین‌جا نرفت ← کارِ «ارسالِ دوباره» برای منشی (work-rules: sms.failed). */
-    if (!res.sent && !res.stub) {
+    if (!delivered) {
       await this.events.emit({
         type: 'sms.failed', patientId: row.patientId, visitId: row.visitId ?? null, actorId: user?.id ?? null,
         ...(rem ? { refType: 'reminder', refId: rem.id } : { refType: `${kind}_order`, refId: id }),
-        payload: { kind: 'notice', error: 'سرویس پیامک ارسال را نپذیرفت' },
+        payload: { kind: 'notice', error: reason },
       });
     }
     await this.audit.record({
       actorId: user?.id, action: `order.${kind}.send`, entityType: `${kind}_order`, entityId: id,
       after: { to, sent: res.sent, stub: res.stub },
     });
+    /* سفارش ذخیره است و همه‌چیز ثبت شد؛ ولی پاسخِ «ok» دروغ است وقتی پیامک نرفته — کارمند علتِ واقعی را می‌بیند. */
+    if (!delivered) throw new ServiceUnavailableException(`سفارش ثبت شد ولی پیامک نرفت — ${reason}`);
     return { ok: true, to, url, sent: res.sent, stub: res.stub };
   }
 

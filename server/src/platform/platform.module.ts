@@ -14,6 +14,7 @@ import {
   Injectable,
   Module,
   NotFoundException,
+  Optional,
   Param,
   Post,
   Req,
@@ -24,13 +25,17 @@ import {
 } from '@nestjs/common';
 import { createHmac, randomBytes, randomInt, timingSafeEqual } from 'crypto';
 import type { Request, Response } from 'express';
-import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Length, Matches, Max, MaxLength, Min, ValidateIf } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Length, Matches, Max, MaxLength, Min, ValidateIf } from 'class-validator';
 import { SECTORS, SECTOR_LABELS } from '../patients/service-codes.service';
 import { RateLimitService } from '../common/rate-limit.service';
 import { sanitizeWebOtpHost } from '../common/webotp';
 import { SmsService } from '../sms/sms.service';
 import { ControlPrismaService } from '../tenant/control-prisma.service';
 import { endOfDayTehran, normalizePlan, TENANT_PLANS, tenantAccess } from '../tenant/tenant-access';
+import { profileError, profileLabel, requestedProfile, SERVICES, TENANT_KINDS, type TenantKind } from '../config/tenant-profile';
+import { parseProfileServices } from '../scripts/seed-profile';
+import { TenantProfileProbe } from './tenant-profile-probe';
+import { platformHealth } from './platform-health';
 import {
   normalizePlatformPhone,
   platformAdminConfig,
@@ -128,6 +133,20 @@ class CreateProvisioningJobDto {
   @Min(1, { message: 'مهلت دست‌کم یک روز است' })
   @Max(3650, { message: 'مهلت بیش از ده سال نمی‌شود' })
   accessDays?: number | null;
+
+  /**
+   * نوعِ نصب: مطب/کلینیک یا شرکتی، و برای شرکت بستهٔ خدمات — Worker همین را روی دیتابیسِ **تازه** می‌نویسد
+   * (مالک ۱۴۰۵/۰۷/۱۵). نبودنش یعنی درخواستِ قدیمی: همان پیش‌فرضِ نصب.
+   */
+  @IsOptional()
+  @IsIn(Object.keys(TENANT_KINDS), { message: 'نوعِ نصب باید «مطب / کلینیک» یا «شرکتی» باشد' })
+  kind?: string;
+
+  @IsOptional()
+  @IsArray({ message: 'خدمات باید فهرست باشد' })
+  @ArrayMaxSize(Object.keys(SERVICES).length, { message: 'خدمتِ انتخاب‌شده نامعتبر است' })
+  @IsIn(Object.keys(SERVICES), { each: true, message: 'خدمتِ انتخاب‌شده نامعتبر است' })
+  services?: string[];
 }
 
 /**
@@ -602,7 +621,8 @@ export class PlatformCsrfGuard implements CanActivate {
 
 @Injectable()
 export class PlatformProvisioningService {
-  constructor(private readonly control: ControlPrismaService) {}
+  /* `probe` اختیاری است: سوییت‌های e2e این سرویس را با فقط `control` می‌سازند و بدونِ آن «نوعِ فعلی» `null` می‌ماند. */
+  constructor(private readonly control: ControlPrismaService, @Optional() private readonly probe?: TenantProfileProbe) {}
 
   private jobSelect = {
     id: true,
@@ -615,11 +635,26 @@ export class PlatformProvisioningService {
     attempts: true,
     plan: true,
     accessDays: true,
+    profileKind: true,
+    profileServices: true,
     createdAt: true,
     updatedAt: true,
     startedAt: true,
     finishedAt: true,
   } as const;
+
+  /** کارِ ساخت برای پنل: پروفایلِ درخواستی به‌شکلِ آماده (برچسبِ فارسی از سرور — قانونِ ۱۵). */
+  private shapeJob<J extends { profileKind: string | null; profileServices: string | null }>(job: J) {
+    const { profileKind, profileServices, ...rest } = job;
+    const kind = profileKind && profileKind in TENANT_KINDS ? (profileKind as TenantKind) : null;
+    const profile = kind
+      ? (() => {
+          const p = requestedProfile(kind, parseProfileServices(profileServices));
+          return { kind: p.kind, services: p.services, label: profileLabel(p) };
+        })()
+      : null;
+    return { ...rest, profile };
+  }
 
   async snapshot() {
     const [tenants, openJobs, doneJobs] = await Promise.all([
@@ -635,6 +670,9 @@ export class PlatformProvisioningService {
           accessUntil: true,
           suspendedAt: true,
           accessNote: true,
+          /* فقط برای خواندنِ نوعِ فعلی از خودِ شرکت (`TenantProfileProbe`)؛ هرگز به پاسخ نمی‌رود —
+             `shapeTenant` فهرستِ سفید است. */
+          databaseUrlEncrypted: true,
           /**
            * **همهٔ** دامنه‌ها، نه فقط primary.
            *
@@ -667,10 +705,17 @@ export class PlatformProvisioningService {
         select: this.jobSelect,
       }),
     ]);
+    /* نوعِ فعلیِ هر شرکت از خودِ همان شرکت (کَش‌شده، با سقفِ زمان) — شرکتی که پاسخ ندهد `null` است. */
+    const profiles = await Promise.all(tenants.map((tenant) => this.probe?.of(tenant) ?? null));
     return {
-      tenants: tenants.map((tenant) => this.shapeTenant(tenant)),
-      jobs: [...openJobs, ...doneJobs],
+      tenants: tenants.map((tenant, i) => ({ ...this.shapeTenant(tenant), profile: profiles[i] })),
+      jobs: [...openJobs, ...doneJobs].map((job) => this.shapeJob(job)),
       deletions: await this.deletionJobs(),
+      /* گزینه‌های فرمِ ساخت از همین‌جا می‌آید تا برچسب‌ها در کلاینت دوباره نوشته نشوند (قانونِ ۱۵). */
+      profileOptions: {
+        kinds: Object.entries(TENANT_KINDS).map(([key, v]) => ({ key, label: v.label })),
+        services: Object.entries(SERVICES).map(([key, v]) => ({ key, label: v.label })),
+      },
     };
   }
 
@@ -755,7 +800,7 @@ export class PlatformProvisioningService {
   async job(id: string) {
     const job = await this.control.provisioningJob.findUnique({ where: { id }, select: this.jobSelect });
     if (!job) throw new NotFoundException();
-    return job;
+    return this.shapeJob(job);
   }
 
   async create(dto: CreateProvisioningJobDto, actorHash: string, ipHash: string, platformHost: string | null = null) {
@@ -787,8 +832,19 @@ export class PlatformProvisioningService {
 
     const plan = normalizePlan(dto.plan);
     const accessDays = dto.accessDays ?? null;
+    /* نوعِ نصب: یا هیچ (درخواستِ قدیمی) یا یک پروفایلِ **معتبر**. «شرکتی» بی‌خدمت و «مطب» با خدمت ردّ می‌شود —
+       همان قاعدهٔ صفحهٔ تنظیماتِ خودِ شرکت (`profileError`). */
+    let profileKind: string | null = null;
+    let profileServices: string | null = null;
+    if (dto.kind !== undefined) {
+      const err = profileError(dto.kind, dto.services ?? []);
+      if (err) throw new BadRequestException(err);
+      const p = requestedProfile(dto.kind as TenantKind, dto.services ?? []);
+      profileKind = p.kind;
+      profileServices = p.kind === 'company' ? JSON.stringify(p.services) : null;
+    }
     const job = await this.control.provisioningJob.create({
-      data: { slug, name, hostname, requestedByHash: actorHash, plan, accessDays },
+      data: { slug, name, hostname, requestedByHash: actorHash, plan, accessDays, profileKind, profileServices },
       select: this.jobSelect,
     });
     await this.control.platformAuditEvent.create({
@@ -798,10 +854,10 @@ export class PlatformProvisioningService {
         targetType: 'provisioning_job',
         targetId: job.id,
         ipHash,
-        metadata: { slug, hostname, plan, accessDays },
+        metadata: { slug, hostname, plan, accessDays, profileKind, profileServices },
       },
     });
-    return job;
+    return this.shapeJob(job);
   }
 
   private deletionSelect = {
@@ -1206,6 +1262,13 @@ export class PlatformController {
     return this.provisioning.snapshot();
   }
 
+  /// آمادگیِ سامانه برای مشتریِ پولی: ماندگاریِ فایل‌ها، پیامکِ مشترک، نسخهٔ در حال اجرا (`platform-health.ts`).
+  @Get('health')
+  @UseGuards(PlatformSessionGuard)
+  health() {
+    return platformHealth();
+  }
+
   /// وضعیتِ هم‌گامیِ دیتابیسِ هر شرکت — با نام، پس فقط پشتِ نشستِ پلتفرم.
   /// `/health` همین را بی‌نام و بی‌احراز هویت می‌دهد.
   @Get('migrations')
@@ -1352,6 +1415,7 @@ export class PlatformController {
     PlatformSessionGuard,
     PlatformCsrfGuard,
     PlatformProvisioningService,
+    TenantProfileProbe,
     PlatformTariffsService, PlatformAiService,
   ],
 })

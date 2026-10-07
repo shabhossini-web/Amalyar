@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import FileDrop from '../ui/FileDrop.jsx';
 import { api, apiUpload } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso, toEnDigits, ymdToJStr } from '../lib/jalali.js';
-import { isValidNationalId } from '../lib/identity.js';
+import { isValidNationalId, normalizeMobile } from '../lib/identity.js';
 import JDate from '../app/JDate.jsx';
 import './intake.css';
 import { Alert, Bank, Box, Calendar, Caret, CheckCircle, Clock, Info, Lock, Money, Pencil, Refresh, Upload } from '../ui/icons.jsx';
@@ -118,7 +118,8 @@ function Register() {
   /* لینک باز نشد ← هویت و تمِ مطب از مسیرِ عمومیِ جدا، تا صفحهٔ خطا هم نام و تلفن داشته باشد. */
   const fallback = useFallbackFace(!!loadErr && !link);
 
-  const set = (k) => (e) => { setF((s) => ({ ...s, [k]: e.target.value })); setFErr((x) => (x[k] ? { ...x, [k]: '' } : x)); };
+  /* موبایل حینِ تایپ/پیست/خودکارپرکن به «09…» می‌رسد («+98 912 526 8654» → «09125268654»). */
+  const set = (k) => (e) => { const val = k === 'phone' ? normalizeMobile(e.target.value) : e.target.value; setF((s) => ({ ...s, [k]: val })); setFErr((x) => (x[k] ? { ...x, [k]: '' } : x)); };
 
   /** همهٔ کادرها یک‌جا، پیش از ارسال — همان قاعده‌های سرور (رقمِ کنترلِ کدِ ملی، «۰۹» و ۱۱ رقم). */
   const validate = () => {
@@ -372,7 +373,7 @@ function Resume({ token, hit, onBack }) {
           {!hit && <p className="ik-hint">شماره‌ای را که با آن ثبت‌نام کرده‌اید بنویسید؛ یک کدِ ۶رقمی برایتان پیامک می‌شود.</p>}
           {/* autoFocus: نمای تازه بی‌فوکوس بود و صفحه‌خوان/کیبورد روی دکمه‌ای می‌ماند که دیگر نیست (PF13). */}
           <Field label="شمارهٔ موبایل" type="tel" dir="ltr" inputMode="numeric" autoComplete="tel" enterKeyHint="send" autoFocus
-                 placeholder="مثلاً ۰۹۱۲۳۴۵۶۷۸۹" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={busy} required />
+                 placeholder="مثلاً ۰۹۱۲۳۴۵۶۷۸۹" value={phone} onChange={(e) => setPhone(normalizeMobile(e.target.value))} disabled={busy} required />
           <button type="submit" className="ik-go" disabled={busy || digits(phone).length < 11}>{busy ? 'در حال ارسال…' : 'ارسالِ کد'}</button>
         </form>
       ) : (

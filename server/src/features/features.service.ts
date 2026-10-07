@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { FEATURES, FEATURE_BY_KEY, FEATURE_DEFAULT_LEVELS, LOCKED_FEATURES } from '../auth/access-registry';
 import { LEVEL } from '../common/levels';
 import { DEFAULT_VERTICAL, isVertical } from '../config/verticals';
-import { KEY_SERVICES, TenantProfile, featurePlanForProfile, featureSeedRows, profileOf } from '../config/tenant-profile';
+import { KEY_SERVICES, TenantProfile, featureChanges, featurePlanForProfile, featureSeedRows, profileOf } from '../config/tenant-profile';
 
 /**
  * پیش‌فرضِ سطحِ ماژول‌ها — از رجیستریِ دسترسی می‌آید، نه از فهرستی که این‌جا
@@ -23,6 +23,33 @@ export const FEATURE_DEFAULTS = FEATURE_DEFAULT_LEVELS;
 export async function seedFeatureRows(db: { setting: any; feature: any }, profile?: TenantProfile) {
   const p = profile ?? await readProfile(db);
   await db.feature.createMany({ data: featureSeedRows(p, FEATURES), skipDuplicates: true });
+}
+
+/**
+ * **گذارِ ماژول‌ها از یک پروفایل به پروفایلِ دیگر — تنها پیاده‌سازی** (`ConfigService.setProfile` و Workerِ ساختِ شرکت).
+ *
+ * ردیف‌های غایب اول به پروفایلِ **قبلی** ساخته می‌شوند تا گذار روی ردیفِ واقعی حساب شود (global-07)؛ بعد فقط
+ * آنچه عضویتش در پلان عوض شده تغییر می‌کند و سطح/خاموش‌ورشنِ دست‌خورده حفظ می‌شود (`featureChanges`).
+ *
+ * ⚠️ چرا Worker هم از همین می‌گذرد، نه فقط دو ردیفِ `settings`: migrationها هنگامِ ساختِ دیتابیس ردیفِ
+ * بعضی ماژول‌ها را با نوعِ **پیش‌فرض** می‌سازند (`waitlist` با `enabled = (vertical = 'clinic')` در لحظهٔ migration —
+ * یعنی خاموش). مطبی که فقط `vertical=clinic` روی دیتابیسش نوشته شود «فهرستِ انتظار»ِ خاموش می‌گیرد
+ * (گیرِ واقعی که سنجهٔ `tenant-profile-create` پیش از انتشار گرفت). گذار از پروفایلِ پیش‌فرض به پروفایلِ
+ * درخواستی همان کاری است که مدیرِ شرکت با «ذخیره» در تنظیمات می‌کند.
+ */
+export async function applyProfileFeatures(
+  db: { setting: any; feature: any },
+  before: TenantProfile,
+  after: TenantProfile,
+) {
+  await seedFeatureRows(db, before);
+  const rows = await db.feature.findMany({ select: { key: true, minLevel: true, enabled: true } });
+  for (const c of featureChanges(before, after, rows)) {
+    if (c.action === 'create') await db.feature.create({ data: { key: c.key, minLevel: c.minLevel!, enabled: true } });
+    else if (c.action === 'enable') await db.feature.update({ where: { key: c.key }, data: { minLevel: c.minLevel!, enabled: true } });
+    else if (c.action === 'relevel') await db.feature.update({ where: { key: c.key }, data: { minLevel: c.minLevel! } });
+    else await db.feature.update({ where: { key: c.key }, data: { enabled: false } });
+  }
 }
 
 /**

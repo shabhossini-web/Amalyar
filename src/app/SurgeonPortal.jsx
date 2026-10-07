@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api, apiBlobUrl } from '../lib/api.js';
 import { faDate, jStrToIso, toEnDigits, todayJStr } from '../lib/jalali.js';
+import { normalizeMobile } from '../lib/identity.js';
 import { fmtMoney, fmtToman } from '../lib/money.js';
 import { useAuth } from './auth.jsx';
 import { useConfig, useStatusMap } from './config.jsx';
@@ -187,7 +188,7 @@ export default function SurgeonPortal() {
           <label className="ia-field"><span>جراح</span><select value={surgeonId} onChange={(e) => setSurgeonId(e.target.value)}><option value="">انتخاب جراح</option>{desk.doctors.map((s) => <option value={s.id} key={s.id}>{s.name}</option>)}</select></label>
           <label className="ia-field"><span>موبایلِ جراح — از خودِ او بپرسید</span>
             <input type="tel" dir="ltr" inputMode="numeric" autoComplete="off" placeholder="مثلاً ۰۹۱۲۳۴۵۶۷۸۹" value={grantPhone}
-                   onChange={(e) => setGrantPhone(e.target.value)} aria-describedby="sp-grant-note" /></label>
+                   onChange={(e) => setGrantPhone(normalizeMobile(e.target.value))} aria-describedby="sp-grant-note" /></label>
           <p id="sp-grant-note" className="sp-hint">حساب فقط وقتی ساخته می‌شود که این شماره با شمارهٔ جراح در «تعاریف» یکی باشد؛ کدِ تحویلِ حساب به همین شماره پیامک می‌شود.</p>
           <button className="bl-mini" disabled={!surgeonId || grantDigits.length !== 11 || grantBusy} type="button" onClick={grant}>آماده‌سازی حساب پرتال</button>
           <Link to="/app/definitions?section=surgeons">تعریف یا اصلاح مشخصات جراح</Link>

@@ -1026,7 +1026,7 @@ function NewFormSheet({ onClose, onCreated, scope = 'visit' }) {
       </header>
       <div className="df-sheet-body pf">
         {errors._ && <div className="df-err">{errors._}</div>}
-        {fld('title', 'عنوان', <input type="text" value={form.title} onChange={set('title')} disabled={busy} placeholder="فرمِ درمان" />)}
+        {fld('title', 'عنوان', <input type="text" value={form.title} onChange={set('title')} disabled={busy} placeholder="نامِ فرم" />)}
         {fld('key', 'کلید', (
           <input type="text" dir="ltr" value={form.key} onChange={set('key')} disabled={busy} placeholder="treatment" />
         ), 'نامِ ماشینی — بعداً عوض نمی‌شود.')}

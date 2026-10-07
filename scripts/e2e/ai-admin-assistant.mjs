@@ -123,6 +123,38 @@ try {
   ok(sys.includes(`«چشم» شروع کن ${tag}`), '**دستورِ اختصاصیِ شرکت در prompt است**');
   ok(req?.body?.messages?.length === 2 && req.body.messages[1].role === 'user', 'تاریخچه درست می‌رود');
 
+  console.log('\n۲ب) راهنما و هویتِ دستیار از نوعِ همین نصب می‌آید (باید بیفتد)');
+  /* ⚠️ مالک (۱۴۰۵/۰۷/۱۵): «دستیار گیج نزند» — مدیرِ مطب نباید دربارهٔ چینش/حمل‌ونقل/انبار بشنود و مدیرِ شرکت
+     نباید از «فهرستِ انتظارِ عمل». اینجا **سیم‌کشیِ واقعی** سنجیده می‌شود (kind و ماژول‌های روشن از DBِ همین
+     نصب)؛ محتوای هر نوع را `assistant-guide-unit.mjs` روی جدول می‌سنجد. */
+  const cfg0 = (await send('/config')).json;
+  const promptFor = async () => {
+    await readStream({ messages: [{ role: 'user', content: 'مسیرها را بگو' }] });
+    return captured[captured.length - 1]?.body?.messages?.[0]?.content ?? '';
+  };
+  const judge = (s, kind, label) => {
+    const clinic = kind === 'clinic';
+    ok(s.includes(clinic ? 'مدیریتِ مطب/کلینیک هستی' : 'مدیریتِ شرکتِ خدماتِ جراحی هستی'), `${label}: هویتِ دستیار ${clinic ? 'مطب' : 'شرکت'} است`);
+    ok(clinic ? s.includes('/app/waitlist') && s.includes('/app/frontdesk') : s.includes('/app/dispatch') && s.includes('/app/inventory'),
+      `${label}: نشانیِ ماژول‌های همین نوع در راهنما هست`);
+    ok(clinic ? !/\/app\/(dispatch|transport|inventory|tech)\b/.test(s) : !s.includes('/app/waitlist'),
+      `${label}: **نشانیِ ماژولِ نوعِ دیگر نیست**`);
+  };
+  judge(sys, cfg0.kind, cfg0.kind === 'clinic' ? 'مطب' : 'شرکت');
+  const servicesRow0 = sql(`SELECT value FROM settings WHERE key='services'`);
+  try {
+    const flipped = cfg0.kind === 'clinic' ? 'ionm' : 'clinic';
+    ok((await send('/config/vertical', 'PATCH', { vertical: flipped })).status === 200, `تعویضِ نوعِ نصب به ${flipped}`);
+    const sys2 = await promptFor();
+    judge(sys2, flipped === 'clinic' ? 'clinic' : 'company', 'پس از تعویض');
+    ok(sys2 !== sys, 'راهنما با تعویضِ نوع واقعاً عوض شد (کش نشده)');
+  } finally {
+    await send('/config/vertical', 'PATCH', { vertical: cfg0.vertical });
+    sql(`DELETE FROM settings WHERE key='services'`);
+    if (servicesRow0) sql(`INSERT INTO settings (key, value) VALUES ('services', '${servicesRow0.replace(/'/g, "''")}')`);
+  }
+  judge(await promptFor(), cfg0.kind, 'پس از بازگشت');
+
   const r2 = await readStream({
     messages: [
       { role: 'user', content: 'سلام' },

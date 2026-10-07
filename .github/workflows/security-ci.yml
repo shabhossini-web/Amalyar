@@ -3493,6 +3493,10 @@ jobs:
         run: node scripts/e2e/w3-7-icons-naming.mjs
       - name: Verify tenant kind and services derive from one rule on both sides
         run: node scripts/e2e/tenant-profile-unit.mjs
+      # دستیارِ هوشمند (خواستهٔ مالک ۱۴۰۵/۰۷/۱۵: «به‌روز باشد و گیج نزند»): راهنما برای هر نوعِ نصب جدا می‌آید و
+      # فقط ماژول‌های روشنِ همان نصب را نشانی می‌دهد؛ هر مسیرِ آن در App.jsx هست و هر ماژولِ رجیستری مسیر دارد.
+      - name: Verify the assistant guide is per install kind and matches the app routes
+        run: node scripts/e2e/assistant-guide-unit.mjs
       - name: Verify intake approval follows each submission's service and needs defined surgeon and hospital
         run: node scripts/e2e/company-services-local.mjs
       - name: Verify the intake queue shows each row's service and asks only when ambiguous

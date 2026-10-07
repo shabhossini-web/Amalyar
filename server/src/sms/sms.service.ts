@@ -193,7 +193,13 @@ export class SmsService {
     try {
       return await this.send(phone, text);
     } catch (e: any) {
-      if (e?.smsDetail) throw new ServiceUnavailableException(e.smsDetail);
+      if (e?.smsDetail) {
+        const staffError = new ServiceUnavailableException(e.smsDetail);
+        /* `smsOutcome` می‌ماند تا فراخوان بفهمد «قطعاً نرفت» (rejected/unconfigured) یا «نامعلوم» — فقط اولی ثبتِ
+           «نرفت» و کارِ «ارسالِ دوباره» می‌سازد (`OrdersService.send`). */
+        (staffError as any).smsOutcome = e.smsOutcome;
+        throw staffError;
+      }
       throw e;
     }
   }

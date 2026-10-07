@@ -53,9 +53,36 @@ export function normalizeIban(value?: string | null): string | null {
   return raw.startsWith('IR') ? raw : `IR${raw}`;
 }
 
+/**
+ * شمارهٔ موبایلِ چسبانده‌شده یا خودکارپرشده → شکلِ محلیِ «09…» (آینهٔ `normalizeMobile` در
+ * `src/lib/identity.js`؛ هر دو باید هم‌شکل بمانند).
+ *
+ * مالک (۱۴۰۵/۰۷/۱۵): «+98 912 526 8654» باید «09125268654» شود. فرانت همین را حینِ تایپ و پیست انجام می‌دهد؛
+ * این‌جا همان قاعده سرور را هم می‌پوشاند تا لینکِ عمومی یا کلاینتِ دیگری که شمارهٔ بین‌المللی می‌فرستد
+ * «شمارهٔ نامعتبر» نخورد.
+ *  - ارقام لاتین؛ فاصله، خط‌تیره، پرانتز، نقطه و نویسه‌های جهت‌نما حذف؛
+ *  - «+98…»، «0098…» و «98…»ِ دوازده‌رقمی → «0…» (صفرِ اضافیِ «+98 0912…» هم برداشته می‌شود)؛
+ *  - ده‌رقمیِ «9…» (بدونِ صفر) → «09…».
+ * چیزِ دیگری کوتاه یا بلند نمی‌شود؛ «۱۱ رقم بودن» کارِ اعتبارسنجی است.
+ */
+export function normalizeMobile(raw: unknown): string {
+  const text = toEnDigits(String(raw ?? ''));
+  const plus = /^[^0-9+]*\+/.test(text);
+  let d = text.replace(/[^0-9]/g, '');
+  if (plus && '98'.startsWith(d)) return `+${d}`; // «+»، «+9»، «+98» نیمه‌کاره (فقط حینِ تایپ در فرانت)
+  if (plus && d.startsWith('98')) {
+    const local = d.slice(2).replace(/^0+/, '');
+    return local.length >= 10 ? `0${local}` : `+98${local}`;
+  }
+  if (d.startsWith('0098')) d = `0${d.slice(4).replace(/^0+/, '')}`;
+  else if (d.length >= 12 && d.startsWith('98')) d = `0${d.slice(2).replace(/^0+/, '')}`;
+  else if (/^9[^8]\d{8}$/.test(d)) d = `0${d}`; // «98…» پیشوندِ کشور است، نه ابتدای شماره
+  return d;
+}
+
 /** موبایلِ معتبر (۱۱ رقمِ لاتین، با ۰۹) یا null. */
 export function mobileOf(value: unknown): string | null {
-  const d = toEnDigits(String(value ?? '')).replace(/[^0-9]/g, '');
+  const d = normalizeMobile(value);
   return /^09\d{9}$/.test(d) ? d : null;
 }
 

@@ -9,7 +9,7 @@ import { ThingPopups, surgeryPrefill, useThings, workTarget } from './thing-popu
 import { kindOf } from './visit-kinds.js';
 import { faDate, isoToJStr, jStrToIso } from '../lib/jalali.js';
 import { fmtToman } from '../lib/money.js';
-import { toEnDigits } from '../lib/identity.js';
+import { normalizeMobile, toEnDigits } from '../lib/identity.js';
 import './launcher.css';
 import './definitions.css';
 import JDate from './JDate.jsx';
@@ -134,7 +134,7 @@ function ProfileTab({ rec, onSave, toast }) {
       <div className="pf-row2">
         <label className="pf-field"><span>نام</span><input value={f.firstName} onChange={set('firstName')} /></label>
         <label className="pf-field"><span>نام خانوادگی</span><input value={f.lastName} onChange={set('lastName')} /></label>
-        <label className="pf-field"><span>موبایل</span><input dir="ltr" inputMode="numeric" value={f.phone} onChange={set('phone')} /></label>
+        <label className="pf-field"><span>موبایل</span><input dir="ltr" inputMode="numeric" value={f.phone} onChange={(e) => setF((s) => ({ ...s, phone: normalizeMobile(e.target.value) }))} /></label>
         <JDate className="pf-field" label="تاریخِ تولد (شمسی)" mode="birth" value={f.birthDateJ}
           onChange={(v) => setF((s2) => ({ ...s2, birthDateJ: v }))} placeholder="۱۳۷۰/۰۱/۱۵" />
         <label className="pf-field"><span>جنسیت</span>

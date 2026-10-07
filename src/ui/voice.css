@@ -38,4 +38,25 @@
 .vn-ghost:hover:not(:disabled) { color: var(--text1); border-color: var(--brand-2); }
 .vn-ghost:disabled { opacity: .5; cursor: default; }
 .vn-clip { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; width: 100%; }
+/* پخش‌کنندهٔ صدای ثبت‌شده — دایرهٔ پخش + نام + راهنما؛ هدفِ لمسِ دستِ‌کم ۴۴ پیکسل. */
+.vn-play {
+  display: inline-flex; align-items: center; gap: 10px; flex: 1 1 auto; min-width: 0; max-width: 360px; min-height: 48px;
+  padding: 6px 12px 6px 14px; cursor: pointer; font: inherit; text-align: start; color: var(--text1);
+  background: rgba(var(--brand-rgb), .1); border: 1px solid rgba(var(--brand-2-rgb), .4); border-radius: 14px;
+  transition: border-color .2s cubic-bezier(.2, .7, .2, 1), background .2s cubic-bezier(.2, .7, .2, 1);
+}
+.vn-play:hover:not(:disabled) { border-color: var(--brand-2); background: rgba(var(--brand-rgb), .16); }
+.vn-play:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.vn-play:disabled { opacity: .65; cursor: default; }
+.vn-play-ic {
+  flex: 0 0 auto; display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; color: #fff;
+  background: linear-gradient(135deg, var(--brand-2), var(--brand) 60%, var(--brand-dark));
+}
+/* مثلثِ پخش همیشه رو به راست است (مثلِ همهٔ پخش‌کننده‌ها، حتی در RTL) و مرکزِ ثقلش چپِ خانه می‌افتد؛ دو پیکسل
+   به سمتِ نوک — حاشیهٔ **فیزیکی** نه منطقی (قانونِ ۹: شکل در RTL قرینه نمی‌شود). */
+.vn-play-ic svg { fill: currentColor; stroke: currentColor; margin-left: 2px; }
+.vn-play-txt { display: grid; gap: 1px; min-width: 0; }
+.vn-play-txt b { font-size: 13px; font-weight: 800; line-height: 1.5; overflow-wrap: anywhere; }
+.vn-play-txt small { font-size: 12px; color: var(--text2); }
+@media (prefers-reduced-motion: reduce) { .vn-play { transition: none; } }
 .vn-err { color: var(--red-text); font-size: 12px; }

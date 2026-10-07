@@ -153,3 +153,7 @@ warehouse-sets-ui
 consumables-ui
 tenant-access
 tenant-access-ui
+consult-voice-ui
+booking-confirm-ui
+phone-paste-ui
+tenant-profile-create

@@ -14,7 +14,7 @@ import {
   featureChanges, featureSeedRows, profileError, profileLabel, profileOf, requestedProfile,
 } from './tenant-profile';
 import { FEATURES } from '../auth/access-registry';
-import { seedFeatureRows } from '../features/features.service';
+import { applyProfileFeatures, seedFeatureRows } from '../features/features.service';
 import { SITE_SECTIONS, sectionPlanFor } from '../site/site.registry';
 import { SettingsService } from './settings.service';
 import { TenantContext } from '../tenant/tenant-context';
@@ -311,14 +311,7 @@ export class ConfigService {
       /* global-07: ردیف‌های غایب اول به پروفایلِ **قبلی** ساخته می‌شوند تا گذار روی ردیفِ واقعی حساب
          شود. بی‌این، ماژولی که پلانِ تازه ندارد و ردیفی هم نداشت خاموش نمی‌شد و ساختِ تنبلِ بعدی
          روشنش می‌کرد — «چینشِ نیروها» در لانچرِ مطب. */
-      await seedFeatureRows(tx, before);
-      const rows = await tx.feature.findMany({ select: { key: true, minLevel: true, enabled: true } });
-      for (const c of featureChanges(before, after, rows)) {
-        if (c.action === 'create') await tx.feature.create({ data: { key: c.key, minLevel: c.minLevel!, enabled: true } });
-        else if (c.action === 'enable') await tx.feature.update({ where: { key: c.key }, data: { minLevel: c.minLevel!, enabled: true } });
-        else if (c.action === 'relevel') await tx.feature.update({ where: { key: c.key }, data: { minLevel: c.minLevel! } });
-        else await tx.feature.update({ where: { key: c.key }, data: { enabled: false } });
-      }
+      await applyProfileFeatures(tx, before, after);
 
       /* ⚠️ بخشِ بی‌ردیفِ سایت از چیدمانِ خدمتِ اصلی پیش‌فرض می‌گیرد
          (`site.service.ts`)؛ عوض‌شدنِ خدمتِ اصلی یعنی سایتِ منتشرشده بی‌خبر

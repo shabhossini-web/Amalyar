@@ -1,4 +1,4 @@
-import { isValidIban, isValidNationalId, isValidPhone, toEnDigits } from '../lib/identity.js';
+import { isValidIban, isValidNationalId, isValidPhone, normalizeMobile, toEnDigits } from '../lib/identity.js';
 
 /**
  * فیلدهای هویتیِ یک «شخص» — تک‌منبعِ فرم.
@@ -46,7 +46,7 @@ export default function PersonFields({ value, onChange, errors = {}, disabled })
 
       <div className="pf-row2">
         {field('phone', 'موبایل', (
-          <input type="tel" inputMode="numeric" dir="ltr" placeholder="09…" value={value.phone ?? ''} onChange={setNum('phone')} disabled={disabled} />
+          <input type="tel" inputMode="numeric" dir="ltr" placeholder="09…" value={value.phone ?? ''} onChange={(ev) => onChange({ ...value, phone: normalizeMobile(ev.target.value) })} disabled={disabled} />
         ))}
         {field('nationalId', 'کد ملی', (
           <input type="text" inputMode="numeric" dir="ltr" maxLength={10} placeholder="۱۰ رقم" value={value.nationalId ?? ''} onChange={setNum('nationalId')} disabled={disabled} />

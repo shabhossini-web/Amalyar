@@ -356,6 +356,14 @@
 .pa-access-row span { font-weight: 800; color: var(--text1); }
 .pa-access-row em { margin-inline-start: auto; font-style: normal; font-size: 12px; font-weight: 800; color: var(--red-text); }
 .pa-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 14px; }
+/* نوعِ نصبِ شرکت (مطب/شرکتی + خدمات) — برچسبِ کوچکِ رنگِ برند، همان وزنِ بقیهٔ خط‌های فرعیِ کارت. */
+.pa-row small.pa-profile, .pa-job small.pa-profile { color: var(--brand-text); font-weight: 800; }
+/* خدماتِ شرکت زیرِ «نوعِ نصب» — دو تیک‌خور؛ هدفِ لمس ۴۴ پیکسل (فرم روی موبایل هم پر می‌شود). */
+.pa-services { display: grid; gap: 6px; margin: 2px 0 0; padding: 10px 12px; border-radius: 13px; border: 1px solid rgba(var(--brand-soft-rgb), .3); background: rgba(var(--surface-rgb), .5); }
+.pa-services legend { padding: 0 6px; font-size: 12px; color: var(--text2); }
+.pa .pa-check { display: flex; align-items: center; gap: 10px; min-height: 44px; margin: 0; font-size: 14px; color: var(--text1); cursor: pointer; }
+.pa .pa-check input { width: 20px; height: 20px; margin: 0; flex: 0 0 auto; accent-color: var(--brand-2); cursor: pointer; }
+.pa .pa-check input:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 .pa-chip {
   font: inherit; font-size: 12px; font-weight: 700; padding: 7px 12px; min-height: 36px; border-radius: 999px; cursor: pointer;
   color: var(--text1); background: rgba(103, 232, 249, .08); border: 1px solid rgba(103, 232, 249, .3);
@@ -364,3 +372,17 @@
 .pa-chip:disabled { opacity: .45; cursor: default; }
 .pa-access-sum { text-align: right; }
 @media (pointer: coarse) { .pa-chip { min-height: 44px; } }
+
+/* ── آمادگیِ سامانه: نوارِ باریکِ چیپ‌ها + علتِ موردِ نامطلوب ── */
+.pa-health { padding: 14px 20px; margin-bottom: 18px; }
+.pa-health-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.pa-health h2 { margin: 0; font-size: 15px; flex-shrink: 0; }
+/* پایه‌ی ۳۶۰: روی گوشی چیپ‌ها زیرِ عنوان و دکمه می‌روند (یک ستونِ باریک چهار سطرِ بلند می‌شد). */
+.pa-health-chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; min-width: 0; flex: 1 1 360px; }
+.pa-health-chips .pa-badge { display: inline-block; font-size: 11px; padding: 6px 12px; }
+.pa-health-chips .pa-badge b { font-weight: 800; }
+.pa-health .pa-refresh { margin-inline-start: auto; min-height: 44px; }
+.pa-health-notes { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 12px; line-height: 1.9; }
+.pa-health-notes li.warn { color: var(--amber-text); }
+.pa-health-notes li.fail { color: var(--red-text); }
+.pa-health-notes bdi { white-space: nowrap; } /* شکستنِ خط وسطِ «/app/storage» دوباره «/» را به انتها می‌برد */

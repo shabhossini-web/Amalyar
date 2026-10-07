@@ -1,4 +1,5 @@
 import { IsOptional, IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { MobileInput } from '../../common/validators';
 
 export class RegisterDto {
   @IsOptional()
@@ -8,6 +9,7 @@ export class RegisterDto {
   username?: string;
 
   @IsOptional()
+  @MobileInput()
   @Matches(/^0\d{10}$/, { message: 'شمارهٔ موبایل باید ۱۱ رقم و با ۰ شروع شود' })
   phone?: string;
 

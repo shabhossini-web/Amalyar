@@ -124,14 +124,20 @@ try {
   const T = (id, name, access, extra = {}) => ({
     id, slug: id, name, status: 'active', hostname: `${id}.amalyar.com`, domains: [{ hostname: `${id}.amalyar.com`, primary: true }],
     shared: false, createdAt: new Date().toISOString(), plan: access.plan, accessUntil: access.accessUntil, suspendedAt: access.suspended ? new Date().toISOString() : null,
-    accessNote: extra.note ?? null, access,
+    accessNote: extra.note ?? null, access, profile: extra.profile ?? null,
   });
+  /* گزینه‌های فرمِ ساخت از سرور می‌آید (`profileOptions`) — همان چیزی که `snapshot()` می‌دهد. */
+  const profileOptions = {
+    kinds: [{ key: 'clinic', label: 'مطب / کلینیک' }, { key: 'company', label: 'شرکتی' }],
+    services: [{ key: 'ionm', label: 'نورومانیتورینگ' }, { key: 'implant', label: 'ایمپلنت و تجهیزات' }],
+  };
+  const CLINIC = { kind: 'clinic', services: [], label: 'مطب / کلینیک' };
   const A = (state, plan, days, suspended = false) => ({
     state, plan, planLabel: plan === 'demo' ? 'نسخهٔ آزمایشی (دمو)' : 'اشتراک', accessUntil: days == null ? null : until(days),
     daysLeft: days ?? null, suspended, readOnly: state === 'expired', message: state === 'suspended' ? 'حسابِ این شرکت غیرفعال شده است.' : state === 'expired' ? 'مهلتِ اشتراک به پایان رسیده است.' : null,
   });
   let tenants = [
-    T('demo-clinic', 'مطبِ دمو', A('active', 'demo', 12), { note: 'مشتریِ احتمالی' }),
+    T('demo-clinic', 'مطبِ دمو', A('active', 'demo', 12), { note: 'مشتریِ احتمالی', profile: CLINIC }),
     T('late-clinic', 'مطبِ منقضی', A('expired', 'paid', -2)),
     T('off-clinic', 'مطبِ معلق', A('suspended', 'paid', null, true)),
     T('paid-clinic', 'مطبِ اشتراکی', A('active', 'paid', null)),
@@ -140,7 +146,21 @@ try {
   const json = (route, body) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
   let posted = null;
   await pa.route('**/api/platform/auth/me', (r) => json(r, { ok: true }));
-  await pa.route('**/api/platform/snapshot', (r) => json(r, { tenants, jobs: [], deletions: [] }));
+  await pa.route('**/api/platform/snapshot', (r) => json(r, { tenants, jobs: [], deletions: [], profileOptions }));
+  /* آمادگیِ سامانه (`/platform/health`) — همان شکلی که `platformHealth()` می‌دهد؛ برای هر حالت قابلِ عوض‌کردن. */
+  let health = {
+    storage: { verdict: 'ok', root: '/app/storage', writable: true, separateMount: true, mountPoint: '/app/storage', fsType: 'ext4', deploys: 3, firstSeenAt: '2026-10-01T08:00:00Z', lastDeployAt: '2026-10-07T08:00:00Z', message: 'فایل‌ها پس از دیپلوی ماندگارند (3 کانتینرِ متفاوت این پوشه را دیده‌اند)' },
+    sms: { configured: true, shared: true, message: 'کلید و خطِ مشترکِ ملی‌پیامک تنظیم است؛ همهٔ شرکت‌ها از همین جفت می‌فرستند' },
+    runtime: { bootedAt: '2026-10-07T08:00:00Z', commit: 'abc1234', environment: 'production' },
+  };
+  let healthStatus = 200;
+  const healthRoute = (r) => (healthStatus === 200 ? json(r, health) : r.fulfill({ status: healthStatus, contentType: 'application/json', body: JSON.stringify({ message: 'خطای آزمایشی' }) }));
+  await pa.route('**/api/platform/health', healthRoute);
+  let created = null;
+  await pa.route('**/api/platform/provisioning-jobs', async (r) => {
+    created = JSON.parse(r.request().postData() || '{}');
+    await json(r, { id: 'job1', slug: created.slug, name: created.name, hostname: created.hostname, status: 'queued', plan: created.plan, accessDays: created.accessDays, profile: null, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+  });
   await pa.route('**/api/platform/hospitals**', (r) => json(r, { rows: [], total: 0, page: 1, pages: 1, provinces: [], coverage: { total: 0, verified: 0 } }));
   await pa.route('**/api/platform/tenants/*/access', async (r) => {
     posted = JSON.parse(r.request().postData() || '{}');
@@ -188,13 +208,118 @@ try {
   await pa.locator('#pa-plan').selectOption('paid');
   ok(/بی‌مهلت/.test(await pa.locator('label[for="pa-days"]').innerText()), 'اشتراک → برچسبِ «خالی = بی‌مهلت»');
 
+  console.log('\n   فرمِ ساخت: نوعِ نصب (مطب / شرکتی)');
+  ok(await pa.locator('.pa-row', { hasText: 'مطبِ دمو' }).locator('.pa-profile').innerText() === 'مطب / کلینیک', 'کارتِ شرکت نوعِ فعلی‌اش را نشان می‌دهد');
+  const kind = pa.locator('#pa-kind');
+  ok(await kind.count() === 1 && (await kind.locator('option').allInnerTexts()).join('|') === '— انتخاب کنید —|مطب / کلینیک|شرکتی', 'گزینه‌ها از سرور: «مطب / کلینیک» و «شرکتی»');
+  const createBtn = pa.locator('form.pa-create > button').last();
+  await pa.locator('form.pa-create input').first().fill('مطبِ آزمون');
+  await pa.locator('form.pa-create input').nth(1).fill('clinic-x');
+  ok(await createBtn.isDisabled(), '**بدونِ انتخابِ نوع، «ساخت» غیرفعال است** (نوعِ پیش‌فرضِ پنهان نداریم)');
+  await kind.selectOption('company');
+  ok(await pa.locator('.pa-services input[type=checkbox]').count() === 2 && await pa.locator('.pa-services input:checked').count() === 1, 'شرکتی: دو خدمت، که نخستینش پیش‌فرض تیک خورده');
+  await pa.locator('.pa-services .pa-check').first().locator('input').uncheck();
+  ok(await createBtn.isDisabled(), 'شرکتیِ بی‌خدمت دکمه را غیرفعال می‌کند');
+  const chk = await pa.locator('.pa-services .pa-check').first().boundingBox();
+  ok(chk && chk.height >= 44, `هدفِ لمسِ تیک‌خور ≥ ۴۴ پیکسل (${Math.round(chk?.height)})`);
+  await kind.selectOption('clinic');
+  ok(await pa.locator('.pa-services').count() === 0 && await createBtn.isEnabled(), 'مطب: خدماتی نمی‌خواهد و «ساخت» فعال می‌شود');
+  if (SHOTS) await pa.screenshot({ path: `${SHOTS}/platform-create-kind-clinic.png` });
+  await kind.selectOption('company');
+  await pa.locator('.pa-services .pa-check').nth(1).locator('input').check();
+  if (SHOTS) await pa.screenshot({ path: `${SHOTS}/platform-create-kind-company.png` });
+  await createBtn.click();
+  await pa.waitForFunction(() => document.querySelector('.pa-notice')?.textContent?.includes('وارد صف شد'), null, { timeout: 5000 }).catch(() => {});
+  ok(created && created.kind === 'company' && JSON.stringify(created.services.sort()) === '["implant","ionm"]', `بدنهٔ ساخت: ${JSON.stringify(created)}`);
+  await pa.locator('#pa-kind').waitFor();
+  await kind.selectOption('clinic');
+  await pa.locator('form.pa-create input').first().fill('مطبِ دوم');
+  await pa.locator('form.pa-create input').nth(1).fill('clinic-y');
+  await createBtn.click();
+  await pa.waitForFunction(() => document.querySelector('.pa-notice')?.textContent?.includes('clinic-y'), null, { timeout: 5000 }).catch(() => {});
+  ok(created && created.kind === 'clinic' && Array.isArray(created.services) && created.services.length === 0, `مطب: ${JSON.stringify(created)}`);
+
+  console.log('\n   آمادگیِ سامانه (نوارِ چیپ‌ها بالای صفحه)');
+  const chips = async (page) => (await page.locator('.pa-health-chips .pa-badge').allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim());
+  await pa.locator('.pa-health-chips .pa-badge').first().waitFor({ timeout: 5000 });
+  let c = await chips(pa);
+  ok(c.length === 4 && c[0] === 'فایل‌ها: ماندگار' && c[1] === 'پیامک: آماده' && c[2] === 'نسخه: abc1234' && c[3] === 'پشتیبان: خارج از برنامه', `چیپ‌ها: ${c.join(' | ')}`);
+  ok(await pa.locator('.pa-health .pa-badge.ok').count() === 2, 'فایل‌ها و پیامک سبزند');
+  ok(await pa.locator('.pa-health-notes').count() === 0, '**وقتی همه سالم است هیچ سطرِ علتی نیست** (نوار باریک می‌ماند)');
+  ok((await pa.locator('.pa-health').boundingBox())?.height < 90, `نوارِ سالم کم‌جاست (${Math.round((await pa.locator('.pa-health').boundingBox())?.height)} پیکسل)`);
+  ok(await pa.locator('.pa-health-chips li').nth(3).locator('.pa-badge').getAttribute('title').then((t) => /Coolify/.test(t) && /BACKUP-RESTORE/.test(t)), 'چیپِ پشتیبان صادقانه «خارج از برنامه» است و به راهنما اشاره می‌کند، نه سبزِ ساختگی');
+  ok(!(await pa.locator('.pa-health .pa-badge.ok').allInnerTexts()).some((t) => /پشتیبان/.test(t)), 'پشتیبان هیچ‌وقت سبز نیست');
+  const rb = await pa.locator('.pa-health .pa-refresh').boundingBox();
+  ok(rb && rb.height >= 44, `هدفِ لمسِ «بازخوانی» ≥ ۴۴ پیکسل (${Math.round(rb?.height)})`);
+  if (SHOTS) {
+    for (const theme of ['dark', 'light']) {
+      await pa.evaluate((t) => { document.documentElement.dataset.theme = t; }, theme);
+      await pa.waitForTimeout(150);
+      await pa.locator('.pa-health').screenshot({ path: `${SHOTS}/platform-health-ok-${theme}.png` });
+    }
+    await pa.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  }
+
+  health = {
+    ...health,
+    storage: { ...health.storage, verdict: 'ephemeral', deploys: 1, separateMount: false, message: 'پوشهٔ فایل‌ها روی volume نیست؛ با دیپلوی بعدی همهٔ فایل‌های آپلودی پاک می‌شود — در Coolify یک volume روی /app/storage سوار کنید' },
+    sms: { configured: false, shared: true, message: 'کلید یا خطِ ملی‌پیامک (MELI_API_KEY / MELI_FROM) در سرور تنظیم نیست — هیچ شرکتی پیامک نمی‌فرستد' },
+  };
+  await pa.locator('.pa-health .pa-refresh').click();
+  await pa.locator('.pa-health-notes li').first().waitFor({ timeout: 5000 });
+  c = await chips(pa);
+  ok(c[0] === 'فایل‌ها: روی volume نیست' && c[1] === 'پیامک: تنظیم نیست', `**حالتِ بد در چیپ‌ها: ${c.slice(0, 2).join(' | ')}**`);
+  ok(await pa.locator('.pa-health .pa-badge.fail').count() === 2, 'هر دو قرمزند');
+  const notes = await pa.locator('.pa-health-notes li').allInnerTexts();
+  ok(notes.length === 2 && /\/app\/storage/.test(notes[0]) && /MELI_API_KEY/.test(notes[1]), `**علتِ فارسی و راهِ درمان زیرِ چیپ‌ها: ${notes.length} سطر**`);
+  ok(await pa.locator('.pa-health-notes li.fail').count() === 2, 'سطرهای علت قرمزند');
+  const ltr = await pa.locator('.pa-health-notes bdi[dir="ltr"]').allInnerTexts();
+  ok(ltr.includes('/app/storage') && ltr.includes('MELI_API_KEY / MELI_FROM') && ltr.includes('Coolify'), `**مسیر و نامِ متغیر در متنِ فارسی ltr جداست: ${ltr.join(' | ')}** (بی‌این «/app/storage» برعکس دیده می‌شد)`);
+  if (SHOTS) {
+    for (const theme of ['dark', 'light']) {
+      await pa.evaluate((t) => { document.documentElement.dataset.theme = t; }, theme);
+      await pa.waitForTimeout(150);
+      await pa.locator('.pa-health').screenshot({ path: `${SHOTS}/platform-health-bad-${theme}.png` });
+    }
+    await pa.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  }
+  health = { ...health, storage: { ...health.storage, verdict: 'unproven', separateMount: true, message: 'پوشهٔ فایل‌ها روی volume جداست؛ ماندگاری با دیپلوی بعدی اثبات می‌شود' }, sms: { ...health.sms, configured: true } };
+  await pa.locator('.pa-health .pa-refresh').click();
+  await pa.waitForFunction(() => document.querySelector('.pa-health-notes li.warn'), null, { timeout: 5000 });
+  ok(await pa.locator('.pa-health-notes li.warn').count() === 1 && await pa.locator('.pa-health .pa-badge.fail').count() === 0, 'ثابت‌نشده = کهربایی (نه قرمز) و پیامکِ آماده سبز');
+  healthStatus = 500;
+  await pa.locator('.pa-health .pa-refresh').click();
+  await pa.locator('.pa-health .pa-badge.fail').first().waitFor({ timeout: 5000 });
+  ok(/خوانده نشد/.test(await pa.locator('.pa-health .pa-badge.fail').first().innerText()) && await pa.locator('.pa-health-chips').count() === 0, 'خطای سرور: «خوانده نشد» با علت، بی‌چیپِ دروغین');
+  ok(await pa.locator('.pa-row').count() >= 1, 'خطای سلامت بقیهٔ پنل را نمی‌شکند');
+  healthStatus = 200;
+
   const paPhone = await newPage({ width: 390, height: 844 });
   await paPhone.route('**/api/platform/auth/me', (r) => json(r, { ok: true }));
-  await paPhone.route('**/api/platform/snapshot', (r) => json(r, { tenants, jobs: [], deletions: [] }));
+  await paPhone.route('**/api/platform/snapshot', (r) => json(r, { tenants, jobs: [], deletions: [], profileOptions }));
+  await paPhone.route('**/api/platform/health', healthRoute);
   await paPhone.route('**/api/platform/hospitals**', (r) => json(r, { rows: [], total: 0, page: 1, pages: 1, provinces: [], coverage: { total: 0, verified: 0 } }));
   await paPhone.goto(UI + '/platform-admin', { waitUntil: 'networkidle' });
   await paPhone.locator('.pa-row').first().waitFor({ timeout: 10000 });
   ok(await noHScroll(paPhone), 'پنل روی گوشی بی‌اسکرولِ افقی');
+  health = { ...health, storage: { ...health.storage, verdict: 'ephemeral', message: 'پوشهٔ فایل‌ها روی volume نیست؛ با دیپلوی بعدی همهٔ فایل‌های آپلودی پاک می‌شود — در Coolify یک volume روی /app/storage سوار کنید' }, sms: { ...health.sms, configured: false, message: 'کلید یا خطِ ملی‌پیامک (MELI_API_KEY / MELI_FROM) در سرور تنظیم نیست — هیچ شرکتی پیامک نمی‌فرستد' } };
+  await paPhone.reload({ waitUntil: 'networkidle' });
+  await paPhone.locator('.pa-health-notes li').first().waitFor({ timeout: 5000 });
+  ok(await noHScroll(paPhone), 'گوشی: نوارِ آمادگی با علت‌های بلند اسکرولِ افقی نمی‌سازد');
+  ok((await paPhone.locator('.pa-health .pa-refresh').boundingBox())?.height >= 44, 'گوشی: «بازخوانی» ≥ ۴۴ پیکسل');
+  const ph = await paPhone.evaluate(() => {
+    const box = (sel) => document.querySelector(sel)?.getBoundingClientRect();
+    const chips = box('.pa-health-chips'); const title = box('.pa-health h2'); const total = box('.pa-health');
+    return { chipsBelow: chips.top >= title.bottom - 1, total: total.height };
+  });
+  ok(ph.chipsBelow && ph.total < 380, `گوشی: چیپ‌ها زیرِ عنوان‌اند و نوار کم‌جاست (${Math.round(ph.total)} پیکسل)`);
+  if (SHOTS) {
+    await paPhone.locator('.pa-health').screenshot({ path: `${SHOTS}/platform-health-bad-phone.png` });
+    await paPhone.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+    await paPhone.waitForTimeout(150);
+    await paPhone.locator('.pa-health').screenshot({ path: `${SHOTS}/platform-health-bad-phone-light.png` });
+    await paPhone.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  }
   await paPhone.locator('.pa-row', { hasText: 'مطبِ منقضی' }).getByRole('button', { name: 'دسترسی' }).click();
   await paPhone.locator('.pa-access').waitFor({ timeout: 5000 });
   if (SHOTS) await paPhone.screenshot({ path: `${SHOTS}/tenant-access-dialog-phone.png` });

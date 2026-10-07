@@ -1,6 +1,6 @@
 import { Transform } from 'class-transformer';
 import { registerDecorator, ValidationOptions } from 'class-validator';
-import { isValidNationalId, toEnDigits } from './identity';
+import { isValidNationalId, normalizeMobile, toEnDigits } from './identity';
 
 /**
  * ارقامِ فارسی/عربیِ ورودی را پیش از اعتبارسنجی به انگلیسی تبدیل می‌کند.
@@ -11,6 +11,13 @@ import { isValidNationalId, toEnDigits } from './identity';
  */
 export const EnDigits = () =>
   Transform(({ value }) => (typeof value === 'string' ? toEnDigits(value).trim() : value));
+
+/**
+ * شمارهٔ موبایل را پیش از اعتبارسنجی به شکلِ «09…» می‌برد: ارقامِ فارسی، فاصله، «+98» و «0098».
+ * رشتهٔ خالی خالی می‌ماند (فیلدهای اختیاریِ `^09\d{9}$|^$`)، و مقدارِ غیررشته دست‌نخورده می‌ماند.
+ */
+export const MobileInput = () =>
+  Transform(({ value }) => (typeof value === 'string' ? normalizeMobile(value) : value));
 
 /**
  * کدِ ملی با رقمِ کنترلی، نه فقط «۱۰ رقم».

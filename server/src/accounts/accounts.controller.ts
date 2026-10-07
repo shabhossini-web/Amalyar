@@ -6,6 +6,7 @@ import { LevelGuard } from '../auth/level.guard';
 import { MinLevel } from '../auth/min-level.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { LEVEL } from '../common/levels';
+import { MobileInput } from '../common/validators';
 import { ApproveDto } from './dto/approve.dto';
 
 /** همان فیلدهای هویتیِ جراح — تا شکلِ «شخص» همه‌جا یکی بماند. */
@@ -17,7 +18,7 @@ class JobRoleDto {
 class StaffProfileDto {
   @IsOptional() @IsString() @MinLength(2) @MaxLength(60) firstName?: string;
   @IsOptional() @IsString() @MinLength(2) @MaxLength(60) lastName?: string;
-  @IsOptional() @Matches(/^09\d{9}$|^$/, { message: 'شمارهٔ موبایل نامعتبر است' }) phone?: string;
+  @IsOptional() @MobileInput() @Matches(/^09\d{9}$|^$/, { message: 'شمارهٔ موبایل نامعتبر است' }) phone?: string;
   @IsOptional() @IsString() @MaxLength(20) nationalId?: string;
   @IsOptional() @IsString() @MaxLength(120) email?: string;
   @IsOptional() @IsString() @MaxLength(40) city?: string;

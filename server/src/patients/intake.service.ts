@@ -26,7 +26,7 @@ import { OTHER_PX, procedureLabel } from './visit-coding';
 import { PortalService } from './portal.service';
 import { renderSms } from '../common/sms-template';
 import { RemindersService } from './reminders.service';
-import { isValidNationalId, mobileOf, submissionPhone, toEnDigits } from '../common/identity';
+import { isValidNationalId, mobileOf, normalizeMobile, submissionPhone, toEnDigits } from '../common/identity';
 import { SmsService } from '../sms/sms.service';
 import { SettingsService } from '../config/settings.service';
 import { SETTING_BY_KEY } from '../config/settings-registry';
@@ -457,7 +457,7 @@ export class IntakeService {
     if (!link) throw new NotFoundException('لینک پیدا نشد');
     if (!link.active) throw new BadRequestException('این لینک غیرفعال است — اول فعالش کنید');
 
-    const to = toEnDigits(String(phone ?? '')).replace(/[^0-9]/g, '');
+    const to = normalizeMobile(phone);
     if (!/^09\d{9}$/.test(to)) throw new BadRequestException('شمارهٔ موبایل نامعتبر است (مثال: ۰۹۱۲۱۲۳۴۵۶۷)');
 
     /* ⚠️ عنوانِ لینک داخلِ متن می‌آید تا بیمار بداند این پیامک برای چیست.
@@ -550,7 +550,7 @@ export class IntakeService {
     const firstName = text(dto.firstName, 80);
     const lastName = text(dto.lastName, 80);
     const nationalId = toEnDigits(text(dto.nationalId, 15) ?? '');
-    const phone = toEnDigits(text(dto.phone, 20) ?? '');
+    const phone = normalizeMobile(text(dto.phone, 20) ?? '');
     if (!firstName || !lastName) throw new BadRequestException('نام و نامِ خانوادگی را وارد کنید');
     /* ⚠️ همان اعتبارسنجیِ مسیرِ ادمین، نه یک «۱۰ رقم» ساده‌تر. نسخهٔ اول فقط
        طول را می‌سنجید، پس کدِ ملیِ بی‌اعتبار از **درِ عمومی** وارد می‌شد و
@@ -665,9 +665,15 @@ export class IntakeService {
     const smsCfg = await this.settings.sms();
     const text = renderSms(smsCfg.formSendText, { title, link: this.publicFormLink(token) });
     void (async () => {
-      const res = await this.sms.send(to, text).catch(() => ({ sent: false, stub: false }));
+      /* علتِ نرفتن (`smsDetail`) روی همان ردیف می‌ماند — تا امروز دور ریخته می‌شد و دفتر فقط «ناموفق» می‌گفت. */
+      const res = await this.sms.send(to, text).catch((e: any) => ({ sent: false, stub: false, detail: String(e?.smsDetail ?? 'نتیجهٔ ارسال مشخص نشد') }));
+      const delivered = res.sent || res.stub;
       await this.prisma.reminder.create({
-        data: { patientId, kind: 'notice', dueAt: new Date(), phone: to, text, status: res.sent || res.stub ? 'sent' : 'failed', sentAt: new Date() },
+        data: {
+          patientId, kind: 'notice', dueAt: new Date(), phone: to, text,
+          status: delivered ? 'sent' : 'failed', sentAt: delivered ? new Date() : null,
+          ...(delivered ? {} : { error: String((res as { detail?: string }).detail || 'سرویس پیامک ارسال را نپذیرفت').slice(0, 300) }),
+        },
       }).catch(() => undefined);
     })().catch(() => undefined);
     return ON_RECORD_PHONE;
@@ -722,7 +728,7 @@ export class IntakeService {
   }
 
   private static resumePhone(raw: unknown) {
-    const phone = toEnDigits(String(raw ?? '')).replace(/[^0-9]/g, '');
+    const phone = normalizeMobile(raw);
     if (!/^09\d{9}$/.test(phone)) throw new BadRequestException('شمارهٔ موبایل را کامل بنویسید (مثلاً ۰۹۱۲۳۴۵۶۷۸۹)');
     return phone;
   }

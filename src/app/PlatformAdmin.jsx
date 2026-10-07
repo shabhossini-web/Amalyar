@@ -112,7 +112,7 @@ const domainsOf = (tenant) => (
 );
 
 /// یک ثابت، تا هیچ‌جا snapshot با آرایهٔ جاافتاده ست نشود (باگِ واقعیِ خروج).
-const EMPTY_SNAPSHOT = { tenants: [], jobs: [], deletions: [] };
+const EMPTY_SNAPSHOT = { tenants: [], jobs: [], deletions: [], profileOptions: { kinds: [], services: [] } };
 
 /**
  * «تمام‌شده» فقط `succeeded` است؛ هر وضعیتِ دیگری — حتی وضعیتی که این نسخه نمی‌شناسد —
@@ -129,8 +129,11 @@ export default function PlatformAdmin() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [snapshot, setSnapshot] = useState(EMPTY_SNAPSHOT);
-  const [form, setForm] = useState({ name: '', slug: '', hostname: '', plan: 'paid', accessDays: '' });
+  const [form, setForm] = useState({ name: '', slug: '', hostname: '', plan: 'paid', accessDays: '', kind: '', services: [] });
   const [hostnameEdited, setHostnameEdited] = useState(false);
+  /* گزینه‌های نوعِ نصب از سرور (`profileOptions`)؛ سرورِ قدیمی که نمی‌فرستد فیلد را پنهان می‌کند، نه بشکند. */
+  const kindOptions = snapshot.profileOptions?.kinds ?? [];
+  const serviceOptions = snapshot.profileOptions?.services ?? [];
 
   // نشانیِ سایتِ یک شرکت — افزودن و اصلی‌کردن، برگشت به نشانیِ قبلی، حذفِ نشانیِ فرعی
   const [addrFor, setAddrFor] = useState(null);
@@ -198,6 +201,11 @@ export default function PlatformAdmin() {
       tenants: Array.isArray(data?.tenants) ? data.tenants : [],
       jobs: Array.isArray(data?.jobs) ? data.jobs : [],
       deletions: Array.isArray(data?.deletions) ? data.deletions : [],
+      /* گزینه‌های نوعِ نصب برای فرمِ ساخت — سرورِ قدیمی که نمی‌فرستد یعنی فیلد پنهان (نه فرمِ شکسته). */
+      profileOptions: {
+        kinds: Array.isArray(data?.profileOptions?.kinds) ? data.profileOptions.kinds : [],
+        services: Array.isArray(data?.profileOptions?.services) ? data.profileOptions.services : [],
+      },
     });
   };
 
@@ -325,9 +333,11 @@ export default function PlatformAdmin() {
           plan: form.plan,
           /* دمو بی‌مدت معنا ندارد (پیش‌فرض ۱۴ روز)؛ اشتراکِ بی‌عدد = بی‌مهلت. */
           accessDays: form.accessDays ? Number(form.accessDays) : (form.plan === 'demo' ? 14 : null),
+          /* نوعِ نصب — Worker همین را روی دیتابیسِ تازه می‌نویسد؛ خدمات فقط برای شرکتی. */
+          ...(kindOptions.length && form.kind ? { kind: form.kind, services: form.kind === 'company' ? form.services : [] } : {}),
         },
       });
-      setForm({ name: '', slug: '', hostname: '', plan: 'paid', accessDays: '' });
+      setForm({ name: '', slug: '', hostname: '', plan: 'paid', accessDays: '', kind: '', services: [] });
       setHostnameEdited(false);
       setNotice(`درخواست ${job.slug} وارد صف شد.`);
       await load();
@@ -492,6 +502,8 @@ export default function PlatformAdmin() {
 
           {notice && <div className="pa-notice pa-wide">{notice}</div>}
 
+          <HealthPanel />
+
           <section className="pa-grid">
             <form className="pa-card pa-create" onSubmit={createJob}>
               <div className="pa-section-title">
@@ -529,7 +541,38 @@ export default function PlatformAdmin() {
                 placeholder={form.plan === 'demo' ? '14' : '—'}
                 required={form.plan === 'demo'}
               />
-              <button disabled={busy}>{busy ? 'در حال ثبت…' : 'ساخت امن شرکت'}</button>
+              {/* نوعِ نصب: همان انتخابی که بعداً در تنظیماتِ خودِ شرکت هست، ولی از روزِ اول درست — مطب از
+                  همان لحظه لانچر و واژه‌های مطب را دارد و بنیان‌گذارش پزشک حساب می‌شود. گزینه‌ها از سرور می‌آیند. */}
+              {kindOptions.length > 0 && (
+                <>
+                  <label htmlFor="pa-kind">نوعِ نصب</label>
+                  <select
+                    id="pa-kind"
+                    value={form.kind}
+                    required
+                    onChange={(e) => setForm((s) => ({ ...s, kind: e.target.value, services: e.target.value === 'company' && !s.services.length ? serviceOptions.slice(0, 1).map((x) => x.key) : s.services }))}
+                  >
+                    <option value="">— انتخاب کنید —</option>
+                    {kindOptions.map((k) => <option key={k.key} value={k.key}>{k.label}</option>)}
+                  </select>
+                  {form.kind === 'company' && (
+                    <fieldset className="pa-services">
+                      <legend>خدماتِ این شرکت</legend>
+                      {serviceOptions.map((sv) => (
+                        <label key={sv.key} className="pa-check">
+                          <input
+                            type="checkbox"
+                            checked={form.services.includes(sv.key)}
+                            onChange={(e) => setForm((s) => ({ ...s, services: e.target.checked ? [...s.services, sv.key] : s.services.filter((x) => x !== sv.key) }))}
+                          />
+                          <span>{sv.label}</span>
+                        </label>
+                      ))}
+                    </fieldset>
+                  )}
+                </>
+              )}
+              <button disabled={busy || (kindOptions.length > 0 && (!form.kind || (form.kind === 'company' && !form.services.length)))}>{busy ? 'در حال ثبت…' : 'ساخت امن شرکت'}</button>
               <p className="pa-hint">رمز دیتابیس در UI یا API نمایش داده نمی‌شود.</p>
             </form>
 
@@ -577,6 +620,7 @@ export default function PlatformAdmin() {
                             {faNum(domainsOf(tenant).length)} یک دیتابیس را می‌بینند.
                           </small>
                         )}
+                        {tenant.profile && <small className="pa-profile" data-kind={tenant.profile.kind}>{tenant.profile.label}</small>}
                         <small>ساخته‌شده {faDate(tenant.createdAt)}</small>
                       </div>
                       <div className="pa-row-side">
@@ -636,6 +680,7 @@ export default function PlatformAdmin() {
                     <div className="pa-job-top"><b>{job.name}</b><span className={`pa-badge ${status[1]}`}>{status[0]}</span></div>
                     <code dir="ltr">{job.slug}</code>
                     <small dir="ltr">{job.hostname}</small>
+                    {job.profile && <small className="pa-profile" data-kind={job.profile.kind}>{job.profile.label}</small>}
                     <div className="pa-job-foot">
                       <span>{faDate(job.updatedAt)}</span>
                       {job.status === 'failed' && <button type="button" disabled={busy} onClick={() => retry(job.id)}>تلاش مجدد</button>}
@@ -668,6 +713,7 @@ export default function PlatformAdmin() {
                               <div className="pa-job-top"><b>{job.name}</b><span className={`pa-badge ${status[1]}`}>{status[0]}</span></div>
                               <code dir="ltr">{job.slug}</code>
                               {job.hostname && <small dir="ltr">{job.hostname}</small>}
+                              {job.profile && <small className="pa-profile" data-kind={job.profile.kind}>{job.profile.label}</small>}
                               <div className="pa-job-foot"><span>{faDate(job.finishedAt ?? job.updatedAt)}</span></div>
                             </article>
                           );
@@ -797,6 +843,73 @@ export default function PlatformAdmin() {
         )}
       </AnimatePresence>
     </main>
+  );
+}
+
+/**
+ * آمادگیِ سامانه برای مشتریِ پولی (گزارشِ آمادگیِ فروش، بندهای ۱ و ۳) — یک نواری باریک: چیپِ هر مورد و فقط برای
+ * موردِ نامطلوب یک سطرِ علتِ فارسی. وقتی همه‌چیز سالم است جز یک سطرِ چیپ جایی نمی‌گیرد؛ وقتی نیست علت **بالای صفحه**
+ * دیده می‌شود، نه پشتِ یک بخشِ تاشو. همه‌چیز را سرور حساب کرده (`/platform/health`)؛ این‌جا فقط رنگ و متن است.
+ *
+ * ⚠️ «پشتیبان‌گیری» عمداً چیپِ «خارج از برنامه» است نه سبز: Coolify انجامش می‌دهد و برنامه از آن چیزی نمی‌داند؛
+ * سبزِ ساختگی بدترین حالت است.
+ */
+/* تکه‌های لاتینیِ داخلِ متنِ فارسی (مسیر، نامِ متغیر، نامِ ابزار) جدا می‌شوند تا «/» و «_» کنارِ متنِ راست‌چین
+   جابه‌جا نشوند — «/app/storage» بی‌این به‌شکلِ «app/storage/» دیده می‌شد. */
+const LTR_RUN = /(\/?[A-Za-z][A-Za-z0-9_.-]*(?:\s*\/\s*[A-Za-z][A-Za-z0-9_.-]*)*)/g;
+function Bidi({ text }) {
+  return String(text ?? '').split(LTR_RUN).map((part, i) => (i % 2 ? <bdi key={i} dir="ltr">{part}</bdi> : part));
+}
+const STORAGE_TONE = { ok: 'ok', unproven: 'warn', ephemeral: 'fail', broken: 'fail', dev: 'run' };
+const STORAGE_LABEL = {
+  ok: 'ماندگار', unproven: 'ماندگاری ثابت نشده', ephemeral: 'روی volume نیست', broken: 'قابل نوشتن نیست', dev: 'محیطِ توسعه',
+};
+function HealthPanel() {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const load = async () => {
+    setBusy(true);
+    try { setData(await platformApi('/health')); setError(''); }
+    catch (e) { setError(e.message || 'نامشخص'); }
+    finally { setBusy(false); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const items = data ? [
+    { key: 'storage', title: 'فایل‌ها', tone: STORAGE_TONE[data.storage?.verdict] ?? 'warn', label: STORAGE_LABEL[data.storage?.verdict] ?? '—', hint: faNum(data.storage?.message) },
+    { key: 'sms', title: 'پیامک', tone: data.sms?.configured ? 'ok' : 'fail', label: data.sms?.configured ? 'آماده' : 'تنظیم نیست', hint: data.sms?.message },
+    { key: 'runtime', title: 'نسخه', tone: 'run', label: data.runtime?.commit ?? 'نامشخص', hint: `روشن‌شده ${faDate(data.runtime?.bootedAt)}`, ltr: true },
+    { key: 'backup', title: 'پشتیبان', tone: 'run', label: 'خارج از برنامه', hint: 'پشتیبان‌گیری در Coolify انجام می‌شود و از اینجا دیده نمی‌شود — شرحِ گام‌به‌گام در docs/BACKUP-RESTORE.md' },
+  ] : [];
+  const notes = items.filter((i) => (i.tone === 'fail' || i.tone === 'warn') && i.hint);
+
+  return (
+    <section className="pa-card pa-health" data-section="health" aria-label="آمادگیِ سامانه">
+      <div className="pa-health-row">
+        <h2>آمادگیِ سامانه</h2>
+        {error
+          ? <span className="pa-badge fail" role="status">خوانده نشد — {error}</span>
+          : (
+            <ul className="pa-health-chips">
+              {items.map((i) => (
+                <li key={i.key}>
+                  <span className={`pa-badge ${i.tone}`} title={i.hint}>
+                    {i.title}: <b dir={i.ltr ? 'ltr' : undefined}>{i.label}</b>
+                  </span>
+                </li>
+              ))}
+              {!data && <li><span className="pa-badge run">در حال بررسی…</span></li>}
+            </ul>
+          )}
+        <button type="button" className="pa-refresh" onClick={load} disabled={busy}>{busy ? 'در حال بررسی…' : 'بازخوانی'}</button>
+      </div>
+      {notes.length > 0 && (
+        <ul className="pa-health-notes">
+          {notes.map((n) => <li key={n.key} className={n.tone}>{n.title}: <Bidi text={n.hint} /></li>)}
+        </ul>
+      )}
+    </section>
   );
 }
 

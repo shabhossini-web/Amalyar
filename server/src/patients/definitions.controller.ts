@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsOptional, IsString, Matches, MaxLength, Min, MinLength } from 'class-validator';
 import { Type } from 'class-transformer';
+import { MobileInput } from '../common/validators';
 import { DefinitionsService } from './definitions.service';
 import { SettingsService } from '../config/settings.service';
 import { NOTE_KINDS } from './record.service';
@@ -27,7 +28,7 @@ import { RequirePermissions } from '../auth/permission.decorator';
 /** جراح: هویت (نام/تلفن) به Person می‌رود، تخصص و نظام‌پزشکی روی خودِ نقش می‌مانَد. */
 /** فیلدهای هویتیِ مشترک؛ جراح و (بعداً) کارشناس هر دو از این ارث می‌برند. */
 class PersonFieldsDto {
-  @IsOptional() @Matches(/^09\d{9}$|^$/, { message: 'شمارهٔ موبایل نامعتبر است' }) phone?: string;
+  @IsOptional() @MobileInput() @Matches(/^09\d{9}$|^$/, { message: 'شمارهٔ موبایل نامعتبر است' }) phone?: string;
   @IsOptional() @IsString() @MaxLength(20) nationalId?: string;
   @IsOptional() @IsString() @MaxLength(120) email?: string;
   @IsOptional() @IsString() @MaxLength(40) city?: string;

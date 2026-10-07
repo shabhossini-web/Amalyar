@@ -72,6 +72,9 @@ await page.waitForTimeout(900);
 
 console.log('\n۲) انتخابگرِ فرم هست و فرم‌های ساخته‌شده را نشان می‌دهد');
 {
+  /* مالک (۱۴۰۵/۰۷/۱۵): نمونهٔ «ثبت‌نامِ نورومانیتورینگ» برای مطب و هر حوزهٔ دیگری غلط است — فقط «نامِ فرم». */
+  const ph = await page.locator('.ia-sheet .ia-field input').first().getAttribute('placeholder');
+  ok('نمونهٔ کادرِ نام عمومی است («نامِ فرم»)، نه نامِ یک حوزه', ph === 'نامِ فرم', String(ph));
   const selects = page.locator('.ia-sheet select');
   ok('انتخابگرِ فرم رندر شد', await selects.count() >= 1, 'n=' + await selects.count());
   const opts = await selects.first().locator('option').allTextContents();

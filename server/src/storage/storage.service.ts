@@ -1,10 +1,11 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, OnModuleInit } from '@nestjs/common';
 import { createHash, randomUUID } from 'crypto';
 import { createReadStream, createWriteStream } from 'fs';
 import { mkdir, rename, rm, stat } from 'fs/promises';
 import { join } from 'path';
 import { pipeline } from 'stream/promises';
 import { TenantContext } from '../tenant/tenant-context';
+import { storageRoot, touchStorageLedger } from './storage-health';
 
 /**
  * ذخیره‌سازیِ فایل روی دیسک، جدا به‌ازای هر شرکت.
@@ -23,10 +24,18 @@ import { TenantContext } from '../tenant/tenant-context';
  *    شود، فایلِ نصفه‌ای با نامِ hashِ درست باقی نمی‌ماند که بعداً «سالم» خوانده شود.
  */
 @Injectable()
-export class StorageService {
-  private readonly root = process.env.STORAGE_ROOT || join(process.cwd(), 'storage');
+export class StorageService implements OnModuleInit {
+  private readonly root = storageRoot();
 
   constructor(private readonly tenantContext: TenantContext) {}
+
+  /**
+   * هر بوت کانتینرِ جاری را در دفترِ **همین ریشه** ثبت می‌کند تا پنلِ پلتفرم بتواند ثابت کند فایل‌ها از دیپلوی
+   * گذشته‌اند (`storage-health.ts`). شکستِ آن هرگز بوت را نمی‌شکند.
+   */
+  async onModuleInit() {
+    await touchStorageLedger(this.root);
+  }
 
   /** ریشهٔ فایل‌های همین شرکت. tenantId یک UUID است، پس امنِ مسیر است. */
   private tenantRoot(): string {

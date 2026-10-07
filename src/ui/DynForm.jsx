@@ -6,7 +6,7 @@ import JDate from '../app/JDate.jsx';
 import TimePick from './TimePick.jsx';
 import Pick from './Pick.jsx';
 import './dynform.css';
-import { toEnDigits } from '../lib/identity.js';
+import { normalizeMobile, toEnDigits } from '../lib/identity.js';
 import { shrinkImage } from '../lib/image-shrink.js';
 import { Bank, Camera, Check, Copy, LinkIcon, Mic, Star, Trash } from './icons.jsx';
 
@@ -223,7 +223,7 @@ function Input({ assistance, field: f, value, set, disabled, lookups, onUpload, 
       return (
         <input
           type="tel" inputMode="numeric" dir="ltr" placeholder={f.placeholder || '09…'}
-          value={v} onChange={(e) => set(toEnDigits(e.target.value))} disabled={disabled}
+          value={v} onChange={(e) => set(normalizeMobile(e.target.value))} disabled={disabled}
         />
       );
 

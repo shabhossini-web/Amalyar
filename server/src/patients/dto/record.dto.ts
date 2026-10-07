@@ -2,7 +2,7 @@ import { Type } from 'class-transformer';
 import {
   IsIn, IsInt, IsISO8601, IsOptional, IsString, Matches, MaxLength, MinLength, ValidateIf,
 } from 'class-validator';
-import { EnDigits } from '../../common/validators';
+import { EnDigits, MobileInput } from '../../common/validators';
 import { DOCUMENT_CATEGORIES, DOCUMENT_PHASES, NOTE_KINDS } from '../record.service';
 
 /** ویرایشِ پروفایلِ بیمار. کد ملی عمداً نیست — کلیدِ هویت است، نه یک فیلدِ معمولی. */
@@ -13,7 +13,7 @@ export class PatientPatchDto {
   @IsOptional() @IsString() @MinLength(2, { message: 'نام خانوادگی کوتاه است' }) @MaxLength(60)
   lastName?: string;
 
-  @IsOptional() @EnDigits() @ValidateIf((o) => o.phone !== '')
+  @IsOptional() @MobileInput() @ValidateIf((o) => o.phone !== '')
   @Matches(/^09\d{9}$/, { message: 'شمارهٔ موبایل نامعتبر است' })
   phone?: string;
 

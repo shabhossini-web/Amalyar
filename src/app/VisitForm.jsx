@@ -8,7 +8,7 @@ import CareEditor from './CareEditor.jsx';
 import { useAuth } from './auth.jsx';
 import { api, apiBlobUrl, apiStream, apiUpload } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso, jToFa } from '../lib/jalali.js';
-import { isValidNationalId, randomNationalId, toEnDigits } from '../lib/identity.js';
+import { isValidNationalId, normalizeMobile, randomNationalId, toEnDigits } from '../lib/identity.js';
 import { badTime, durationMin, normTime, faDuration } from '../lib/time.js';
 import { useConfig, useStatusList, useStatusMap } from './config.jsx';
 import VitalSigns from './VitalSigns.jsx';
@@ -2364,7 +2364,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
               <input type="text" value={f.lastName} onChange={set('lastName')} required={editing ? idOpen : step === 1} minLength={2} />
             </label>
             <label className="db-field"><span>موبایل</span>
-              <input type="tel" dir="ltr" inputMode="numeric" value={f.phone} onChange={set('phone')} placeholder="09xxxxxxxxx" />
+              <input type="tel" dir="ltr" inputMode="numeric" value={f.phone} onChange={(e) => setF((s) => ({ ...s, phone: normalizeMobile(e.target.value) }))} placeholder="09xxxxxxxxx" />
             </label>
             <label className={`db-field${nidBad || coreErr.nationalId ? ' bad' : ''}`} data-core="nationalId"><span>کد ملی
               {/* موقت — بیمارِ آزمایشی (خواستهٔ مالک): کدِ تصادفیِ معتبر تا

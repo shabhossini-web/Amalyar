@@ -161,6 +161,23 @@ export function requestedProfile(kind: TenantKind, services: readonly string[]):
 }
 
 /**
+ * **ردیف‌های `settings`ی که یک نصبِ تازه با این پروفایل می‌گیرد** — تنها چیزی که Workerِ ساختِ شرکت
+ * (`seed-profile.ts`) می‌نویسد. ماژول‌ها لازم نیست همان‌جا بیایند: ردیفِ غایبِ `features` را ساختِ تنبل
+ * (`seedFeatureRows`) از همین دو ردیف می‌سازد، پس نصبی که از روزِ اول «مطب» است هیچ‌وقت لانچرِ شرکتی ندارد.
+ *
+ * ⚠️ مالک (۱۴۰۵/۰۷/۱۵): «مدلِ هر شرکت، مطبی یا شرکتی، در خودِ شرکت تعیین شود.» تا امروز هر نصبِ تازه
+ * `ionm` (شرکتیِ نورومانیتورینگ) بود و صاحبِ مطب پس از ثبت‌نام باید در تنظیمات عوضش می‌کرد — و چون
+ * بنیان‌گذارِ مطب فقط وقتی `jobRole: doctor` می‌گیرد که حوزه **پیش از ثبت‌نام** `clinic` باشد
+ * (`auth.service.ts`)، هیچ نصبِ واقعیِ مطبی آن شرط را نداشت.
+ */
+export function profileSettingRows(kind: TenantKind, services: readonly string[]): { key: string; value: string }[] {
+  const p = requestedProfile(kind, services);
+  const rows: { key: string; value: string }[] = [{ key: 'vertical', value: p.primary }];
+  if (p.kind === 'company') rows.push({ key: KEY_SERVICES, value: JSON.stringify(p.services) });
+  return rows;
+}
+
+/**
  * **تغییرِ ماژول‌ها وقتی پروفایل عوض می‌شود — فقط آنچه عضویتش عوض شده.**
  *
  * ⚠️ `setVertical`ِ قدیمی هر ماژولِ پلان را به سطحِ پیش‌فرض برمی‌گرداند و

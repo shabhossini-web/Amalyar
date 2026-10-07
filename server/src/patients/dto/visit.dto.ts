@@ -16,7 +16,7 @@ import {
   IsObject,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { EnDigits, IsNationalId } from '../../common/validators';
+import { EnDigits, IsNationalId, MobileInput } from '../../common/validators';
 import { PAYERS } from '../settlement.service';
 import { ANESTHESIA_KEYS, DECISION_KEYS } from '../labels';
 
@@ -65,7 +65,7 @@ export class CreateVisitDto {
   lastName?: string;
 
   @IsOptional()
-  @EnDigits()
+  @MobileInput()
   @Matches(/^09\d{9}$/, { message: 'شمارهٔ موبایل نامعتبر است (مثال: 09121234567)' })
   phone?: string;
 
@@ -318,7 +318,7 @@ export class UpdateVisitDto {
   lastName?: string;
 
   @IsOptional()
-  @EnDigits()
+  @MobileInput()
   @ValidateIf((o) => o.phone !== '')
   @Matches(/^09\d{9}$/, { message: 'شمارهٔ موبایل نامعتبر است' })
   phone?: string;

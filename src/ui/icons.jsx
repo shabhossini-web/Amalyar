@@ -298,6 +298,11 @@ export const Mic = (p) => (
   </Svg>
 );
 
+/** مثلثِ پخش — شروعِ پخشِ صدای ثبت‌شده (`VoiceClip`). مثلث در RTL رو به چپ نیست: شکلِ ثابت و فیزیکی. */
+export const Play = (p) => (
+  <Svg {...p}><path d="M8 5.5v13a.8.8 0 0 0 1.2.7l10-6.5a.8.8 0 0 0 0-1.4l-10-6.5A.8.8 0 0 0 8 5.5z" /></Svg>
+);
+
 /** مربعِ توقف — پایانِ ضبطِ صدا. */
 export const StopRec = (p) => (
   <Svg {...p}><rect x="6" y="6" width="12" height="12" rx="2" /></Svg>

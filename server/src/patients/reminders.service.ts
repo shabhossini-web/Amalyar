@@ -521,11 +521,18 @@ export class RemindersService {
       if (!/^09\d{9}$/.test(to)) return;
       const brand = await this.settings.brand().catch(() => ({ name: null as string | null }));
       const text = cancelSms(kind, reasonKey, { brand: brand?.name ?? null, when: opts.when ?? null });
-      const res = await this.sms.send(to, text);
+      /* ⚠️ در production ردِ ملی‌پیامک و کلیدِ تنظیم‌نشده **پرتاب** می‌شود؛ تا امروز همین `catch`ِ بیرونی آن را
+         می‌بلعید و هیچ ردیفی نمی‌نشست — برخلافِ وعدهٔ همین کامنتِ بالا («با وضعیتِ failed می‌نشیند»)، نرفتنِ پیامکِ
+         لغو در production کاملاً نامرئی بود. علتِ واقعی (`smsDetail`) روی همان ردیف می‌ماند. */
+      let res: { sent: boolean; stub: boolean; detail?: string };
+      try { res = await this.sms.send(to, text); }
+      catch (e: any) { res = { sent: false, stub: false, detail: String(e?.smsDetail ?? 'نتیجهٔ ارسال مشخص نشد') }; }
+      const delivered = res.sent || res.stub;
       await this.prisma.reminder.create({
         data: {
           patientId, kind: 'notice', dueAt: new Date(), phone: to, text,
-          status: res.sent || res.stub ? 'sent' : 'failed', sentAt: new Date(),
+          status: delivered ? 'sent' : 'failed', sentAt: delivered ? new Date() : null,
+          ...(delivered ? {} : { error: String(res.detail || 'سرویس پیامک ارسال را نپذیرفت').slice(0, 300) }),
         },
       }).catch(() => undefined);
     } catch { /* لغو نباید به‌خاطرِ پیامک بشکند */ }

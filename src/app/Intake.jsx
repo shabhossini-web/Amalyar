@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api, apiBlobUrl } from '../lib/api.js';
 import { faDate, isoToJStr, jStrToIso } from '../lib/jalali.js';
+import { normalizeMobile } from '../lib/identity.js';
 import './intake-admin.css';
 import './dashboard.css'; // bl-mini / db-hint
 import { Alert, Bank, CheckCircle, Close, Copy, Doctor, External, Eye, Form, Hospital, Pencil, Plus, Scalpel, Search, Send, Trash, User } from '../ui/icons.jsx';
@@ -451,7 +452,7 @@ function IdentityCard({ row, who, onSaved }) {
             <label className="ia-field"><span>نام خانوادگی</span>
               <input value={v.lastName} disabled={busy} onChange={(e) => setV((x) => ({ ...x, lastName: e.target.value }))} /></label>
             <label className="ia-field"><span>موبایل</span>
-              <input dir="ltr" inputMode="numeric" value={v.phone} disabled={busy} onChange={(e) => setV((x) => ({ ...x, phone: e.target.value }))} /></label>
+              <input dir="ltr" inputMode="numeric" value={v.phone} disabled={busy} onChange={(e) => setV((x) => ({ ...x, phone: normalizeMobile(e.target.value) }))} /></label>
           </div>
           <p className="ia-note">کدِ ملی کلیدِ پرونده است و این‌جا عوض نمی‌شود؛ اگر اشتباه است، ثبت‌نام را رد کنید تا بیمار با کدِ درست ثبت‌نام کند.</p>
           <div className="ia-acts">
@@ -997,7 +998,7 @@ function LinkSheet({ initial, onClose, onDone }) {
       <div className="ia-sheet-body">
         <label className="ia-field">
           <span>نامِ لینک</span>
-          <input value={title} onChange={(e) => setTitle(e.target.value)} disabled={busy} placeholder="ثبت‌نامِ نورومانیتورینگ" />
+          <input value={title} onChange={(e) => setTitle(e.target.value)} disabled={busy} placeholder="نامِ فرم" />
         </label>
 
         <label className="ia-field">

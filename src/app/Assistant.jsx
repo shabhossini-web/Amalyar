@@ -4,17 +4,29 @@ import { api, apiStream } from '../lib/api.js';
 import './launcher.css';
 import './assistant.css';
 import { Alert, Send } from '../ui/icons.jsx';
-import { useTerms } from './config.jsx';
+import { useConfig, useTerms } from './config.jsx';
 import { toolLabel } from './tools.jsx';
 import PageHeader from '../ui/PageHeader.jsx';
 
-const STARTERS = [
-  'چه فرم‌هایی منتظرِ تاییدند؟',
-  'پرتال جراح برای چه کسی است و بیلانش کجاست؟',
-  'چطور حساب موقت بسازم و برنامه کارشناسان و حمل را ابلاغ کنم؟',
-  'چطور برای یک عمل قالبِ شرح بسازم؟',
-  'گزارشِ مالی را از کجا ببینم؟',
-];
+/* ⚠️ پیشنهادها از **نوعِ همین نصب** می‌آیند (`useConfig().kind`) — مطب هیچ‌وقت «چینشِ کارشناسان و حمل» را
+   پیشنهاد نمی‌دهد و شرکت «فهرستِ انتظارِ عمل» را؛ همان گیجیِ بازخوردِ مالک ۱۴۰۵/۰۷/۱۵ که راهنمای سرور هم از آن
+   جدا شد (`assistant-knowledge.ts`). هر پیشنهاد باید پرسشی باشد که راهنمای همان نوع جوابش را دارد. */
+const STARTERS = {
+  clinic: [
+    'چه فرم‌هایی منتظرِ تاییدند؟',
+    'میزِ پذیرش و فهرستِ انتظارِ عمل برای چیست؟',
+    'چطور برای یک عمل قالبِ شرح بسازم؟',
+    'چطور حسابِ موقت بسازم و دسترسی بدهم؟',
+    'گزارشِ مالی را از کجا ببینم؟',
+  ],
+  company: [
+    'چه فرم‌هایی منتظرِ تاییدند؟',
+    'پرتال جراح برای چه کسی است و بیلانش کجاست؟',
+    'چطور حساب موقت بسازم و برنامه کارشناسان و حمل را ابلاغ کنم؟',
+    'ستِ ابزار و مصرفی‌ها چطور تحویل و ثبت می‌شوند؟',
+    'گزارشِ مالی را از کجا ببینم؟',
+  ],
+};
 
 /** مسیرهای داخلی در جوابِ دستیار لینکِ کلیک‌شدنی می‌شوند — راه‌بردنِ واقعی، نه فقط حرف. */
 function Linkified({ text }) {
@@ -42,6 +54,8 @@ export default function Assistant() {
   const endRef = useRef(null);
 
   const t = useTerms();
+  const { kind } = useConfig();
+  const starters = STARTERS[kind] ?? STARTERS.company;
   useEffect(() => {
     api('/ai/status').then(setStatus).catch((e) => setStatus({ enabled: false, error: e.message }));
   }, []);
@@ -94,8 +108,8 @@ export default function Assistant() {
           <div className="as-empty">
             <p>سؤالت را بپرس، یا یکی از این‌ها:</p>
             <div className="as-starters">
-              {STARTERS.map((t) => (
-                <button key={t} type="button" onClick={() => ask(t)} disabled={busy}>{t}</button>
+              {starters.map((q) => (
+                <button key={q} type="button" onClick={() => ask(q)} disabled={busy}>{q}</button>
               ))}
             </div>
           </div>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import { faDate, J_MONTHS, jToday } from '../lib/jalali.js';
 import JGrid from '../app/JGrid.jsx';
+import { CheckCircle } from '../ui/icons.jsx';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
 /** «16:00» ← «۱۶:۰۰»: تاریخِ کنارش فارسی است و ساعتِ لاتین کنارِ آن («۶ مهر ساعتِ 16:00») ناهمخوان بود. */
@@ -66,23 +67,14 @@ export default function BookingPick({ token, booking, onBooked, disabled, error 
   };
 
   const chosen = booking?.appointment;
+  /* روزِ بازشده همان روزِ نوبتِ ثبت‌شدهٔ بیمار است؟ */
+  const mineDay = !!chosen && !!picked && chosen.date === picked.date;
 
   return (
     <section className={`ik-book${error ? ' bad' : ''}`} aria-describedby={error ? 'ik-book-need' : undefined}>
       <h3>روزِ نوبت را انتخاب کنید</h3>
       {/* «روزی انتخاب نشده» روی خودِ تقویم — فرم با اسکرول همین‌جا می‌آورد (بازبینیِ UX، بندِ ۱۰۵). */}
       {error && <p id="ik-book-need" className="ik-book-err" role="alert">{error}</p>}
-
-      {chosen && (
-        <p className="ik-book-has">
-          {/* ⚠️ تاریخ به بیمار **شمسی** نشان داده می‌شود — ISOِ خامِ سرور
-              (2026-08-15) روی نصبِ واقعی دیده شد و برای بیمار بی‌معنی است. */}
-          نوبتِ شما: <b>{faDate(chosen.date) || chosen.date}</b>
-          {chosen.time ? <> ساعتِ <b dir="ltr">{faTime(chosen.time)}</b></> : null}
-          {chosen.topicName ? <> — {chosen.topicName}</> : null}
-          <small>می‌توانید روزِ دیگری بزنید تا جابه‌جا شود.</small>
-        </p>
-      )}
 
       {topics.length > 0 && (
         <div className="ik-book-topics" role="radiogroup" aria-label="موضوعِ ویزیت">
@@ -118,12 +110,17 @@ export default function BookingPick({ token, booking, onBooked, disabled, error 
         renderDay={(dd) => {
           const cell = byDay.get(dd);
           if (!cell) return null;
+          /* هشدار: روزِ **نوبتِ خودِ بیمار** تیک می‌گیرد، نه نقطهٔ «باز» — حتی وقتی نوبتِ خودش آخرین جا را گرفته و
+             سرور روز را دیگر «باز» نمی‌گوید. مالک (۱۴۰۵/۰۷/۱۵): «نوبت را انتخاب می‌کند و جایی نشانش نمی‌دهد
+             که نوبتش انتخاب شده». */
+          const mine = !!chosen && cell.date === chosen.date;
           return (
             /* مینیمال: روزِ باز فقط یک نقطهٔ نئون می‌گیرد؛ عددِ «جا مانده» در
                کارتِ پایینِ تقویم می‌آید، نه داخلِ سلول — سلولِ شلوغ همان
                چیزی بود که کاربر «افتضاح» خواند. */
-            <div className={`ik-cell${cell.open ? ' open' : ''}`}>
-              {cell.open ? <i className="ik-dot" aria-hidden="true" /> : null}
+            <div className={`ik-cell${cell.open ? ' open' : ''}${mine ? ' mine' : ''}`}>
+              {mine ? <CheckCircle className="ik-tick" width="14" height="14" aria-hidden="true" />
+                : cell.open ? <i className="ik-dot" aria-hidden="true" /> : null}
             </div>
           );
         }}
@@ -159,19 +156,55 @@ export default function BookingPick({ token, booking, onBooked, disabled, error 
                   );
                 })}
               </div>
+              {mineDay && <Done chosen={chosen} />}
             </>
           ) : (
             <>
               <small>
                 {faTime(picked.windows.map((w) => `${w.start}–${w.end}`).join('، '))} · {faNum(picked.free)} جا مانده
               </small>
-              <button type="button" className="ik-book-go" disabled={busy || disabled} onClick={() => book(null)}>
-                {busy ? 'در حال ثبت…' : 'همین روز را می‌خواهم'}
-              </button>
+              {/* هشدار: همین‌جا که دکمه بود، «ثبت شد» می‌نشیند — جایی که چشمِ بیمار بعد از لمس مانده است. دکمه‌ای که
+                  بعد از زدن هیچ تغییری نمی‌کرد یعنی بیمار نمی‌دانست نوبتش گرفته شد یا نه. */}
+              {mineDay ? <Done chosen={chosen} /> : (
+                <button type="button" className="ik-book-go" disabled={busy || disabled} onClick={() => book(null)}>
+                  {busy ? 'در حال ثبت…' : 'همین روز را می‌خواهم'}
+                </button>
+              )}
             </>
           )}
         </div>
       )}
+
+      {/* هشدار: «نوبتِ شما: …» **زیرِ** تقویم و کارتِ روز می‌آید نه بالای بخش: تا دیروز بالای بخش بود و با
+          ثبتِ نوبت یک‌دفعه ۷۰ پیکسل می‌نشست و تقویم و دکمه‌ای که بیمار همان لحظه رویش بود را به پایین می‌پراند
+          (و پیام از دیدِ او بیرون می‌افتاد). وقتی روزِ بازشده همان روزِ نوبت است، خودِ کارت (`Done`) جایگزینش
+          است و این‌جا تکرار نمی‌شود؛ وقتی بیمار ماه/موضوع/روزِ دیگری را می‌بیند، همین یادآوری می‌ماند. */}
+      {chosen && !mineDay && (
+        <p className="ik-book-has">
+          {/* هشدار: تاریخ به بیمار **شمسی** نشان داده می‌شود — ISOِ خامِ سرور
+              (2026-08-15) روی نصبِ واقعی دیده شد و برای بیمار بی‌معنی است. */}
+          نوبتِ شما: <b>{faDate(chosen.date) || chosen.date}</b>
+          {chosen.time ? <> ساعتِ <b dir="ltr">{faTime(chosen.time)}</b></> : null}
+          {chosen.topicName ? <> — {chosen.topicName}</> : null}
+          <small>می‌توانید روزِ دیگری بزنید تا جابه‌جا شود.</small>
+        </p>
+      )}
     </section>
+  );
+}
+
+/**
+ * «نوبتِ شما ثبت شد» — پیامِ تأییدِ پایدار زیرِ همان روزی که بیمار زد. `role="status"` تا صفحه‌خوان هم
+ * اعلامش کند؛ تاریخ شمسی و ساعت فارسی (همان قاعدهٔ بالای صفحه).
+ */
+function Done({ chosen }) {
+  return (
+    <p className="ik-book-done" role="status">
+      <CheckCircle width="20" height="20" aria-hidden="true" />
+      <span>
+        <b>نوبتِ شما ثبت شد: {faDate(chosen.date) || chosen.date}{chosen.time ? <> ساعتِ <bdi dir="ltr">{faTime(chosen.time)}</bdi></> : null}</b>
+        <small>روزِ دیگری بزنید تا جابه‌جا شود.</small>
+      </span>
+    </p>
   );
 }

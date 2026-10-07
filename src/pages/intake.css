@@ -322,6 +322,21 @@
   background: linear-gradient(135deg, rgb(var(--brand-2-rgb)), rgb(var(--brand-soft-rgb)));
 }
 .ik-book-go:disabled { opacity: .55; cursor: default; }
+/* ── «نوبتِ شما ثبت شد» — زیرِ روزِ انتخاب‌شده، جای دکمهٔ «همین روز را می‌خواهم» ──
+   سبزِ معنایی با زمینهٔ مات و هم‌فام (قانونِ رنگِ وضعیت): در تمِ تیره لایهٔ کم‌آلفا خاکستری می‌شود. */
+.ik-book-done {
+  margin: 0; display: flex; align-items: flex-start; gap: 9px; padding: 10px 12px; border-radius: 11px;
+  color: var(--green-text); background: var(--green-bg);
+  border: 1px solid color-mix(in srgb, var(--green) 45%, transparent);
+}
+.ik-book-done svg { flex: 0 0 auto; margin-top: 1px; }
+.ik-book-done b { display: block; font-size: 14.5px; font-weight: 800; line-height: 1.7; }
+.ik-book-done small { display: block; font-size: 12.5px; color: var(--text2); }
+/* تیکِ روزِ نوبتِ خودِ بیمار روی تقویم؛ روی خانهٔ انتخاب‌شده (گرادیانِ برند) سفید است. */
+.ik-tick { color: var(--green-text); }
+.jg.compact .jg-cell.sel .ik-tick { color: #fff; }
+.jg.compact .jg-cell:has(.ik-cell.mine):not(.sel) { border-color: color-mix(in srgb, var(--green) 55%, transparent); background: var(--green-bg); }
+.jg.compact .jg-cell:has(.ik-cell.mine):not(.sel) .jg-num { color: var(--green-text); font-weight: 800; }
 
 /* فهرستِ فیش‌های آپلودشده — چندتایی، با امکانِ برداشتن. */
 .ik-receipts { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }

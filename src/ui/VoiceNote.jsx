@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, Close, Mic, StopRec, Trash } from './icons.jsx';
+import { Check, Close, Mic, Play, StopRec, Trash } from './icons.jsx';
 import { startWavRecording } from './wav-recorder.js';
 import './voice.css';
 
@@ -141,8 +141,16 @@ export function VoiceClip({ load, name, onDelete, disabled }) {
       {url ? (
         <audio controls autoPlay src={url} preload="auto" />
       ) : (
-        <button type="button" className="vn-ghost" disabled={busy || disabled} onClick={play} aria-label={`پخشِ ${name || 'صدا'}`}>
-          <Mic size={14} /><span>{busy ? 'در حالِ بارگیری…' : (name || 'توضیحِ صوتی')}</span>
+        /* هشدار: «پخش‌کننده» است نه چیپِ برچسب. تا ۱۴۰۵/۰۷/۱۵ این‌جا یک قرصِ کوچکِ میکروفون‌دار بود و مالک
+           نوشت «ویس‌ها نشان داده نمی‌شود»: شبیهِ برچسبِ فایل بود، نه صدایی که با یک لمس پخش می‌شود. حالا دکمهٔ
+           پخشِ دایره‌ای + نام + «برای پخش بزنید»، با هدفِ لمسِ ۴۴ پیکسلی. فایل پشتِ احراز است، پس همچنان
+           فقط با لمسِ کاربر بارگیری می‌شود. */
+        <button type="button" className="vn-play" disabled={busy || disabled} onClick={play} aria-label={`پخشِ ${name || 'صدا'}`}>
+          <span className="vn-play-ic" aria-hidden="true">{busy ? <i className="vc-spin" /> : <Play width="15" height="15" />}</span>
+          <span className="vn-play-txt">
+            <b>{name || 'توضیحِ صوتی'}</b>
+            <small>{busy ? 'در حالِ بارگیری…' : 'برای پخش بزنید'}</small>
+          </span>
         </button>
       )}
       {onDelete && (

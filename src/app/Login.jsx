@@ -8,6 +8,7 @@ import PasswordInput from './PasswordInput.jsx';
 
 import { useAuth } from './auth.jsx';
 import { api } from '../lib/api.js';
+import { normalizeIdentifier, normalizeMobile } from '../lib/identity.js';
 import './login.css';
 import { Back, Check, Clock, Fingerprint, Info } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
@@ -431,7 +432,7 @@ export default function Login() {
         {tab === 'login' && step !== 'done' && !forgot && (
           <form onSubmit={doLogin} className="lg-form">
             {field('نام کاربری یا موبایل',
-              <input type="text" value={identifier} onChange={(e) => setIdentifier(e.target.value)}
+              <input type="text" value={identifier} onChange={(e) => setIdentifier(normalizeIdentifier(e.target.value))}
                 placeholder="نام کاربری یا ۰۹…" autoComplete="username" required />)}
             {field('رمز عبور',
               <PasswordInput value={password} onChange={(e) => setPassword(e.target.value)}
@@ -461,7 +462,7 @@ export default function Login() {
             <h2 className="lg-title" ref={fpHead} tabIndex={-1}>بازیابیِ رمز</h2>
             <p className="lg-fp-text">نام کاربری یا شمارهٔ موبایلِ حسابتان را بنویسید؛ یک کدِ ۶رقمی به موبایلِ همان حساب پیامک می‌شود.</p>
             {field('نام کاربری یا موبایل',
-              <input type="text" value={identifier} onChange={(e) => setIdentifier(e.target.value)}
+              <input type="text" value={identifier} onChange={(e) => setIdentifier(normalizeIdentifier(e.target.value))}
                 placeholder="نام کاربری یا ۰۹…" autoComplete="username" enterKeyHint="send" required />)}
             <button className="lg-btn" type="submit" disabled={busy || !identifier.trim()}>{busy ? '…' : 'ارسالِ کد'}</button>
             {/* سوپرادمین کدِ پیامکی نمی‌گیرد (`resetTarget`، PF1) — بی این جمله منتظرِ پیامکی می‌ماند که نمی‌آید. */}
@@ -497,7 +498,7 @@ export default function Login() {
         {tab === 'signup' && step === 'phone' && (
           <form onSubmit={sendOtp} className="lg-form">
             {field('شمارهٔ موبایل',
-              <input type="tel" inputMode="numeric" value={phone} onChange={(e) => setPhone(e.target.value)}
+              <input type="tel" inputMode="numeric" value={phone} onChange={(e) => setPhone(normalizeMobile(e.target.value))}
                 placeholder="مثلاً ۰۹۱۲۳۴۵۶۷۸۹" autoComplete="tel" required />)}
             <button className="lg-btn" type="submit" disabled={busy}>{busy ? '…' : 'ارسالِ کدِ تأیید'}</button>
             <p className="lg-hint">کدِ تأیید با پیامک به موبایل شما ارسال می‌شود.</p>

@@ -4,6 +4,7 @@ import { promisify } from 'util';
 import { PrismaClient } from '../generated/control';
 import { decryptDatabaseUrl, encryptDatabaseUrl } from '../tenant/tenant-crypto';
 import { endOfDayTehran, normalizePlan, tehranDatePlusDays } from '../tenant/tenant-access';
+import { assertJobProfile, seedTenantProfile } from './seed-profile';
 
 const execFileAsync = promisify(execFile);
 let stopping = false;
@@ -14,10 +15,12 @@ function required(name: string) {
   return value;
 }
 
-function validateJob(job: { slug: string; name: string; hostname: string }) {
+function validateJob(job: { slug: string; name: string; hostname: string; profileKind?: string | null; profileServices?: string | null }) {
   if (!/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/.test(job.slug)) {
     throw new Error('INVALID_SLUG');
   }
+  // پیش از ساختنِ نقش و دیتابیس: پروفایلِ ناسازگار نباید چیزی بسازد که بعد باید پاک شود.
+  assertJobProfile(job.profileKind, job.profileServices);
   if (!job.name.trim() || !/^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(job.hostname)) {
     throw new Error('INVALID_TENANT_INPUT');
   }
@@ -100,6 +103,12 @@ async function provision(control: PrismaClient, job: Awaited<ReturnType<typeof c
     databaseCreated = true;
 
     await migrateTenant(tenantUrl.toString());
+
+    /* نوعِ نصب (مطب/شرکتی) **پیش از** ثبتِ شرکت در control-db و پیش از اولین درخواست روی دیتابیسِ تازه
+       نوشته می‌شود: لانچر و ساختِ تنبلِ ماژول‌ها از همین دو ردیف می‌آیند، و بنیان‌گذارِ مطب
+       باید هنگامِ ثبت‌نام `jobRole: doctor` بگیرد (مالک، ۱۴۰۵/۰۷/۱۵). درخواستِ بی‌پروفایل (قدیمی)
+       همان پیش‌فرضِ نصب را می‌گیرد. */
+    if (job.profileKind) await seedTenantProfile(tenantUrl.toString(), job.profileKind, job.profileServices);
 
     const tenant = await control.$transaction(async (tx) => {
       /* نوعِ حساب و مهلتِ اولیه از خودِ درخواست می‌آید — دموی ۱۴ روزه از همین لحظه فعال است. */

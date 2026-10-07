@@ -84,6 +84,11 @@ model ProvisioningJob {
   /// (دمو ۱۴ روزه از همان لحظهٔ ساخت فعال است، بی‌نیاز از یک مرحلهٔ دستیِ دوم).
   plan            String    @default("paid")
   accessDays      Int?      @map("access_days")
+  /// نوعِ نصبِ درخواستی (`clinic` | `company`) و بستهٔ خدماتِ شرکت (JSON، مثلِ `["ionm"]`). Worker همین را
+  /// پس از migration روی `settings`ِ دیتابیسِ **تازه** می‌نویسد؛ `null` یعنی درخواستِ قدیمی و پیش‌فرضِ نصب.
+  /// فقط **تاریخچهٔ درخواست** است، نه حالِ فعلیِ شرکت — شرکت بعداً در تنظیماتِ خودش عوضش می‌کند.
+  profileKind     String?   @map("profile_kind")
+  profileServices String?   @map("profile_services")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
   startedAt       DateTime? @map("started_at")
