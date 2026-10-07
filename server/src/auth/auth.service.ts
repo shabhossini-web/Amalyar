@@ -91,7 +91,7 @@ export class AuthService {
   }
 
   async setupStatus() {
-    const access = this.tenantContext.current()?.access ?? null;
+    const access = this.tenantContext?.current?.()?.access ?? null;
     /* شرکتِ معلق: دیتابیسش را نمی‌خوانیم (میان‌افزار فقط همین مسیر را گذرانده تا
        صفحهٔ ورود علت را بگوید)، پس «نیازِ به راه‌اندازی» هم معنایی ندارد. */
     if (access?.state === 'suspended') return { needsSetup: false, access };

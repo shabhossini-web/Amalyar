@@ -196,7 +196,7 @@ try {
   const row = await prisma.account.findUnique({ where: { id: stranger.user.id } });
   assert.equal(stranger.pending, true); assert.equal(row.level, 1); assert.equal(row.status, 'pending');
   assert.equal(stranger.bootstrap, undefined);
-  assert.deepEqual(await auth.setupStatus(), { needsSetup: false });
+  assert.deepEqual(await auth.setupStatus(), { needsSetup: false, access: null });
   pass('PS2: no active superadmin is not "first account" — public signup stays level 1 and pending');
   console.log(`${count} shared-phone test account scenarios passed`);
 } finally { if (prisma) await prisma.$disconnect(); await new Promise(r => server.close(r)); await db.close(); }

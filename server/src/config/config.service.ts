@@ -67,7 +67,7 @@ export class ConfigService {
       vertical,
       verticalLabel: VERTICALS[vertical].label,
       /// چرخهٔ عمرِ تجاریِ شرکت (دمو/مهلت/معلق) — حساب‌شده در میان‌افزار، برای بنرِ پوسته. کلاینت روز نمی‌شمارد.
-      access: this.tenantContext.current()?.access ?? null,
+      access: this.tenantContext?.current?.()?.access ?? null,
       /**
        * نوعِ نصب و بستهٔ خدمات (`tenant-profile.ts`). `vertical` برای
        * سازگاری می‌ماند و برای شرکت همیشه خدمتِ اصلی است.
