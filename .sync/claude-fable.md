@@ -1,13 +1,33 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: idle
-branch: claude/tenant-access
+status: active
+branch: claude/tenant-vertical-and-fixes
 since: 2026-10-07
-paths: []
+paths:
+  - server/prisma/control/
+  - server/src/platform/
+  - server/src/tenant/
+  - server/src/config/
+  - server/src/scripts/
+  - server/src/ai/
+  - server/src/sms/
+  - server/src/patients/orders.service.ts
+  - server/src/patients/intake.service.ts
+  - src/app/PlatformAdmin.jsx
+  - src/app/platform.css
+  - src/app/Intake.jsx
+  - src/app/VisitDocs.jsx
+  - src/app/Assistant.jsx
+  - src/pages/Intake.jsx
+  - src/pages/BookingPick.jsx
+  - src/ui/DynForm.jsx
+  - src/ui/dynform.css
+  - src/lib/identity.js
+  - scripts/e2e/
+  - docs/
 note: >-
-  چرخهٔ عمرِ تجاریِ شرکت در پنلِ پلتفرم (فعال/معلق، دمو/اشتراک، مهلت، یادداشت؛ اعمال در میان‌افزار؛ بنر در اپ)
-  با 438659b + 93d5e88 + 28d0e0b روی main رفت و رانِ ۶۵۳ سبز شد. بررسیِ آمادگیِ فروش به مطب در STATUS.
-  بعدی: پاسخِ مالک به چهار بندِ عملیاتی (volume/پشتیبان/پیامک/روالِ راه‌اندازی).
+  نوعِ کسب‌وکارِ هر tenant (شرکت/مطب) روی خودِ tenant، چهار اصلاحِ UI با عکسِ مالک (نامِ فرم، پیستِ +98،
+  نمایشِ نوبتِ انتخاب‌شده، پخشِ ویسِ مشاوره)، بررسیِ دستیارِ هوشمند، پیامک، خودسنجیِ ذخیره‌سازی/پشتیبان.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
