@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/commo
 import { PrismaClient } from '@prisma/client';
 import { ControlPrismaService } from '../tenant/control-prisma.service';
 import { decryptDatabaseUrl } from '../tenant/tenant-crypto';
+import { tenantAccess } from '../tenant/tenant-access';
 import { SmsService } from '../sms/sms.service';
 import { sendReminders } from './send-reminders';
 import { expireProvisional } from '../accounts/provisional';
@@ -66,11 +67,15 @@ export class RemindersWorkerService implements OnModuleInit, OnModuleDestroy {
     try {
       const tenants = await this.control.tenant.findMany({
         where: { status: 'active' },
-        select: { slug: true, databaseUrlEncrypted: true },
+        select: { slug: true, databaseUrlEncrypted: true, plan: true, accessUntil: true, suspendedAt: true },
       });
       for (const t of tenants) {
+        /* چرخهٔ عمرِ تجاری (`tenant-access.ts`، همان قاعدهٔ میان‌افزار): شرکتِ معلق هیچ کاری نمی‌گیرد
+           و شرکتِ منقضی پیامک نمی‌فرستد — اعتبارِ پیامک برای حسابی که بسته یا تمام شده نمی‌سوزد. */
+        const access = tenantAccess(t);
+        if (access.state === 'suspended') continue;
         try {
-          await this.sweepTenant(decryptDatabaseUrl(t.databaseUrlEncrypted), t.slug);
+          await this.sweepTenant(decryptDatabaseUrl(t.databaseUrlEncrypted), t.slug, { sendSms: !access.readOnly });
         } catch (e) {
           this.log.error(`sweep(${t.slug}) شکست خورد: ${e instanceof Error ? e.message : e}`);
         }
@@ -80,12 +85,14 @@ export class RemindersWorkerService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async sweepTenant(url: string, slug: string) {
+  private async sweepTenant(url: string, slug: string, opts: { sendSms: boolean } = { sendSms: true }) {
     const client = new PrismaClient({ datasources: { db: { url } }, log: [] });
     try {
       await expireProvisional(client);
-      const result = await sendReminders(client, this.sms);
-      if (result.due) this.log.log(`${slug}: ${result.sent}/${result.due} یادآوری فرستاده شد`);
+      if (opts.sendSms) {
+        const result = await sendReminders(client, this.sms);
+        if (result.due) this.log.log(`${slug}: ${result.sent}/${result.due} یادآوری فرستاده شد`);
+      }
       /* لایهٔ کار (W2.1): رویدادهای پردازش‌نشده ← کار. همان sweep، همان client. */
       /* W2.2: حالت‌های بیات (عملِ بی‌وضعیت، گزارشِ نیامده، مصرفِ تأییدنشده، فرمِ بی‌پاسخ) ← رویداد. */
       await detectStaleWork(client);

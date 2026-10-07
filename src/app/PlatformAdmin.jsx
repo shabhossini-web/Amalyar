@@ -5,6 +5,7 @@ import Mark from '../components/Mark.jsx';
 import './platform.css';
 import Overlay from '../ui/Overlay.jsx';
 import { Caret, Hospital } from '../ui/icons.jsx';
+import { isoToJStr, jStrToIso, jToFa } from '../lib/jalali.js';
 
 const API = typeof window === 'undefined' ? '/api/platform' : `${window.location.origin}/api/platform`;
 
@@ -69,6 +70,28 @@ const TENANT_STATUS = {
   deleting: ['در حال حذف', 'fail'],
 };
 
+/**
+ * چرخهٔ عمرِ تجاری (دسترسی) — متن و رنگِ بج از `tenant.access`ِ سرور ساخته می‌شود:
+ * وضعیت، روزهای مانده و پیام همان‌جا حساب شده‌اند و پنل خودش روز نمی‌شمارد (قانونِ ۱۵).
+ */
+function accessText(a) {
+  if (!a) return '';
+  const until = a.accessUntil ? jToFa(isoToJStr(a.accessUntil)) : '';
+  if (a.state === 'suspended') return 'معلق';
+  if (a.state === 'expired') return `منقضی · فقط‌خواندنی${until ? ` (از ${until})` : ''}`;
+  const left = a.daysLeft == null ? 'بی‌مهلت' : a.daysLeft === 0 ? 'امروز آخرین روز' : `${jToFa(a.daysLeft)} روز مانده`;
+  if (a.plan === 'demo') return `دمو · ${left}${until ? ` (تا ${until})` : ''}`;
+  return a.daysLeft != null ? `اشتراک تا ${until} · ${left}` : 'اشتراک · بی‌مهلت';
+}
+function accessBadge(tenant) {
+  const a = tenant?.access;
+  if (!a) return null;
+  if (a.state === 'suspended' || a.state === 'expired') return [accessText(a), 'fail'];
+  if (a.plan === 'demo' || (a.daysLeft != null && a.daysLeft <= 14)) return [accessText(a), 'warn'];
+  if (a.daysLeft != null) return [accessText(a), 'ok'];
+  return null; // اشتراکِ بی‌مهلت: همان «فعال»ِ ساخت کافی است
+}
+
 const faDate = (value) => value ? new Intl.DateTimeFormat('fa-IR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : '—';
 const faNum = (value) => String(value ?? '').replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
 const toEn = (value) => String(value ?? '').replace(/[۰-۹]/g, (d) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d)).replace(/[^0-9]/g, '');
@@ -106,11 +129,17 @@ export default function PlatformAdmin() {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [snapshot, setSnapshot] = useState(EMPTY_SNAPSHOT);
-  const [form, setForm] = useState({ name: '', slug: '', hostname: '' });
+  const [form, setForm] = useState({ name: '', slug: '', hostname: '', plan: 'paid', accessDays: '' });
   const [hostnameEdited, setHostnameEdited] = useState(false);
 
   // نشانیِ سایتِ یک شرکت — افزودن و اصلی‌کردن، برگشت به نشانیِ قبلی، حذفِ نشانیِ فرعی
   const [addrFor, setAddrFor] = useState(null);
+  // دسترسیِ یک شرکت — فعال/معلق، دمو/اشتراک، مهلت، یادداشت (خواستهٔ مالک ۱۴۰۵/۰۷/۱۵)
+  const [accessFor, setAccessFor] = useState(null);
+  const accessChanged = (next) => {
+    setSnapshot((snap) => ({ ...snap, tenants: snap.tenants.map((t) => (t.id === next.id ? { ...t, ...next } : t)) }));
+    setAccessFor((cur) => (cur && cur.id === next.id ? { ...cur, ...next } : cur));
+  };
   /** کارتِ همان شرکت با پاسخِ سرور تازه می‌شود — بی‌بارگذاریِ دوبارهٔ کلِ پنل. */
   const domainsChanged = (next) => setSnapshot((snap) => ({
     ...snap,
@@ -151,7 +180,8 @@ export default function PlatformAdmin() {
   const stats = useMemo(() => {
     const all = [...snapshot.jobs, ...snapshot.deletions];
     return {
-      active: snapshot.tenants.filter((t) => t.status === 'active').length,
+      /* «فعال» = ساخته‌شده و معلق‌نشده؛ شرکتِ معلق جایی جز بجِ خودش شمرده نمی‌شود. */
+      active: snapshot.tenants.filter((t) => t.status === 'active' && t.access?.state !== 'suspended').length,
       building: snapshot.tenants.filter((t) => t.status !== 'active').length,
       failed: all.filter((j) => j.status === 'failed').length,
       queued: all.filter((j) => j.status === 'queued' || j.status === 'running').length,
@@ -292,9 +322,12 @@ export default function PlatformAdmin() {
           name: form.name.trim(),
           slug: form.slug.trim(),
           hostname: form.hostname.trim().toLowerCase(),
+          plan: form.plan,
+          /* دمو بی‌مدت معنا ندارد (پیش‌فرض ۱۴ روز)؛ اشتراکِ بی‌عدد = بی‌مهلت. */
+          accessDays: form.accessDays ? Number(form.accessDays) : (form.plan === 'demo' ? 14 : null),
         },
       });
-      setForm({ name: '', slug: '', hostname: '' });
+      setForm({ name: '', slug: '', hostname: '', plan: 'paid', accessDays: '' });
       setHostnameEdited(false);
       setNotice(`درخواست ${job.slug} وارد صف شد.`);
       await load();
@@ -477,6 +510,25 @@ export default function PlatformAdmin() {
                 required
                 placeholder="sample-center.amalyar.com"
               />
+              <label htmlFor="pa-plan">نوعِ حساب</label>
+              <select
+                id="pa-plan"
+                value={form.plan}
+                onChange={(e) => setForm((s) => ({ ...s, plan: e.target.value, accessDays: e.target.value === 'demo' ? (s.accessDays || '14') : s.accessDays }))}
+              >
+                <option value="paid">اشتراک</option>
+                <option value="demo">نسخهٔ آزمایشی (دمو)</option>
+              </select>
+              <label htmlFor="pa-days">{form.plan === 'demo' ? 'مدتِ دمو (روز)' : 'مهلتِ اشتراک (روز؛ خالی = بی‌مهلت)'}</label>
+              <input
+                id="pa-days"
+                value={form.accessDays}
+                onChange={(e) => setForm((s) => ({ ...s, accessDays: toEn(e.target.value).slice(0, 4) }))}
+                inputMode="numeric"
+                dir="ltr"
+                placeholder={form.plan === 'demo' ? '14' : '—'}
+                required={form.plan === 'demo'}
+              />
               <button disabled={busy}>{busy ? 'در حال ثبت…' : 'ساخت امن شرکت'}</button>
               <p className="pa-hint">رمز دیتابیس در UI یا API نمایش داده نمی‌شود.</p>
             </form>
@@ -491,6 +543,7 @@ export default function PlatformAdmin() {
                 {snapshot.tenants.map((tenant) => {
                   const status = TENANT_STATUS[tenant.status] || [tenant.status, ''];
                   const removing = tenant.status === 'deleting';
+                  const acc = accessBadge(tenant);
                   return (
                     <article key={tenant.id} className="pa-row">
                       <div className="pa-row-main">
@@ -527,7 +580,18 @@ export default function PlatformAdmin() {
                         <small>ساخته‌شده {faDate(tenant.createdAt)}</small>
                       </div>
                       <div className="pa-row-side">
-                        <span className={`pa-badge ${status[1]}`}>{status[0]}</span>
+                        {/* یک بج برای هر کارت: «معلق»/«دمو · N روز» جای «فعال» را می‌گیرد — دو بجِ هم‌زمانِ «فعال» و «معلق» گیج‌کننده بود. */}
+                        {(!acc || tenant.status !== 'active') && <span className={`pa-badge ${status[1]}`}>{status[0]}</span>}
+                        {acc && <span className={`pa-badge ${acc[1]}`} data-access={tenant.access?.state}>{acc[0]}</span>}
+                        <button
+                          type="button"
+                          className="pa-soft"
+                          disabled={busy || tenant.status !== 'active'}
+                          onClick={() => setAccessFor(tenant)}
+                          title="فعال/معلق، دمو یا اشتراک، مهلت و یادداشت"
+                        >
+                          دسترسی
+                        </button>
                         <button
                           type="button"
                           className="pa-soft"
@@ -653,6 +717,9 @@ export default function PlatformAdmin() {
       )}
 
       <AnimatePresence>
+        {accessFor && (
+          <TenantAccessDialog tenant={accessFor} onClose={() => setAccessFor(null)} onChanged={accessChanged} />
+        )}
         {addrFor && (
           <TenantDomainsDialog tenant={addrFor} onClose={() => setAddrFor(null)} onChanged={domainsChanged} />
         )}
@@ -887,6 +954,123 @@ function TenantDomainsDialog({ tenant, onClose, onChanged }) {
             </>
           )}
           <p>کاربران روی نشانیِ تازه یک بار دوباره وارد می‌شوند و اثرِ انگشت را همان‌جا از نو ثبت می‌کنند.</p>
+        </div>
+      )}
+    </Overlay>
+  );
+}
+
+/** مهلت‌های سریع — از امروز به بعد؛ تاریخِ نهایی را اپراتور می‌بیند و می‌تواند دستی عوض کند. */
+const QUICK_DAYS = [[7, 'یک هفته'], [14, '۱۴ روز'], [30, 'یک ماه'], [90, 'سه ماه'], [365, 'یک سال']];
+
+/**
+ * دسترسیِ یک شرکت (خواستهٔ مالک ۱۴۰۵/۰۷/۱۵): فعال/معلق، دمو/اشتراک، مهلت، یادداشت.
+ * تاریخ شمسی تایپ می‌شود و میلادیِ آن به سرور می‌رود؛ وضعیت و روزهای مانده را سرور
+ * برمی‌گرداند و همان نشان داده می‌شود. معلق = هیچ درخواستی پذیرفته نمی‌شود؛ منقضی =
+ * فقط‌خواندنی. هیچ‌کدام داده‌ای پاک نمی‌کند.
+ */
+function TenantAccessDialog({ tenant, onClose, onChanged }) {
+  const a = tenant.access || {};
+  const [suspended, setSuspended] = useState(Boolean(a.suspended));
+  const [plan, setPlan] = useState(a.plan === 'demo' ? 'demo' : 'paid');
+  const [untilJ, setUntilJ] = useState(a.accessUntil ? isoToJStr(a.accessUntil) : '');
+  const [note, setNote] = useState(tenant.accessNote || '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [saved, setSaved] = useState(null);
+
+  const plusDays = (n) => {
+    const d = new Date();
+    d.setDate(d.getDate() + n);
+    setUntilJ(isoToJStr(d));
+    setError('');
+  };
+  const iso = untilJ.trim() ? jStrToIso(untilJ) : null;
+  const badDate = Boolean(untilJ.trim()) && !iso;
+
+  const save = async () => {
+    if (badDate) { setError('تاریخِ مهلت نامعتبر است (مثال: ۱۴۰۵/۰۸/۱۵)'); return; }
+    setBusy(true);
+    setError('');
+    try {
+      const next = await platformApi(`/tenants/${tenant.id}/access`, {
+        method: 'POST', csrf: true, body: { suspended, plan, accessUntil: iso, note: note.trim() || null },
+      });
+      onChanged(next);
+      setSaved(next.access);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Overlay
+      backdrop="pa-modal-bg"
+      panel="pa-card pa-modal pa-access"
+      as="section"
+      onClose={onClose}
+      closable={!busy}
+      role="dialog" aria-modal="true" aria-labelledby="pa-access-title"
+    >
+      <h2 id="pa-access-title">دسترسیِ {tenant.name}</h2>
+      <p className="pa-modal-sub">
+        حسابِ معلق هیچ درخواستی را نمی‌پذیرد و کاربران هنگامِ ورود علت را می‌بینند. پس از پایانِ مهلت،
+        سامانه فقط برای مشاهده باز می‌ماند؛ هیچ داده‌ای پاک نمی‌شود.
+      </p>
+
+      <label className="pa-access-row">
+        <input type="checkbox" checked={!suspended} onChange={(e) => setSuspended(!e.target.checked)} disabled={busy} />
+        <span>حساب فعال است</span>
+        {suspended && <em>معلق</em>}
+      </label>
+
+      <label htmlFor="pa-access-plan">نوعِ حساب</label>
+      <select id="pa-access-plan" value={plan} onChange={(e) => setPlan(e.target.value)} disabled={busy}>
+        <option value="paid">اشتراک</option>
+        <option value="demo">نسخهٔ آزمایشی (دمو)</option>
+      </select>
+
+      <label htmlFor="pa-access-until">مهلت تا (شمسی)</label>
+      <input
+        id="pa-access-until"
+        value={untilJ}
+        onChange={(e) => { setUntilJ(e.target.value); setError(''); }}
+        dir="ltr"
+        inputMode="numeric"
+        placeholder="۱۴۰۵/۰۸/۱۵ — خالی یعنی بی‌مهلت"
+        disabled={busy}
+        aria-invalid={badDate || undefined}
+      />
+      <div className="pa-chips" role="group" aria-label="مهلتِ سریع">
+        {QUICK_DAYS.map(([n, label]) => (
+          <button key={n} type="button" className="pa-chip" disabled={busy} onClick={() => plusDays(n)}>{label}</button>
+        ))}
+        <button type="button" className="pa-chip" disabled={busy} onClick={() => { setUntilJ(''); setError(''); }}>بی‌مهلت</button>
+      </div>
+
+      <label htmlFor="pa-access-note">یادداشت (فقط اپراتور می‌بیند)</label>
+      <textarea
+        id="pa-access-note"
+        value={note}
+        onChange={(e) => setNote(e.target.value.slice(0, 300))}
+        rows={2}
+        maxLength={300}
+        placeholder="مثلاً: پرداختِ شش‌ماهه در ۱۴۰۵/۰۷/۱۵"
+        disabled={busy}
+      />
+
+      <div className="pa-modal-actions">
+        <button type="button" className="pa-ghost" onClick={onClose} disabled={busy}>بستن</button>
+        <button type="button" className="pa-primary-btn" onClick={save} disabled={busy || badDate}>
+          {busy ? 'در حالِ ذخیره…' : 'ذخیره'}
+        </button>
+      </div>
+      {error && <div className="pa-modal-err">{error}</div>}
+      {saved && (
+        <div className="pa-addr-next pa-access-sum" role="status">
+          <b>ذخیره شد.</b> وضعیتِ فعلی: {accessText(saved)}
         </div>
       )}
     </Overlay>

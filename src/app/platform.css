@@ -332,3 +332,35 @@
   font-size: 12px; color: var(--text2); cursor: pointer;
 }
 .pa-ai-toggle input { width: 15px; height: 15px; accent-color: var(--brand-2); cursor: pointer; }
+
+/* ── دسترسی (چرخهٔ عمرِ تجاری): بجِ هشدار + دیالوگ ── */
+.pa-badge.warn { color: var(--amber-text); background: rgba(245, 158, 11, .12); border-color: rgba(245, 158, 11, .32); }
+.pa-access { width: min(520px, 100%); text-align: right; }
+.pa-access h2, .pa-access .pa-modal-sub { text-align: center; }
+/* همان قابِ ورودیِ دیالوگ، برای select و textarea */
+.pa-access select, .pa-access textarea {
+  width: 100%; height: 50px; padding: 0 15px; border-radius: 13px; font: inherit; outline: none;
+  color: #fff; text-align: center; letter-spacing: 2px;
+  background: rgba(var(--surface-rgb), .62); border: 1px solid rgba(251, 113, 133, .28);
+  text-align: right; letter-spacing: normal; border-color: rgba(103, 232, 249, .3);
+}
+.pa-access textarea { height: auto; min-height: 72px; padding: 10px 15px; line-height: 1.8; resize: vertical; }
+.pa-access input { text-align: left; letter-spacing: normal; border-color: rgba(103, 232, 249, .3); }
+.pa-access input[aria-invalid="true"] { border-color: #fb7185; }
+.pa-access select:focus, .pa-access textarea:focus { border-color: #67e8f9; box-shadow: 0 0 0 3px rgba(103, 232, 249, .12); }
+.pa-access-row {
+  display: flex; align-items: center; gap: 10px; margin: 0 0 16px; padding: 12px 14px; border-radius: 13px;
+  background: rgba(var(--surface-rgb), .62); border: 1px solid rgba(103, 232, 249, .3); font-size: 13px; cursor: pointer;
+}
+.pa-access-row input { width: 20px; height: 20px; margin: 0; accent-color: #67e8f9; cursor: pointer; }
+.pa-access-row span { font-weight: 800; color: var(--text1); }
+.pa-access-row em { margin-inline-start: auto; font-style: normal; font-size: 12px; font-weight: 800; color: var(--red-text); }
+.pa-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 14px; }
+.pa-chip {
+  font: inherit; font-size: 12px; font-weight: 700; padding: 7px 12px; min-height: 36px; border-radius: 999px; cursor: pointer;
+  color: var(--text1); background: rgba(103, 232, 249, .08); border: 1px solid rgba(103, 232, 249, .3);
+}
+.pa-chip:hover { background: rgba(103, 232, 249, .16); }
+.pa-chip:disabled { opacity: .45; cursor: default; }
+.pa-access-sum { text-align: right; }
+@media (pointer: coarse) { .pa-chip { min-height: 44px; } }

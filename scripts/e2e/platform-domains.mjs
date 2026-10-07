@@ -100,9 +100,11 @@ try {
       added: { hostname: posted.hostname, automatic: !custom },
     });
   });
-  ok(await solo.locator('.pa-soft').count() === 1, 'دکمهٔ «تغییرِ نشانی» روی کارتِ شرکت هست');
+  /* کارت حالا دو دکمهٔ `.pa-soft` دارد («دسترسی» و «تغییرِ نشانی»)؛ با نام پیدا می‌شود، نه با کلاس. */
+  const addrBtn = (row) => row.getByRole('button', { name: 'تغییرِ نشانی' });
+  ok(await addrBtn(solo).count() === 1, 'دکمهٔ «تغییرِ نشانی» روی کارتِ شرکت هست');
   if (shots) await p.screenshot({ path: `${shots}/platform-domain-list.png` });
-  await solo.locator('.pa-soft').click();
+  await addrBtn(solo).click();
   const dlg = p.locator('.pa-addr');
   await dlg.waitFor({ timeout: 5000 });
   ok(await dlg.locator('.pa-addr-list li').count() === 1, 'پنجره نشانیِ فعلی را نشان می‌دهد');
@@ -144,7 +146,7 @@ try {
     removed = JSON.parse(r.request().postData() || '{}');
     await json(r, { id: 't-solo', hostname: 'drnew.amalyar.com', shared: false, domains: [{ hostname: 'drnew.amalyar.com', primary: true }] });
   });
-  await soloAfter.locator('.pa-soft').click();
+  await addrBtn(soloAfter).click();
   const dlg2 = p.locator('.pa-addr');
   await dlg2.waitFor({ timeout: 5000 });
   await dlg2.locator('.pa-addr-del').click();
@@ -159,7 +161,7 @@ try {
 
   console.log('\n۸) گوشی: پنجره در عرضِ ۳۹۰ جا می‌شود');
   await p.setViewportSize({ width: 390, height: 844 });
-  await p.locator('.pa-row', { hasText: 'کلینیکِ دو‌دامنه' }).locator('.pa-soft').click();
+  await addrBtn(p.locator('.pa-row', { hasText: 'کلینیکِ دو‌دامنه' })).click();
   const dlg3 = p.locator('.pa-addr');
   await dlg3.waitFor({ timeout: 5000 });
   /* پنجره با محوشدن/بزرگ‌شدن باز می‌شود؛ اندازه و عکس بعد از پایانِ حرکت، نه وسطش. */

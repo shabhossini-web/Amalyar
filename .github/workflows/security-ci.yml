@@ -3248,6 +3248,42 @@ jobs:
       - name: Verify one appointment state machine
         run: node scripts/verify-state-machine.js
 
+      # چرخهٔ عمرِ تجاریِ شرکت (خواستهٔ مالک ۱۴۰۵/۰۷/۱۵): معلق → ۴۰۳ همه‌جا جز setup-status؛
+      # منقضی → فقط‌خواندنی. قاعده فقط در `tenant-access.ts` است و فقط میان‌افزار اعمالش می‌کند؛
+      # کلاینت روز نمی‌شمارد و وضعیت نمی‌سازد — همه را از سرور می‌خواند (قانونِ ۱۵).
+      - name: Verify tenant lifecycle is enforced once, in the middleware, and never derived in the client
+        run: |
+          set -e
+          node -e "
+          const fs = require('fs');
+          const read = (p) => fs.readFileSync(p, 'utf8');
+          const bad = [];
+          const mw = read('server/src/tenant/tenant.middleware.ts');
+          if (!/tenantAccess\(/.test(mw) || !/tenant_suspended/.test(mw) || !/tenant_read_only/.test(mw)) bad.push('میان‌افزارِ tenant چرخهٔ عمر را اعمال نمی‌کند (tenantAccess / tenant_suspended / tenant_read_only)');
+          if (!/SUSPENDED_ALLOW/.test(mw)) bad.push('شرکتِ معلق باید setup-status را بگذراند تا صفحهٔ ورود علت را بگوید');
+          const reg = read('server/src/tenant/tenant-registry.service.ts');
+          if (!/suspendedAt/.test(reg) || !/accessUntil/.test(reg)) bad.push('رجیستری چرخهٔ عمر را همراهِ شرکت نمی‌فرستد');
+          if (!/access:/.test(read('server/src/config/config.service.ts'))) bad.push('/config وضعیتِ دسترسی را نمی‌دهد (بنرِ پوسته کور می‌شود)');
+          if (!/access/.test(read('server/src/auth/auth.service.ts').match(/async setupStatus\(\)[\s\S]*?\n  }/)?.[0] ?? '')) bad.push('setup-status وضعیتِ دسترسی را نمی‌دهد (صفحهٔ ورودِ شرکتِ معلق کور می‌شود)');
+          const worker = read('server/src/scripts/provisioning-worker.ts');
+          if (!/normalizePlan\(/.test(worker) || !/accessUntil/.test(worker)) bad.push('Worker نوعِ حساب و مهلتِ اولیهٔ درخواست را روی شرکتِ تازه نمی‌نویسد');
+          // قاعده یک خانه دارد: هیچ سرویسِ دیگری suspendedAt را تفسیر نمی‌کند
+          const { execSync } = require('child_process');
+          const files = execSync(\"grep -rl 'suspendedAt' server/src --include=*.ts\", { encoding: 'utf8' }).split('\n').filter(Boolean);
+          const allowed = new Set(['server/src/tenant/tenant-access.ts', 'server/src/tenant/tenant-registry.service.ts', 'server/src/tenant/tenant-context.ts', 'server/src/platform/platform.module.ts', 'server/src/reminders/reminders-worker.service.ts']);
+          for (const f of files) if (!allowed.has(f) && !f.startsWith('server/src/generated/')) bad.push('suspendedAt بیرون از خانه‌اش تفسیر شده: ' + f);
+          // workerِ یادآوری همان قاعده را صدا می‌زند: شرکتِ معلق sweep نمی‌شود، منقضی پیامک نمی‌فرستد
+          const rw = read('server/src/reminders/reminders-worker.service.ts');
+          if (!/tenantAccess\(/.test(rw) || !/'suspended'/.test(rw) || !/sendSms/.test(rw)) bad.push('workerِ یادآوری چرخهٔ عمر را رعایت نمی‌کند (اعتبارِ پیامک برای شرکتِ معلق/منقضی می‌سوزد)');
+          // کلاینت روز نمی‌شمارد و حالتِ دسترسی نمی‌سازد («readOnly» نامِ عمومیِ propهاست و این‌جا ملاک نیست)
+          for (const f of execSync(\"grep -rlE 'daysLeft|tenant_suspended|tenant_read_only' src --include=*.jsx --include=*.js || true\", { encoding: 'utf8' }).split('\n').filter(Boolean)) {
+            const src = read(f).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+            if (/(^|[^.\w])daysLeft\s*[:=][^=]/.test(src) || /tenant_(suspended|read_only)/.test(src)) bad.push('کلاینت وضعیتِ دسترسی را خودش می‌سازد: ' + f);
+          }
+          if (bad.length) { console.error('چرخهٔ عمرِ شرکت:\n  ' + bad.join('\n  ')); process.exit(1); }
+          console.log('tenant lifecycle ok — یک قاعده، یک جای اعمال، کلاینت فقط می‌خواند');
+          "
+
       # «امروز» به وقتِ مطب، نه کانتینر: سرورِ UTC و کاربرِ تهران هر شب
       # ۳:۳۰ ساعت یک روز اختلاف داشتند و دکمهٔ «شروع» از کلِ میزِ پذیرش
       # غیب می‌شد، بی‌هیچ خطایی.

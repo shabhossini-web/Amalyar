@@ -22,10 +22,26 @@ export class TenantRegistryService {
       include: { tenant: true },
     });
     if (!domain || domain.tenant.status !== 'active') return null;
+    return this.shape(domain.tenant);
+  }
+
+  /**
+   * چرخهٔ عمرِ تجاری همراهِ شرکت می‌رود (معلق/دمو/مهلت — `tenant-access.ts`) تا
+   * میان‌افزار همان‌جا تصمیم بگیرد. عمداً این‌جا به ۴۰۴ ترجمه نمی‌شود: «شرکتی
+   * نیست» و «حسابِ شرکت غیرفعال است» دو پیامِ متفاوت به کاربر می‌دهند.
+   */
+  private shape(tenant: {
+    id: string; slug: string; name: string; databaseUrlEncrypted: string;
+    plan: string; accessUntil: Date | null; suspendedAt: Date | null;
+  }) {
     return {
-      tenantId: domain.tenant.id,
-      tenantSlug: domain.tenant.slug,
-      databaseUrl: decryptDatabaseUrl(domain.tenant.databaseUrlEncrypted),
+      tenantId: tenant.id,
+      tenantSlug: tenant.slug,
+      tenantName: tenant.name,
+      databaseUrl: decryptDatabaseUrl(tenant.databaseUrlEncrypted),
+      plan: tenant.plan,
+      accessUntil: tenant.accessUntil,
+      suspendedAt: tenant.suspendedAt,
     };
   }
 
@@ -60,10 +76,6 @@ export class TenantRegistryService {
     const tenant = await this.control.tenant.findUnique({ where: { slug } });
     if (!tenant || tenant.status !== 'active') return null;
     this.log.warn(`پیش‌فرضِ توسعه: میزبانِ «${hostname || '—'}» به شرکتِ «${slug}» نگاشت شد. در production این مسیر بسته است.`);
-    return {
-      tenantId: tenant.id,
-      tenantSlug: tenant.slug,
-      databaseUrl: decryptDatabaseUrl(tenant.databaseUrlEncrypted),
-    };
+    return this.shape(tenant);
   }
 }

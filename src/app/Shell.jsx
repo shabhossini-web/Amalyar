@@ -12,6 +12,7 @@ import { Search } from '../ui/icons.jsx';
 import './launcher.css';
 import './shell.css';
 import Toast, { useToast } from '../ui/Toast.jsx';
+import { isoToJStr, jToFa } from '../lib/jalali.js';
 
 /**
  * پوستهٔ سراسریِ سامانه (W2.4) — یک نوارِ ثابت بالای **همهٔ** صفحاتِ `/app`:
@@ -56,6 +57,7 @@ export default function Shell() {
         </div>
       </header>
       <InstallBanner onToast={setToast} />
+      <AccessBanner />
       <GlobalSearch open={searchOpen} onOpen={() => setSearchOpen(true)} onClose={() => setSearchOpen(false)} />
       <Outlet />
       <Toast msg={toast} />
@@ -74,6 +76,48 @@ const dismissed = () => { try { return !!localStorage.getItem(A2HS_KEY); } catch
  * گوش می‌دهد و بنر زیرِ نوار، داخلِ جریانِ صفحه می‌نشیند — نه شناورِ پایین، که روی «+»ِ
  * «امروز» و توست بیفتد.
  */
+/**
+ * بنرِ چرخهٔ عمرِ تجاریِ شرکت (خواستهٔ مالک ۱۴۰۵/۰۷/۱۵) — نسخهٔ آزمایشی، مهلتِ رو به پایان،
+ * یا اشتراکِ منقضی (فقط‌خواندنی). همه‌چیز از `config.access`ِ سرور می‌آید: وضعیت، روزهای
+ * مانده و متنِ پیام همان‌جا حساب شده و پوسته فقط نشانش می‌دهد (قانونِ ۱۵).
+ * مثلِ بنرِ نصب داخلِ جریانِ صفحه است و بلندی‌اش را در `--access-h` می‌گذارد تا صفحه‌های
+ * تمام‌قد آن را هم از `100dvh` کم کنند.
+ */
+function AccessBanner() {
+  const { access } = useConfig();
+  const ref = useRef(null);
+  const show = Boolean(access) && (
+    access.state === 'expired' || access.plan === 'demo' || (access.daysLeft != null && access.daysLeft <= 14)
+  );
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const root = document.documentElement;
+    const measure = () => {
+      const top = parseFloat(getComputedStyle(el).marginTop) || 0;
+      root.style.setProperty('--access-h', `${Math.ceil(el.getBoundingClientRect().height + top)}px`);
+    };
+    measure();
+    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    return () => { ro?.disconnect(); root.style.removeProperty('--access-h'); };
+  }, [show]);
+  if (!show) return null;
+  const until = access.accessUntil ? jToFa(isoToJStr(access.accessUntil)) : '';
+  const left = access.daysLeft == null ? 'بی‌مهلت' : access.daysLeft === 0 ? 'امروز آخرین روز است' : `${jToFa(access.daysLeft)} روز مانده`;
+  let tone = 'warn';
+  let text;
+  if (access.state === 'expired') { tone = 'danger'; text = access.message; }
+  else if (access.plan === 'demo') text = `نسخهٔ آزمایشی (دمو) · ${left}${until ? ` (تا ${until})` : ''}`;
+  else text = `اشتراک تا ${until} · ${left}`;
+  return (
+    <div ref={ref} className={`sh-access ${tone}`} role="status" data-access={access.state}>
+      <span>{text}</span>
+      {access.state !== 'expired' && <small>برای تمدید با عمل‌یار تماس بگیرید.</small>}
+    </div>
+  );
+}
+
 function InstallBanner({ onToast }) {
   const [evt, setEvt] = useState(null);
   const ref = useRef(null);

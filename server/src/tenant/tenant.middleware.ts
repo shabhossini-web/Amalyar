@@ -1,8 +1,9 @@
-import { Injectable, NestMiddleware, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NestMiddleware, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import type { NextFunction, Request, Response } from 'express';
 import { TenantContext } from './tenant-context';
 import { TenantRegistryService } from './tenant-registry.service';
 import { TenantMigratorService } from './tenant-migrator.service';
+import { readOnlyAllows, SUSPENDED_ALLOW, tenantAccess } from './tenant-access';
 
 @Injectable()
 export class TenantMiddleware implements NestMiddleware {
@@ -34,8 +35,22 @@ export class TenantMiddleware implements NestMiddleware {
         'به‌روزرسانیِ دیتابیسِ این شرکت ناتمام مانده است؛ لطفاً با پشتیبانی تماس بگیرید.',
       );
     }
+    /**
+     * چرخهٔ عمرِ تجاری (`tenant-access.ts`) — این‌جا و فقط این‌جا اعمال می‌شود:
+     *  - معلق: هیچ چیزی به دیتابیسِ شرکت نمی‌رسد، جز `setup-status` که صفحهٔ ورود
+     *    با آن علت را می‌گوید. ۴۰۳ است نه ۴۰۴: شرکت هست، حسابش بسته است.
+     *  - منقضی: خواندن آزاد، نوشتن ۴۰۳ — داده قفل می‌شود، گم نمی‌شود؛ ورود و خروج
+     *    همچنان کار می‌کند تا کاربر پرونده‌ها را ببیند و تمدید کند.
+     */
+    const access = tenantAccess(tenant);
+    if (access.state === 'suspended' && !(req.method === 'GET' && SUSPENDED_ALLOW.test(req.path))) {
+      throw new ForbiddenException({ statusCode: 403, message: access.message, code: 'tenant_suspended' });
+    }
+    if (access.readOnly && !readOnlyAllows(req.method, req.path)) {
+      throw new ForbiddenException({ statusCode: 403, message: access.message, code: 'tenant_read_only' });
+    }
     // میزبانِ درخواست همراهِ context می‌رود تا سرویس‌های وابسته به دامنه
     // (پس‌کی و WebOTP) به‌جای یک دامنهٔ ثابت، دامنهٔ همان شرکت را ببینند.
-    this.context.run({ ...tenant, hostname }, next);
+    this.context.run({ ...tenant, hostname, access }, next);
   }
 }

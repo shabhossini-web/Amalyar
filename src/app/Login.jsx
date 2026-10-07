@@ -28,6 +28,8 @@ export default function Login() {
   // اینجا می‌رسد، پس باید صریح بگوییم شرکتی وجود ندارد — نه اینکه فرمِ ورودِ
   // ظاهراً سالم نشان دهیم که کاربر بی‌نتیجه در آن رمز بزند.
   const [tenantMissing, setTenantMissing] = useState(false);
+  /* حسابِ شرکت معلق است — پیامِ سرور (`setup-status.access`)؛ نه فرمِ ورود، نه ثبت‌نام. */
+  const [blocked, setBlocked] = useState('');
   const [err, setErr] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -147,7 +149,14 @@ export default function Login() {
     (async () => {
       try {
         const s = await api('/auth/setup-status', { auth: false });
-        if (alive && s?.needsSetup) {
+        if (!alive) return;
+        /* چرخهٔ عمرِ تجاری (`tenant-access.ts`): معلق → صفحهٔ بسته؛ منقضی → ورود فقط برای مشاهده. */
+        if (s?.access?.state === 'suspended') {
+          setBlocked(s.access.message || 'حسابِ این شرکت غیرفعال شده است.');
+          return;
+        }
+        if (s?.access?.state === 'expired') setErr(s.access.message || 'مهلتِ اشتراکِ این شرکت به پایان رسیده است.');
+        if (s?.needsSetup) {
           setFirstAdmin(true);
           setTab('signup');
         }
@@ -329,6 +338,31 @@ export default function Login() {
       {node}
     </label>
   );
+
+  // حسابِ معلق: سرور هیچ درخواستی جز همین وضعیت را نمی‌پذیرد — فقط علت و راهِ تماس.
+  if (blocked) {
+    return (
+      <div className="lg theme-dark">
+        <div className="lg-bg" aria-hidden="true" />
+        <div className="lg-orbs" aria-hidden="true"><span className="orb o1" /><span className="orb o2" /></div>
+        <div className="glass lg-card">
+          <span className="glass-glow" aria-hidden="true" />
+          <header className="lg-brand">
+            <Mark className="lg-mark" gradient aria-hidden="true" />
+            <div className="lg-word">عمل<span className="grad-text">‌یار</span></div>
+          </header>
+          <div className="lg-done" data-access="suspended">
+            <div className="lg-done-ic" aria-hidden="true">
+              <Info size={26} strokeWidth={2} />
+            </div>
+            <h2>حسابِ این شرکت غیرفعال است</h2>
+            <p>{blocked}</p>
+            <a className="lg-btn" href="https://amalyar.com" style={{ display: 'block', textAlign: 'center', lineHeight: '52px', textDecoration: 'none' }}>رفتن به سایت عمل‌یار</a>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // دامنهٔ ناشناخته: نه فرمِ ورود، نه ثبت‌نام — فقط یک پیامِ روشن.
   if (tenantMissing) {

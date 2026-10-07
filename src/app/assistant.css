@@ -4,7 +4,7 @@
    اسکرول‌شونده یعنی کادرِ نوشتن همیشه پایینِ صفحه‌نما چسبیده است. `--install-h` = بنرِ نصبِ اپ
    زیرِ نوار، وقتی هست (`Shell.jsx`، R7). */
 .as {
-  position: relative; height: calc(100dvh - var(--shell-h) - var(--install-h, 0px)); min-height: 360px;
+  position: relative; height: calc(100dvh - var(--shell-h) - var(--install-h, 0px) - var(--access-h, 0px)); min-height: 360px;
   display: flex; flex-direction: column; padding: 20px 14px calc(14px + env(safe-area-inset-bottom, 0px)); color: var(--text1);
   /* گفتگو ستونِ «فرم/خواندن»ِ استاندارد است (shell-15)؛ سربرگ و بلوک‌ها از همین می‌خوانند. */
   --page-w: var(--maxw-form);

@@ -111,3 +111,14 @@
 }
 .gs-new:hover { background: rgba(var(--brand-rgb), 0.18); }
 .gs-new:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+/* ── بنرِ چرخهٔ عمرِ شرکت (دمو / مهلتِ رو به پایان / منقضی) — داخلِ جریان، زیرِ نوار، مثلِ بنرِ نصب.
+   رنگ از جفتِ `--kind-*` تا در هر دو تم خوانا بماند؛ متن از `--amber-text` / `--red-text`. ── */
+.sh-access {
+  max-width: var(--maxw); margin: 10px auto 0; width: calc(100% - 32px);
+  display: flex; align-items: center; flex-wrap: wrap; gap: 4px 12px;
+  padding: 9px 14px; border-radius: 14px; font-size: 13px; font-weight: 700; line-height: 1.8;
+}
+.sh-access.warn { color: var(--amber-text); background: rgba(var(--kind-amber), 0.12); border: 1px solid rgba(var(--kind-amber), 0.38); }
+.sh-access.danger { color: var(--red-text); background: rgba(var(--kind-rose), 0.12); border: 1px solid rgba(var(--kind-rose), 0.42); }
+.sh-access small { font-weight: 500; color: var(--text2); }

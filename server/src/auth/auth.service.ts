@@ -91,7 +91,11 @@ export class AuthService {
   }
 
   async setupStatus() {
-    return { needsSetup: await hasNoAccounts(this.prisma) };
+    const access = this.tenantContext.current()?.access ?? null;
+    /* شرکتِ معلق: دیتابیسش را نمی‌خوانیم (میان‌افزار فقط همین مسیر را گذرانده تا
+       صفحهٔ ورود علت را بگوید)، پس «نیازِ به راه‌اندازی» هم معنایی ندارد. */
+    if (access?.state === 'suspended') return { needsSetup: false, access };
+    return { needsSetup: await hasNoAccounts(this.prisma), access };
   }
 
   // ── ثبت‌نام: مرحلهٔ ۱ — ارسالِ کدِ یکبارمصرف ────────────────

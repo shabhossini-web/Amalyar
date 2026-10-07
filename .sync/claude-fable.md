@@ -1,13 +1,29 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: idle
-branch: claude/consumables
-since: 2026-10-04
-paths: []
+status: active
+branch: claude/tenant-access
+since: 2026-10-07
+paths:
+  - server/prisma/control/
+  - server/src/tenant/
+  - server/src/platform/
+  - server/src/scripts/provisioning-worker.ts
+  - server/src/config/config.service.ts
+  - server/src/auth/auth.service.ts
+  - src/app/PlatformAdmin.jsx
+  - src/app/platform.css
+  - src/app/Shell.jsx
+  - src/app/shell.css
+  - src/app/assistant.css
+  - src/app/chat.css
+  - scripts/e2e/ci-live.txt
+  - src/app/Login.jsx
+  - src/app/config.jsx
+  - scripts/e2e/tenant-access.mjs
+  - scripts/e2e/tenant-access-ui.mjs
 note: >-
-  بستهٔ جِ طرحِ انبار/ست (ثبتِ مصرفیِ کارشناس با پیش‌فرضِ شخصی + شمارشِ راننده هنگامِ جمع‌آوری) روی main رفت
-  (b42f51a) و دو نگهبانِ قرمزِ CI (دفترِ فقط‌افزودنی، موجودی موقعِ ارسال) هم با آن رفع شد. طرحِ ده‌بندیِ
-  انبار/ست/تحویل/مصرفی (الف، ب، ج) تمام است؛ ران‌های قرمزِ ۶۴۹ تا ۶۵۱ با 8caf0b9 و 1831a02 رفع شد؛ بعدی: بازخوردِ مالک.
+  چرخهٔ عمرِ شرکت در پنلِ پلتفرم (خواستهٔ مالک ۱۴۰۵/۰۷/۱۵): فعال/معلق، مهلتِ اشتراک، حالتِ دمو با
+  تاریخِ پایان، یادداشت؛ اعمال در میان‌افزارِ tenant (معلق → ۴۰۳، منقضی → فقط‌خواندنی) و بنر در اپ.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.

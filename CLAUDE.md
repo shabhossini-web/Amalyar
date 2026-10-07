@@ -238,6 +238,19 @@ SaaSِ مدیریتِ شرکت‌های خدمات/تجهیزاتِ جراحی. 
     می‌نویسد. (تصمیمِ مالک ۱۴۰۵/۰۷/۰۴: «طبقِ اصولِ محرمانگی، دادهٔ خصوصی — نه».) نگهبان:
     گامِ «private conversations stay private» در CI + سوییتِ `superadmin-portals`.
 
+30. **چرخهٔ عمرِ تجاریِ شرکت فقط در control-db است و فقط میان‌افزار اعمالش می‌کند:**
+    `tenants.plan` (demo | paid)، `access_until`، `suspended_at`، `access_note` —
+    جدا از `status` که چرخهٔ **ساخت** است. تنها خانهٔ قاعده
+    `server/src/tenant/tenant-access.ts` است: معلق → ۴۰۳ برای همه‌چیز جز
+    `GET /api/auth/setup-status` (تا صفحهٔ ورود علت را بگوید)؛ مهلتِ گذشته →
+    فقط‌خواندنی (خواندن آزاد، نوشتن ۴۰۳، ورود/خروج مجاز؛ هیچ داده‌ای پاک نمی‌شود).
+    فقط پنلِ پلتفرم می‌نویسد (`POST /platform/tenants/:id/access`، با ممیزیِ
+    قبل/بعد) و «روزهای مانده» را سرور می‌شمارد (تفاضلِ تاریخِ تقویمیِ تهران) و
+    `/config` و `setup-status` می‌دهند؛ پوسته و پنل فقط نشان می‌دهند. درخواستِ
+    ساخت هم نوعِ حساب و مهلتِ اولیه را حمل می‌کند تا دموی ۱۴ روزه از همان لحظهٔ
+    ساخت فعال باشد. نگهبان: گامِ «tenant lifecycle» در CI؛ سنجه‌ها:
+    `scripts/e2e/tenant-access.mjs` و `tenant-access-ui.mjs`.
+
 ## ساختارِ کلیدی
 
 | مسیر | نقش |
@@ -253,6 +266,7 @@ SaaSِ مدیریتِ شرکت‌های خدمات/تجهیزاتِ جراحی. 
 | `server/src/auth/feature.*` · `permission.*` | گاردِ ماژول (Feature) و گاردِ عملیات (Permission) — قانون ۳ |
 | `server/src/tenant/*` · `prisma/control/*` | هستهٔ مالتی‌تننت: middleware (Host→tenant)، Prisma-proxyِ per-tenant، control-DB، رمزنگاری URL |
 | `server/src/platform/*` · `scripts/provisioning-worker.ts` | کنسولِ Platform Admin (بک‌اند) + Workerِ ساختِ خودکارِ DB/role |
+| `server/src/tenant/tenant-access.ts` | چرخهٔ عمرِ تجاریِ شرکت (معلق/دمو/مهلت) — تنها خانهٔ قاعده؛ اعمال در `tenant.middleware.ts`، نوشتن از پنلِ پلتفرم (قانون ۳۰) |
 | `server/src/audit/*` | ثبتِ رویدادهای حساس (AuditEvent per-tenant) |
 | `server/src/patients/subforms.ts` · `src/app/VisitSubforms.jsx` | زیرفرم‌های الصاقیِ مراجعه (داخلی: علائمِ حیاتی/درخواستِ پاراکلینیک؛ فرم‌ساز: `scope=subform`) + منتخب‌های شخصی (`/auth/prefs`، `src/app/usePrefs.jsx`). ⚠️ در **فرمِ عمل** هر الصاق مرحلهٔ خودش را دارد (`phase`: pre/intra/post، اجباری) و کارتش داخلِ تبِ همان مرحله است؛ غیرجراحی مرحله ندارد |
 | `src/app/Waitlist.jsx` · `server/src/patients/waitlist.*` | «فهرستِ انتظارِ عمل» (ماژولِ `waitlist`، فقط مطب): ردیف‌ها از «تصمیم: عمل»ِ ویزیت‌ها، وضعیت‌ها (منتظرِ برنامه/بی‌تاریخ/رزروشده/بسته‌شده) **مشتقِ سرور**؛ بستن/بازکردنِ تصمیم با دلیل. عملِ «هنوز تاریخ ندارد» = جراحیِ در انتظارِ بی‌تاریخ (`enrich().undated`)، نه ستون |

@@ -17,6 +17,7 @@ import { FEATURES } from '../auth/access-registry';
 import { seedFeatureRows } from '../features/features.service';
 import { SITE_SECTIONS, sectionPlanFor } from '../site/site.registry';
 import { SettingsService } from './settings.service';
+import { TenantContext } from '../tenant/tenant-context';
 import { CANCEL_REASONS, cancelSms } from '../common/cancel-reasons';
 import { LEVEL } from '../common/levels';
 
@@ -30,7 +31,12 @@ const KEY_VERTICAL = 'vertical';
  */
 @Injectable()
 export class ConfigService {
-  constructor(private prisma: PrismaService, private audit: AuditService, private settings: SettingsService) {}
+  constructor(
+    private prisma: PrismaService,
+    private audit: AuditService,
+    private settings: SettingsService,
+    private tenantContext: TenantContext,
+  ) {}
 
   private async read(key: string): Promise<string | null> {
     const row = await this.prisma.setting.findUnique({ where: { key } });
@@ -60,6 +66,8 @@ export class ConfigService {
     return {
       vertical,
       verticalLabel: VERTICALS[vertical].label,
+      /// چرخهٔ عمرِ تجاریِ شرکت (دمو/مهلت/معلق) — حساب‌شده در میان‌افزار، برای بنرِ پوسته. کلاینت روز نمی‌شمارد.
+      access: this.tenantContext.current()?.access ?? null,
       /**
        * نوعِ نصب و بستهٔ خدمات (`tenant-profile.ts`). `vertical` برای
        * سازگاری می‌ماند و برای شرکت همیشه خدمتِ اصلی است.

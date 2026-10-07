@@ -16,6 +16,14 @@ model Tenant {
   status               String         @default("provisioning")
   databaseUrlEncrypted String         @map("database_url_encrypted")
   databaseKeyVersion   Int            @default(1) @map("database_key_version")
+  /// چرخهٔ عمرِ تجاری — جدا از `status` که چرخهٔ **ساخت** است (provisioning/active/deleting).
+  /// فقط پنلِ پلتفرم می‌نویسد؛ میان‌افزارِ tenant اعمال می‌کند (`tenant-access.ts`):
+  /// `suspendedAt` → ۴۰۳ برای همهٔ درخواست‌ها؛ `accessUntil` گذشته → فقط‌خواندنی.
+  /// `plan`: demo | paid — «دمو» فقط برچسبِ بنر است؛ مهلت را `accessUntil` تعیین می‌کند.
+  plan                 String         @default("paid")
+  accessUntil          DateTime?      @map("access_until")
+  suspendedAt          DateTime?      @map("suspended_at")
+  accessNote           String?        @map("access_note")
   createdAt            DateTime       @default(now()) @map("created_at")
   updatedAt            DateTime       @default(now()) @updatedAt @map("updated_at")
   domains              TenantDomain[]
@@ -72,6 +80,10 @@ model ProvisioningJob {
   requestedByHash String    @map("requested_by_hash")
   errorCode       String?   @map("error_code")
   attempts        Int       @default(0)
+  /// نوعِ حساب و مهلتِ اولیه که Worker هنگامِ ساختِ شرکت روی آن می‌نویسد
+  /// (دمو ۱۴ روزه از همان لحظهٔ ساخت فعال است، بی‌نیاز از یک مرحلهٔ دستیِ دوم).
+  plan            String    @default("paid")
+  accessDays      Int?      @map("access_days")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
   startedAt       DateTime? @map("started_at")

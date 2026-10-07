@@ -24,12 +24,13 @@ import {
 } from '@nestjs/common';
 import { createHmac, randomBytes, randomInt, timingSafeEqual } from 'crypto';
 import type { Request, Response } from 'express';
-import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Length, Matches, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString, Length, Matches, Max, MaxLength, Min, ValidateIf } from 'class-validator';
 import { SECTORS, SECTOR_LABELS } from '../patients/service-codes.service';
 import { RateLimitService } from '../common/rate-limit.service';
 import { sanitizeWebOtpHost } from '../common/webotp';
 import { SmsService } from '../sms/sms.service';
 import { ControlPrismaService } from '../tenant/control-prisma.service';
+import { endOfDayTehran, normalizePlan, TENANT_PLANS, tenantAccess } from '../tenant/tenant-access';
 import {
   normalizePlatformPhone,
   platformAdminConfig,
@@ -114,6 +115,46 @@ class CreateProvisioningJobDto {
   @IsString()
   @Matches(/^(?=.{4,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/)
   hostname!: string;
+
+  /** نوعِ حساب از همان لحظهٔ ساخت — دموی ۱۴ روزه بی‌نیاز از مرحلهٔ دستیِ دوم (`tenant-access.ts`). */
+  @IsOptional()
+  @IsIn([...TENANT_PLANS], { message: 'نوعِ حساب باید «دمو» یا «اشتراک» باشد' })
+  plan?: string;
+
+  /** مهلتِ اولیه به روز؛ خالی یعنی بی‌مهلت. */
+  @IsOptional()
+  @ValidateIf((o) => o.accessDays !== null)
+  @IsInt({ message: 'مهلت باید عددِ صحیحِ روز باشد' })
+  @Min(1, { message: 'مهلت دست‌کم یک روز است' })
+  @Max(3650, { message: 'مهلت بیش از ده سال نمی‌شود' })
+  accessDays?: number | null;
+}
+
+/**
+ * چرخهٔ عمرِ تجاریِ یک شرکتِ ساخته‌شده: فعال/معلق، نوعِ حساب، مهلت، یادداشت.
+ * هر فیلد اختیاری است و فقط فیلدهای فرستاده‌شده عوض می‌شوند.
+ */
+class TenantAccessDto {
+  @IsOptional()
+  @IsBoolean({ message: 'وضعیتِ تعلیق باید درست/نادرست باشد' })
+  suspended?: boolean;
+
+  @IsOptional()
+  @IsIn([...TENANT_PLANS], { message: 'نوعِ حساب باید «دمو» یا «اشتراک» باشد' })
+  plan?: string;
+
+  /** `YYYY-MM-DD` میلادی (پایانِ همان روز به وقتِ تهران) یا `null` برای بی‌مهلت. */
+  @IsOptional()
+  @ValidateIf((o) => o.accessUntil !== null)
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'تاریخِ مهلت باید به شکلِ YYYY-MM-DD باشد' })
+  accessUntil?: string | null;
+
+  @IsOptional()
+  @ValidateIf((o) => o.note !== null)
+  @IsString()
+  @MaxLength(300, { message: 'یادداشت بیش از ۳۰۰ نویسه نمی‌شود' })
+  note?: string | null;
 }
 
 class DeleteTenantDto {
@@ -572,6 +613,8 @@ export class PlatformProvisioningService {
     tenantId: true,
     errorCode: true,
     attempts: true,
+    plan: true,
+    accessDays: true,
     createdAt: true,
     updatedAt: true,
     startedAt: true,
@@ -588,6 +631,10 @@ export class PlatformProvisioningService {
           name: true,
           status: true,
           createdAt: true,
+          plan: true,
+          accessUntil: true,
+          suspendedAt: true,
+          accessNote: true,
           /**
            * **همهٔ** دامنه‌ها، نه فقط primary.
            *
@@ -621,21 +668,88 @@ export class PlatformProvisioningService {
       }),
     ]);
     return {
-      tenants: tenants.map((tenant) => ({
-        id: tenant.id,
-        slug: tenant.slug,
-        name: tenant.name,
-        status: tenant.status,
-        hostname: tenant.domains.find((d) => d.primary)?.hostname ?? tenant.domains[0]?.hostname ?? null,
-        /* آرایهٔ کامل — کلاینت نباید دوباره چیزی را استنتاج کند (قانون ۱۵). */
-        domains: tenant.domains.map((d) => ({ hostname: d.hostname, primary: d.primary })),
-        /* «این شرکت از بیش از یک نشانی سرو می‌شود» — پرچمِ مشتق، سمتِ سرور. */
-        shared: tenant.domains.length > 1,
-        createdAt: tenant.createdAt,
-      })),
+      tenants: tenants.map((tenant) => this.shapeTenant(tenant)),
       jobs: [...openJobs, ...doneJobs],
       deletions: await this.deletionJobs(),
     };
+  }
+
+  /** شکلِ یگانهٔ یک شرکت برای پنل — snapshot و پاسخِ تغییرِ دسترسی یکی‌اند. */
+  private shapeTenant(tenant: {
+    id: string; slug: string; name: string; status: string; createdAt: Date;
+    plan: string; accessUntil: Date | null; suspendedAt: Date | null; accessNote: string | null;
+    domains: { hostname: string; primary: boolean }[];
+  }) {
+    return {
+      id: tenant.id,
+      slug: tenant.slug,
+      name: tenant.name,
+      status: tenant.status,
+      hostname: tenant.domains.find((d) => d.primary)?.hostname ?? tenant.domains[0]?.hostname ?? null,
+      /* آرایهٔ کامل — کلاینت نباید دوباره چیزی را استنتاج کند (قانون ۱۵). */
+      domains: tenant.domains.map((d) => ({ hostname: d.hostname, primary: d.primary })),
+      /* «این شرکت از بیش از یک نشانی سرو می‌شود» — پرچمِ مشتق، سمتِ سرور. */
+      shared: tenant.domains.length > 1,
+      createdAt: tenant.createdAt,
+      plan: tenant.plan,
+      accessUntil: tenant.accessUntil,
+      suspendedAt: tenant.suspendedAt,
+      accessNote: tenant.accessNote,
+      /* وضعیتِ حساب‌شده (معلق/منقضی/فعال، روزهای مانده) — همان چیزی که میان‌افزار اعمال می‌کند. */
+      access: tenantAccess(tenant),
+    };
+  }
+
+  /* بدونِ `as const`: آرایهٔ فقط‌خواندنیِ `orderBy` با نوعِ Prisma نمی‌خواند؛ جهتِ مرتب‌سازی literal می‌ماند. */
+  private tenantShapeSelect = {
+    id: true, slug: true, name: true, status: true, createdAt: true,
+    plan: true, accessUntil: true, suspendedAt: true, accessNote: true,
+    domains: {
+      orderBy: [{ primary: 'desc' as const }, { hostname: 'asc' as const }],
+      select: { hostname: true, primary: true },
+    },
+  };
+
+  /**
+   * چرخهٔ عمرِ تجاریِ یک شرکت (خواستهٔ مالک ۱۴۰۵/۰۷/۱۵): فعال/معلق، دمو/اشتراک، مهلت، یادداشت.
+   * فقط فیلدهای فرستاده‌شده عوض می‌شوند؛ قبل/بعد در ممیزی می‌نشیند. شرکتِ در حالِ حذف دست نمی‌خورد.
+   */
+  async setAccess(tenantId: string, dto: TenantAccessDto, actorHash: string, ipHash: string) {
+    const tenant = await this.control.tenant.findUnique({ where: { id: tenantId }, select: this.tenantShapeSelect });
+    if (!tenant) throw new NotFoundException('شرکت یافت نشد');
+    if (tenant.status === 'deleting') throw new ConflictException('این شرکت در حالِ حذف است');
+
+    const data: { plan?: string; accessUntil?: Date | null; suspendedAt?: Date | null; accessNote?: string | null } = {};
+    if (dto.plan !== undefined) data.plan = normalizePlan(dto.plan);
+    if (dto.accessUntil !== undefined) {
+      if (dto.accessUntil === null) data.accessUntil = null;
+      else {
+        const until = endOfDayTehran(dto.accessUntil);
+        if (!until) throw new BadRequestException('تاریخِ مهلت نامعتبر است');
+        data.accessUntil = until;
+      }
+    }
+    if (dto.suspended !== undefined) {
+      /* تعلیقِ دوباره تاریخِ اول را نگه می‌دارد: «از کِی بسته است» نباید با هر ذخیره جابه‌جا شود. */
+      data.suspendedAt = dto.suspended ? (tenant.suspendedAt ?? new Date()) : null;
+    }
+    if (dto.note !== undefined) data.accessNote = dto.note ? dto.note.trim().slice(0, 300) || null : null;
+
+    const before = { plan: tenant.plan, accessUntil: tenant.accessUntil, suspendedAt: tenant.suspendedAt, accessNote: tenant.accessNote };
+    const updated = await this.control.$transaction(async (tx) => {
+      const row = await tx.tenant.update({ where: { id: tenantId }, data, select: this.tenantShapeSelect });
+      await tx.platformAuditEvent.create({
+        data: {
+          actorHash, action: 'platform.tenant.access_changed', targetType: 'tenant', targetId: tenantId, ipHash,
+          metadata: {
+            before,
+            after: { plan: row.plan, accessUntil: row.accessUntil, suspendedAt: row.suspendedAt, accessNote: row.accessNote },
+          },
+        },
+      });
+      return row;
+    });
+    return this.shapeTenant(updated);
   }
 
   async job(id: string) {
@@ -671,8 +785,10 @@ export class PlatformProvisioningService {
       );
     }
 
+    const plan = normalizePlan(dto.plan);
+    const accessDays = dto.accessDays ?? null;
     const job = await this.control.provisioningJob.create({
-      data: { slug, name, hostname, requestedByHash: actorHash },
+      data: { slug, name, hostname, requestedByHash: actorHash, plan, accessDays },
       select: this.jobSelect,
     });
     await this.control.platformAuditEvent.create({
@@ -682,7 +798,7 @@ export class PlatformProvisioningService {
         targetType: 'provisioning_job',
         targetId: job.id,
         ipHash,
-        metadata: { slug, hostname },
+        metadata: { slug, hostname, plan, accessDays },
       },
     });
     return job;
@@ -1188,6 +1304,18 @@ export class PlatformController {
    * نشانی‌های سایتِ یک شرکت — افزودن (و اصلی‌کردن)، اصلی‌کردنِ نشانیِ موجود، حذفِ نشانیِ
    * فرعی. هیچ‌کدام داده را جابه‌جا نمی‌کند؛ فقط این‌که کدام Host به این شرکت برسد.
    */
+  /**
+   * چرخهٔ عمرِ تجاریِ شرکت — فعال/معلق، دمو/اشتراک، مهلت، یادداشت. هیچ داده‌ای جابه‌جا
+   * نمی‌شود؛ فقط این‌که میان‌افزار با درخواست‌های این شرکت چه کند (`tenant-access.ts`).
+   */
+  @Post('tenants/:id/access')
+  @HttpCode(200)
+  @UseGuards(PlatformSessionGuard, PlatformCsrfGuard)
+  setAccess(@Param('id') id: string, @Body() dto: TenantAccessDto, @Req() req: Request) {
+    const session = (req as any).platformSession;
+    return this.provisioning.setAccess(id, dto, session.phoneHash, this.auth.ipHash(requestIp(req)));
+  }
+
   @Post('tenants/:id/domains')
   @HttpCode(200)
   @UseGuards(PlatformSessionGuard, PlatformCsrfGuard)

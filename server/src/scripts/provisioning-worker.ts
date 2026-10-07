@@ -3,6 +3,7 @@ import { randomBytes } from 'crypto';
 import { promisify } from 'util';
 import { PrismaClient } from '../generated/control';
 import { decryptDatabaseUrl, encryptDatabaseUrl } from '../tenant/tenant-crypto';
+import { endOfDayTehran, normalizePlan, tehranDatePlusDays } from '../tenant/tenant-access';
 
 const execFileAsync = promisify(execFile);
 let stopping = false;
@@ -101,6 +102,8 @@ async function provision(control: PrismaClient, job: Awaited<ReturnType<typeof c
     await migrateTenant(tenantUrl.toString());
 
     const tenant = await control.$transaction(async (tx) => {
+      /* نوعِ حساب و مهلتِ اولیه از خودِ درخواست می‌آید — دموی ۱۴ روزه از همین لحظه فعال است. */
+      const accessDays = job.accessDays ?? null;
       const created = await tx.tenant.create({
         data: {
           slug: job.slug,
@@ -108,6 +111,8 @@ async function provision(control: PrismaClient, job: Awaited<ReturnType<typeof c
           status: 'active',
           databaseUrlEncrypted: encryptDatabaseUrl(tenantUrl.toString()),
           domains: { create: { hostname: job.hostname, primary: true } },
+          plan: normalizePlan(job.plan),
+          accessUntil: accessDays ? endOfDayTehran(tehranDatePlusDays(accessDays)) : null,
         },
         select: { id: true },
       });
