@@ -139,6 +139,35 @@ try {
     ok(sql(`SELECT array_to_string(tests, ',') FROM lab_orders WHERE visit_id=${visit.id} ORDER BY id DESC LIMIT 1`).includes('ESR'),
       'تیکِ انتخابی ذخیره شد');
 
+    /* ارسالِ ناموفقِ پیامک: سفارش ذخیره است، علتِ واقعی دیده می‌شود، شیت باز می‌ماند و «ثبت و ارسال»ِ دوباره همان سفارش
+       را می‌فرستد — نه سفارشِ دوم (تا امروز `order` در شیت تهی می‌ماند و POST دوباره می‌زد). */
+    await page.goto(BASE + `/app/dashboard?patient=${visit.id}`);
+    await page.waitForFunction(() => document.querySelector('[data-order-new="lab"]'), null, { timeout: 15000 });
+    await page.locator('[data-order-new="lab"]').click();
+    await page.locator('.od-sheet').waitFor({ timeout: 8000 });
+    await page.locator('.od-sheet .od-chip', { hasText: 'CBC' }).first().click();
+    let sendCalls = 0;
+    const REASON = 'ملی‌پیامک پیام را نپذیرفت: اعتبارِ پنلِ پیامک کافی نیست (کدِ ۲)';
+    await page.route('**/api/orders/lab/*/send', async (route) => {
+      sendCalls++;
+      if (sendCalls === 1) {
+        await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ statusCode: 503, message: REASON }) });
+      } else await route.continue();
+    });
+    const posts = [];
+    page.on('request', (rq) => { if (rq.method() === 'POST' && /\/api\/orders\/lab$/.test(rq.url())) posts.push(rq.url()); });
+    await page.locator('.od-sheet .od-send').click();
+    await page.getByText(/سفارش ثبت شد ولی ارسالِ پیامک ناموفق بود/).first().waitFor({ timeout: 8000 });
+    ok(await page.getByText(/اعتبارِ پنلِ پیامک کافی نیست/).count() >= 1, '**علتِ واقعیِ ردِ پیامک به کارمند نشان داده شد، نه پیامِ کلی**');
+    ok(await page.locator('.od-sheet').count() === 1, 'شیت باز ماند تا همان سفارش دوباره فرستاده شود');
+    ok(Number(sql(`SELECT count(*) FROM lab_orders WHERE visit_id=${visit.id}`)) === 3, 'سفارش با وجودِ ردِ پیامک ذخیره شد');
+    await page.locator('.od-sheet .od-send').click();
+    await page.locator('.od-sheet').waitFor({ state: 'detached', timeout: 10000 });
+    ok(posts.length === 1, `**«ثبت و ارسال»ِ دوباره سفارشِ دومی نساخت** (POST ${posts.length}، باید ۱)`);
+    ok(Number(sql(`SELECT count(*) FROM lab_orders WHERE visit_id=${visit.id}`)) === 3, 'در پایگاه‌داده هنوز سه سفارش است (بی‌تکرار)');
+    ok(sendCalls === 2, 'ارسالِ دوم به همان سفارش رفت');
+    await page.unroute('**/api/orders/lab/*/send');
+
     /* صفحهٔ عمومی در مرورگرِ واقعی. */
     await page.goto(BASE + `/o/${token}`);
     await page.waitForTimeout(1800);

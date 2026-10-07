@@ -219,6 +219,11 @@ jobs:
           if grep -rn "sendForStaff" src/auth src/platform; then
             echo "مسیرِ عمومی نباید علتِ داخلیِ پیامک را نشان دهد"; exit 1
           fi
+          # و برعکس: دکمه‌های پنلِ کارکنان (لینکِ سفارش، خلاصه، پورتال) باید از sendForStaff بگذرند؛ `send`ِ مستقیم همان
+          # ۵۰۳ِ کلیِ عمومی را به کارمند می‌دهد (گزارشِ آمادگیِ فروش، بندِ ۳ — orders.service سال‌ها همین بود).
+          if grep -n "this\.sms\.send(" src/patients/orders.service.ts src/patients/summary.service.ts src/patients/portal.service.ts; then
+            echo "دکمهٔ پنلِ کارکنان باید از sendForStaff بگذرد، نه send"; exit 1
+          fi
           # گزارشِ عیب‌یابیِ پیامک (خطِ زمانیِ تلاش‌ها، زمانِ روشن‌شدنِ سرور) فقط برای ادمین به بالا.
           node -e "
           const s = require('fs').readFileSync('src/patients/summary.controller.ts', 'utf8');
@@ -227,6 +232,12 @@ jobs:
             console.error('گزارشِ عیب‌یابیِ پیامک باید پشتِ سطحِ ادمین باشد'); process.exit(1);
           }
           "
+      # قراردادِ دو سرویسِ واقعی (SmsService + OrdersService، دیتابیسِ جعلی): ردِ ملی‌پیامک در production علتِ واقعی را به
+      # کارمند می‌رساند، «نرفت» و کارِ «ارسالِ دوباره» را ثبت می‌کند و سفارشِ نرفته را «ارسال‌شده» نمی‌کند؛ نتیجهٔ نامعلوم
+      # و خطای برنامه چیزی ثبت نمی‌کنند.
+      - name: Verify order send reaches staff with the real SMS reason and records failures
+        run: node scripts/e2e/orders-send-unit.mjs
+
       - name: Verify generated control client
         working-directory: server
         run: test -f src/generated/control/index.js
@@ -3284,6 +3295,42 @@ jobs:
           console.log('tenant lifecycle ok — یک قاعده، یک جای اعمال، کلاینت فقط می‌خواند');
           "
 
+      # نوعِ نصب (مطب/شرکتی) هنگامِ ساخت تعیین می‌شود (خواستهٔ مالک ۱۴۰۵/۰۷/۱۵) و **یک‌بار، پیش از اولین حساب** در دیتابیسِ خودِ
+      # tenant می‌نشیند: Worker از `seedTenantProfile` می‌گذرد (پیش از ثبتِ شرکت در control-db)، گذارِ ماژول‌ها فقط
+      # `applyProfileFeatures` است (هم «ذخیره» در تنظیماتِ شرکت هم ساخت — یک پیاده‌سازی)، ردیف‌های `vertical/services` فقط از
+      # `profileSettingRows` نوشته می‌شوند، و پنل نوعِ **فعلی** را از خودِ tenant می‌خواند — نه نسخه‌ای در دیتابیسِ مرکزی که کهنه شود.
+      - name: Verify the install kind is seeded once at creation and read from the tenant itself
+        run: |
+          set -e
+          node -e "
+          const fs = require('fs');
+          const read = (p) => fs.readFileSync(p, 'utf8');
+          const bad = [];
+          const worker = read('server/src/scripts/provisioning-worker.ts');
+          if (!/assertJobProfile\\(/.test(worker) || !/seedTenantProfile\\(/.test(worker)) bad.push('Worker نوعِ نصب را اعتبارسنجی و در دیتابیسِ tenant نمی‌کارد');
+          if (worker.indexOf('seedTenantProfile(') > worker.indexOf('tx.tenant.create(')) bad.push('نوعِ نصب باید پیش از ثبتِ شرکت در control-db کاشته شود (وگرنه اولین ورود با نوعِ پیش‌فرض می‌رسد)');
+          if (worker.indexOf('seedTenantProfile(') < worker.indexOf('migrateTenant(')) bad.push('نوع پیش از migration کاشته شده؛ ردیف‌های ماژول هنوز نیست');
+          const feat = read('server/src/features/features.service.ts');
+          if ((feat.match(/export async function applyProfileFeatures/g) || []).length !== 1) bad.push('applyProfileFeatures باید دقیقاً یک‌بار تعریف شود');
+          for (const f of ['server/src/config/config.service.ts', 'server/src/scripts/seed-profile.ts']) {
+            if (!/applyProfileFeatures\\(/.test(read(f))) bad.push(f + ' گذارِ ماژول‌ها را از applyProfileFeatures نمی‌گذراند');
+          }
+          const seed = read('server/src/scripts/seed-profile.ts');
+          if (!/TENANT_NOT_FRESH/.test(seed) || !/account\\.count\\(\\)/.test(seed)) bad.push('کاشتنِ نوع باید فقط روی دیتابیسِ بکر مجاز باشد (TENANT_NOT_FRESH)');
+          if (!/profileSettingRows\\(/.test(seed)) bad.push('ردیف‌های vertical/services باید از profileSettingRows نوشته شوند');
+          // نسخهٔ دومِ نوع در دیتابیسِ مرکزی ممنوع: مدلِ Tenant فیلدِ پروفایل ندارد (فقط ProvisioningJob درخواست را حمل می‌کند)
+          const schema = read('server/prisma/control/schema.prisma');
+          const tenantModel = (schema.match(/model Tenant \\{[\\s\\S]*?\\n\\}/) || [''])[0];
+          if (/profile/i.test(tenantModel.replace(/\\/\\/\\/.*$/gm, ''))) bad.push('مدلِ Tenant نوعِ نصب را نگه می‌دارد؛ منبعِ حقیقت خودِ tenant است');
+          const mod = read('server/src/platform/platform.module.ts');
+          if (!/TenantProfileProbe/.test(mod)) bad.push('پنل نوعِ فعلی را از خودِ tenant نمی‌خواند (TenantProfileProbe)');
+          // رابطِ ساخت: «نوعِ نصب» بدونِ پیش‌فرضِ پنهان و فرستادنِ kind/services
+          const ui = read('src/app/PlatformAdmin.jsx');
+          if (!/id=\"pa-kind\"/.test(ui) || !/kind: form\\.kind/.test(ui)) bad.push('فرمِ ساختِ شرکت نوعِ نصب را نمی‌گیرد/نمی‌فرستد');
+          if (bad.length) { console.error('نوعِ نصب هنگامِ ساخت:\\n  ' + bad.join('\\n  ')); process.exit(1); }
+          console.log('install kind ok — یک‌بار در tenant، پیش از اولین حساب، از خودِ tenant خوانده می‌شود');
+          "
+
       # «امروز» به وقتِ مطب، نه کانتینر: سرورِ UTC و کاربرِ تهران هر شب
       # ۳:۳۰ ساعت یک روز اختلاف داشتند و دکمهٔ «شروع» از کلِ میزِ پذیرش
       # غیب می‌شد، بی‌هیچ خطایی.
@@ -3497,6 +3544,15 @@ jobs:
       # فقط ماژول‌های روشنِ همان نصب را نشانی می‌دهد؛ هر مسیرِ آن در App.jsx هست و هر ماژولِ رجیستری مسیر دارد.
       - name: Verify the assistant guide is per install kind and matches the app routes
         run: node scripts/e2e/assistant-guide-unit.mjs
+      # ماندگاریِ فایل‌های آپلودی (گزارشِ آمادگیِ فروش، بندِ ۱): حکمِ ok/unproven/ephemeral/broken از شواهدِ mount و دفترِ
+      # کانتینرها، دفترِ خراب، ریشهٔ نوشتنی‌نشدنی، و اینکه پاسخِ آمادگی هیچ رازی نمی‌برد.
+      - name: Verify storage persistence self-check and platform readiness
+        run: node scripts/e2e/storage-health-unit.mjs
+      # پشتیبان‌گیری و تمرینِ بازگردانی روی Postgresِ واقعی (گزارشِ آمادگیِ فروش، بندِ ۲): نقش‌ها + دیتابیسِ مرکزی + شرکت‌ها +
+      # فایل‌ها پشتیبان گرفته و در سرورِ دیگرِ خالی برگردانده می‌شود؛ دامپ/فایلِ خراب، رمزِ غلط و سرورِ پُر باید قرمز شوند.
+      # در CI (Docker) همان مسیرِ production (`docker exec` + volume)؛ در سندباکسِ بی‌Docker با دو cluster محلی.
+      - name: Verify backup and restore drill on real Postgres
+        run: node scripts/e2e/backup-drill.mjs
       - name: Verify intake approval follows each submission's service and needs defined surgeon and hospital
         run: node scripts/e2e/company-services-local.mjs
       - name: Verify the intake queue shows each row's service and asks only when ambiguous

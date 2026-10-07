@@ -251,6 +251,38 @@ SaaSِ مدیریتِ شرکت‌های خدمات/تجهیزاتِ جراحی. 
     ساخت فعال باشد. نگهبان: گامِ «tenant lifecycle» در CI؛ سنجه‌ها:
     `scripts/e2e/tenant-access.mjs` و `tenant-access-ui.mjs`.
 
+31. **نوعِ نصب (مطب/شرکتی) هنگامِ ساخت تعیین می‌شود و فقط در خودِ tenant می‌نشیند:** فرمِ ساختِ شرکت در پنلِ پلتفرم
+    «نوعِ نصب» (و برای شرکتی خدمات) را **بی‌پیش‌فرضِ پنهان** می‌پرسد؛ Worker پیش از ثبتِ شرکت در control-db و پیش از
+    اولین درخواست آن را با `seedTenantProfile` (`server/src/scripts/seed-profile.ts`) در دو ردیفِ `vertical/services`ِ
+    دیتابیسِ همان شرکت می‌کارد، تا لانچر از روزِ اول درست باشد و بنیان‌گذارِ مطب هنگامِ ثبت‌نام `jobRole: doctor` بگیرد.
+    ⚠️ **سه تله که هر سه خورده شد:** (۱) migrationها ردیفِ بعضی ماژول‌ها را با نوعِ **پیش‌فرض** می‌سازند (`waitlist` در لحظهٔ
+    migration خاموش است) — پس کاشتنِ دو ردیف کافی نیست و گذارِ ماژول‌ها لازم است؛ (۲) آن گذار **یک پیاده‌سازی** دارد،
+    `applyProfileFeatures`، که هم ساخت هم «ذخیره» در تنظیماتِ شرکت از آن می‌گذرند؛ (۳) نسخهٔ دومِ نوع در دیتابیسِ مرکزی
+    ممنوع است (کهنه می‌شود) — پنل نوعِ **فعلی** را از خودِ tenant می‌خواند (`tenant-profile-probe.ts`) و `ProvisioningJob`
+    فقط درخواست را حمل می‌کند. کاشتن فقط روی دیتابیسِ بکر مجاز است (`TENANT_NOT_FRESH`). نگهبان: گامِ «install kind is
+    seeded once at creation» در CI؛ سنجه‌ها: `tenant-profile-create.mjs`، `tenant-access-ui.mjs`.
+
+32. **«آمادهٔ مشتریِ پولی» دیده می‌شود، حدس زده نمی‌شود — و پشتیبانِ بازگردانده‌نشده پشتیبان نیست:**
+    - **فایل‌های آپلودی:** ماندگاری با دو شاهد سنجیده و در نوارِ «آمادگیِ سامانه»ِ `/platform-admin` نشان داده می‌شود
+      (`storage-health.ts`، `platform-health.ts`): ریشه روی mountِ جدا است؟ و دفترِ کانتینرها (`<root>/.ledger`، کنارِ خودِ
+      فایل‌ها نه در DB) دو دیپلوی را دیده؟ **سبز فقط با اثبات** (دو کانتینر)؛ volume بدونِ اثبات کهربایی، و بی‌volume در production
+      قرمز است. ریشهٔ خراب هرگز بوت را نمی‌شکند. چیپِ «پشتیبان» عمداً «خارج از برنامه» است — **سبزِ ساختگی ممنوع**.
+    - **پشتیبان:** `scripts/ops/backup.sh` (نقش‌ها + هر دیتابیس + فایل‌ها، فهرست از خودِ Postgres، رمزنگاریِ اختیاری، FAILED در شکست)
+      و `restore-drill.sh` (بازگردانی در سرورِ دورریختنی و سنجشِ نقش‌ها، دیتابیسِ هر شرکتِ فعال و **هر فایلِ ارجاع‌شده**؛
+      هرگز روی سرورِ زنده نمی‌دود). راهنمای مالک: `docs/BACKUP-RESTORE.md`؛ روالِ مشتری: `docs/ONBOARDING-RUNBOOK.md`.
+      سنجه: `scripts/e2e/backup-drill.mjs` (Postgresِ واقعی؛ CI با Docker، سندباکس با دو cluster محلی).
+    - **پیامکِ دکمه‌های کارکنان:** `sendForStaff` (علتِ واقعیِ رد را می‌بیند)، نه `send`ِ مستقیم؛ ردِ قطعی در production **پرتاب**
+      می‌شود، پس هر فراخوان باید ثبتِ «نرفت» و کارِ «ارسالِ دوباره» را هم در همان شاخه بنویسد (`orders.service.ts`)؛ نتیجهٔ
+      **نامعلوم** (قطعِ شبکه) عمداً ثبت نمی‌شود چون شاید رفته باشد. نگهبان: `orders-send-unit.mjs` + grep در گامِ SMSِ CI.
+
+33. **دستیارِ هوشمند فقط راهنمای نصبِ خودش را می‌بیند:** `server/src/ai/assistant-knowledge.ts` بندهایی با برچسبِ `kind` و
+    `modules` است و `assistantGuide({kind, enabled})` فقط بندهایی را می‌دهد که **همهٔ** ماژول‌هایشان در همین نصب روشن است
+    («همه»، نه «یکی از» — بندِ چینش/پنلِ کارشناسی در شرکتِ فقط‌ایمپلنت به دو صفحهٔ ناموجود ارجاع می‌داد)؛ هویتِ دستیار و پیشنهادهای
+    شروعِ `Assistant.jsx` هم از نوعِ نصب می‌آید. **ماژولِ تازه = یک مسیر در `FEATURE_ROUTES` (و `App.jsx`) + یک بند در `GUIDE`**؛
+    هر چیزِ نوشته‌شده باید از کد/سند راستی‌آزمایی شده باشد (دستیار هر جمله را به مدیر «حقیقت» می‌گوید). نگهبان:
+    `scripts/e2e/assistant-guide-unit.mjs` (مسیرها با App.jsx، هر نصب فقط نشانیِ ماژول‌های روشنِ خودش، سیم‌کشیِ سرور و رابط)
+    و بندِ ۲بِ `ai-admin-assistant.mjs` (تعویضِ نوعِ نصب در سرورِ زنده راهنما را عوض می‌کند).
+
 ## ساختارِ کلیدی
 
 | مسیر | نقش |
@@ -266,6 +298,10 @@ SaaSِ مدیریتِ شرکت‌های خدمات/تجهیزاتِ جراحی. 
 | `server/src/auth/feature.*` · `permission.*` | گاردِ ماژول (Feature) و گاردِ عملیات (Permission) — قانون ۳ |
 | `server/src/tenant/*` · `prisma/control/*` | هستهٔ مالتی‌تننت: middleware (Host→tenant)، Prisma-proxyِ per-tenant، control-DB، رمزنگاری URL |
 | `server/src/platform/*` · `scripts/provisioning-worker.ts` | کنسولِ Platform Admin (بک‌اند) + Workerِ ساختِ خودکارِ DB/role |
+| `server/src/scripts/seed-profile.ts` · `server/src/platform/tenant-profile-probe.ts` | کاشتنِ نوعِ نصب در tenant هنگامِ ساخت (پیش از اولین حساب) و خواندنِ نوعِ فعلی از خودِ tenant برای پنل (قانون ۳۱) |
+| `server/src/storage/storage-health.ts` · `server/src/platform/platform-health.ts` | خودسنجیِ ماندگاریِ فایل‌ها + آمادگیِ سامانه (پیامکِ مشترک، نسخه) برای نوارِ `/platform-admin` (قانون ۳۲) |
+| `scripts/ops/backup.sh` · `restore-drill.sh` | پشتیبانِ کاملِ شبانه (نقش‌ها + دیتابیس‌ها + فایل‌ها) و تمرینِ بازگردانی در سرورِ دورریختنی؛ `docs/BACKUP-RESTORE.md` (قانون ۳۲) |
+| `server/src/ai/assistant-knowledge.ts` | راهنمای نسخه‌دارِ دستیار — بندها به نوعِ نصب و ماژولِ روشن گره‌اند، `FEATURE_ROUTES` با `App.jsx` یکی است (قانون ۳۳) |
 | `server/src/tenant/tenant-access.ts` | چرخهٔ عمرِ تجاریِ شرکت (معلق/دمو/مهلت) — تنها خانهٔ قاعده؛ اعمال در `tenant.middleware.ts`، نوشتن از پنلِ پلتفرم (قانون ۳۰) |
 | `server/src/audit/*` | ثبتِ رویدادهای حساس (AuditEvent per-tenant) |
 | `server/src/patients/subforms.ts` · `src/app/VisitSubforms.jsx` | زیرفرم‌های الصاقیِ مراجعه (داخلی: علائمِ حیاتی/درخواستِ پاراکلینیک؛ فرم‌ساز: `scope=subform`) + منتخب‌های شخصی (`/auth/prefs`، `src/app/usePrefs.jsx`). ⚠️ در **فرمِ عمل** هر الصاق مرحلهٔ خودش را دارد (`phase`: pre/intra/post، اجباری) و کارتش داخلِ تبِ همان مرحله است؛ غیرجراحی مرحله ندارد |

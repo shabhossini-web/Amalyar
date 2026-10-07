@@ -199,10 +199,15 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
   const save = async (thenSend) => {
     if (meta.hasDue && f.dueJ.trim() && !jStrToIso(f.dueJ)) { onToast('تاریخِ مهلت نامعتبر است'); return; }
     setBusy(true);
+    let saved = null;
     try {
-      const saved = order?.id
-        ? await api(`/orders/${kind}/${order.id}`, { method: 'PATCH', body: body() })
+      /* ⚠️ `ord` نه `order`: سفارشی که همین شیت ساخته به‌محضِ ساخت شناخته می‌شود. تا امروز ارسالِ ناموفقِ پیامک شیت را
+         باز می‌گذاشت و «ثبت و ارسال»ِ دوباره (با `order` هنوز تهی) **سفارشِ دومی** می‌ساخت. */
+      saved = ord?.id
+        ? await api(`/orders/${kind}/${ord.id}`, { method: 'PATCH', body: body() })
         : await api(`/orders/${kind}`, { method: 'POST', body: body() });
+      setLive(saved);
+      setPending([]);
       if (thenSend) {
         const res = await api(`/orders/${kind}/${saved.id}/send`, { method: 'POST' });
         onToast(res?.stub ? 'ثبت شد (سرویسِ پیامک آزمایشی است)' : `لینک برای بیمار فرستاده شد${res?.to ? ` به ${res.to}` : ''}`);
@@ -211,7 +216,13 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
       }
       onSaved();
       onClose();
-    } catch (e) { onToast(e.message); } finally { setBusy(false); }
+    } catch (e) {
+      /* سفارش ذخیره است ولی پیامک نرفت: علتِ واقعی (از سرور) دیده می‌شود، فهرست تازه می‌شود و شیت باز می‌ماند تا
+         همان سفارش دوباره فرستاده شود — نه یک سفارشِ تازه. */
+      const msg = String(e?.message ?? '');
+      if (saved) onSaved();
+      onToast(saved && !/ثبت شد/.test(msg) ? `سفارش ثبت شد ولی ارسالِ پیامک ناموفق بود — ${msg}` : msg);
+    } finally { setBusy(false); }
   };
 
   return (
