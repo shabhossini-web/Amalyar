@@ -9,6 +9,7 @@
 #   globals.sql        نقش‌ها و رمزشان (pg_dumpall --globals-only)
 #   <db>.dump          هر دیتابیس، قالبِ custom (pg_dump -Fc) — پیش از ذخیره با pg_restore --list خوانده‌شدنش سنجیده می‌شود
 #   storage.tar.gz     پوشهٔ فایل‌ها (عکس و مدارک) — **بعد** از دیتابیس‌ها گرفته می‌شود تا هر فایلِ ارجاع‌شده در دامپ باشد
+#                      (بدونِ `.ledger`: دفترِ کانتینرها اثباتِ ماندگاریِ همان volume است و با بازگردانی نباید منتقل شود)
 #   SHA256SUMS         چکیدهٔ همهٔ فایل‌ها — تمرینِ بازگردانی اول همین را می‌سنجد
 #   MANIFEST.txt       خلاصهٔ قابلِ‌خواندن
 # و فایلِ LATEST در $BACKUP_DIR که نامِ آخرین پوشه را دارد. اگر چیزی شکست بخورد فایلِ FAILED کنارِ آن پوشه می‌نشیند
@@ -109,7 +110,9 @@ STORAGE_NOTE="رد شد (SKIP_STORAGE)"
 if [ -z "$SKIP_STORAGE" ]; then
   if [ -n "$STORAGE_DIR" ]; then
     [ -d "$STORAGE_DIR" ] || die "پوشهٔ فایل‌ها پیدا نشد: $STORAGE_DIR"
-    tar -C "$STORAGE_DIR" -czf "$TMP/storage.tar.gz" .
+    # `.ledger` (دفترِ کانتینرهای برنامه) عمداً بیرون می‌ماند: اگر همراهِ فایل‌ها برگردد، volumeِ تازه با اثباتِ ماندگاریِ
+    # volumeِ قبلی «ماندگار» نشان داده می‌شد؛ بدونِ آن، بعد از بازگردانی اثبات از صفر و با دیپلویِ بعدی شروع می‌شود.
+    tar -C "$STORAGE_DIR" --exclude=./.ledger -czf "$TMP/storage.tar.gz" .
   else
     command -v docker >/dev/null 2>&1 || die "برای پشتیبانِ volume به Docker نیاز است؛ یا STORAGE_DIR بده یا SKIP_STORAGE=1"
     if [ -z "$STORAGE_VOLUME" ]; then
@@ -118,7 +121,7 @@ if [ -z "$SKIP_STORAGE" ]; then
       STORAGE_VOLUME="$vols"
     fi
     docker volume inspect "$STORAGE_VOLUME" >/dev/null 2>&1 || die "volume پیدا نشد: $STORAGE_VOLUME"
-    docker run --rm -v "$STORAGE_VOLUME":/data:ro alpine tar -C /data -czf - . > "$TMP/storage.tar.gz"
+    docker run --rm -v "$STORAGE_VOLUME":/data:ro alpine tar -C /data --exclude=./.ledger -czf - . > "$TMP/storage.tar.gz"
   fi
   tar -tzf "$TMP/storage.tar.gz" > /dev/null || die "آرشیوِ فایل‌ها خوانده نشد"
   FILES="$(tar -tzf "$TMP/storage.tar.gz" | grep -vc '/$' || true)"

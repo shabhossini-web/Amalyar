@@ -171,6 +171,8 @@ try {
   ok(/دیتابیس‌ها \(3\)/.test(readFileSync(join(dir, 'MANIFEST.txt'), 'utf8')) && /رمزشده: خیر/.test(readFileSync(join(dir, 'MANIFEST.txt'), 'utf8')), 'خلاصه: سه دیتابیس، بی‌رمز');
   ok(!existsSync(join(dir, 'FAILED')), 'علامتِ FAILED نیست');
   ok(!readdirSync(BK).some((n) => n.startsWith('.tmp')), 'پوشهٔ موقت پاک شد');
+  const tarList = sh('tar', ['-tzf', join(dir, 'storage.tar.gz')]).stdout;
+  ok(tarList.includes(files.proof) && !tarList.includes('.ledger'), '**آرشیوِ فایل‌ها `.ledger` (اثباتِ ماندگاریِ volume) را ندارد** — بعد از بازگردانی اثبات از صفر شروع می‌شود، نه موروثی');
 
   console.log('\n۲) تمرینِ بازگردانی');
   let d = run(DRILL, await drillEnv({ BACKUP_DIR: BK }), [latest]);
