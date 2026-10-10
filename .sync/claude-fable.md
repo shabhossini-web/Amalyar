@@ -1,33 +1,12 @@
 <!-- claim:begin -->
 agent: claude-fable
-status: active
-branch: claude/tenant-vertical-and-fixes
-since: 2026-10-07
-paths:
-  - server/prisma/control/
-  - server/src/platform/
-  - server/src/tenant/
-  - server/src/config/
-  - server/src/scripts/
-  - server/src/ai/
-  - server/src/sms/
-  - server/src/patients/orders.service.ts
-  - server/src/patients/intake.service.ts
-  - src/app/PlatformAdmin.jsx
-  - src/app/platform.css
-  - src/app/Intake.jsx
-  - src/app/VisitDocs.jsx
-  - src/app/Assistant.jsx
-  - src/pages/Intake.jsx
-  - src/pages/BookingPick.jsx
-  - src/ui/DynForm.jsx
-  - src/ui/dynform.css
-  - src/lib/identity.js
-  - scripts/e2e/
-  - docs/
+status: idle
+branch: main
+since: 2026-10-10
+paths: []
 note: >-
-  نوعِ کسب‌وکارِ هر tenant (شرکت/مطب) روی خودِ tenant، چهار اصلاحِ UI با عکسِ مالک (نامِ فرم، پیستِ +98،
-  نمایشِ نوبتِ انتخاب‌شده، پخشِ ویسِ مشاوره)، بررسیِ دستیارِ هوشمند، پیامک، خودسنجیِ ذخیره‌سازی/پشتیبان.
+  روی main رفت (4b28d26، 21199e5): نوعِ نصب هنگامِ ساخت، چهار اصلاحِ عکس‌دار، دستیارِ نوع‌محور، پیامکِ کارکنان،
+  آمادگیِ پلتفرم، اسکریپتِ پشتیبان و تمرینِ بازگردانی. شرح در STATUS.md.
 <!-- claim:end -->
 
 > ردیف‌های زیر از تاریخچهٔ گیت پر شده‌اند تا فایل خالی نباشد.
