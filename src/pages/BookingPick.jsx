@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../lib/api.js';
 import { faDate, J_MONTHS, jToday } from '../lib/jalali.js';
 import JGrid from '../app/JGrid.jsx';
@@ -198,8 +198,15 @@ export default function BookingPick({ token, booking, onBooked, disabled, error 
  * اعلامش کند؛ تاریخ شمسی و ساعت فارسی (همان قاعدهٔ بالای صفحه).
  */
 function Done({ chosen }) {
+  /* پیام زیرِ روزِ زده‌شده می‌نشیند و روی گوشی ممکن است زیرِ لبهٔ پایینِ صفحه بیفتد — همان «جایی نشان نمی‌دهد»ِ مالک.
+     پس به دید آورده می‌شود (فقط به‌اندازهٔ لازم، و بی‌انیمیشن برای کسی که حرکتِ کم خواسته). */
+  const ref = useRef(null);
+  useEffect(() => {
+    const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    ref.current?.scrollIntoView?.({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
+  }, [chosen?.date, chosen?.time]);
   return (
-    <p className="ik-book-done" role="status">
+    <p className="ik-book-done" role="status" ref={ref}>
       <CheckCircle width="20" height="20" aria-hidden="true" />
       <span>
         <b>نوبتِ شما ثبت شد: {faDate(chosen.date) || chosen.date}{chosen.time ? <> ساعتِ <bdi dir="ltr">{faTime(chosen.time)}</bdi></> : null}</b>

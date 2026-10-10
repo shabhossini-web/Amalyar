@@ -97,11 +97,14 @@ const link = (await send('/intake/links', 'POST', { title: `[e2e] شماره ${t
   const stored = sql(`SELECT coalesce(p.phone,'-') FROM patients p WHERE p.national_id='${id}' LIMIT 1`)
     || sql(`SELECT coalesce(data->>'phone','-') FROM intake_submissions WHERE token='${reg.json?.token}' LIMIT 1`);
   ok('و در پایگاه «09125268654» ذخیره شد، نه «+98…»', stored === '09125268654', stored);
-  const v = await send('/visits', 'POST', { kind: 'clinic', firstName: 'شمارهٔ', lastName: `ثبتِ دستی ${tag}`, phone: '+98 912 526 8655', opDate: new Date().toISOString() });
+  /* نوعِ مراجعهٔ خودِ سوییت (همان فرمِ سادهٔ بالا، بی‌فیلدِ اجباری) — نه «clinic»ِ ثابت که روی دیتابیسِ تازهٔ CI فرم ندارد، نه
+     «جراحی» که جراح و بیمارستان می‌خواهد. */
+  const KIND = `ph${tag}`; // کلیدِ همان فرم (سرور در پاسخ پیشوندِ دامنه را جلویش می‌گذارد)
+  const v = await send('/visits', 'POST', { kind: KIND, firstName: 'شمارهٔ', lastName: `ثبتِ دستی ${tag}`, phone: '+98 912 526 8655', opDate: new Date().toISOString() });
   ok('ثبتِ دستیِ مراجعه با «+98 912 526 8655» (DTO)', v.status < 300 && !!v.json?.id, `${v.status} ${JSON.stringify(v.json).slice(0, 140)}`);
   const pid = v.json?.patientId;
   ok('و به‌صورتِ «09125268655» ذخیره شد', pid && sql(`SELECT phone FROM patients WHERE id=${pid}`) === '09125268655', pid ? sql(`SELECT phone FROM patients WHERE id=${pid}`) : '-');
-  const bad = await send('/visits', 'POST', { kind: 'clinic', firstName: 'شمارهٔ', lastName: `بد ${tag}`, phone: '+98 912', opDate: new Date().toISOString() });
+  const bad = await send('/visits', 'POST', { kind: KIND, firstName: 'شمارهٔ', lastName: `بد ${tag}`, phone: '+98 912', opDate: new Date().toISOString() });
   ok('**نباید بیفتد:** «+98 912»ِ ناقص هنوز رد می‌شود', bad.status === 400, String(bad.status));
 }
 

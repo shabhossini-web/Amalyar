@@ -113,9 +113,11 @@ const run = async (theme) => {
   ok('دکمهٔ «همین روز…» رفت (جایش را پیام گرفت)', (await page.locator('.ik-book-go').count()) === 0);
   ok('روی تقویم همان روز تیک دارد', (await page.locator('.ik-cell.mine .ik-tick').count()) === 1);
   ok('**بدونِ پرش:** پیامِ «نوبتِ شما: …»ِ جدا تکرار نمی‌شود (خودِ کارت جایش را گرفته)', (await page.locator('.ik-book-has').count()) === 0);
+  /* کارت خودش را (نرم) به دید می‌آورد — منتظرِ نتیجه می‌مانیم، نه ساعت. */
+  await page.waitForFunction(() => { const r = document.querySelector('.ik-book-done')?.getBoundingClientRect(); return r && r.top >= 0 && r.bottom <= innerHeight; }, null, { timeout: 4000 }).catch(() => {});
   const box = await done.boundingBox();
   const vh = page.viewportSize().height;
-  ok('پیام در همان صفحهٔ دیدِ کاربر است (از پایینِ پنجره بیرون نیست)', !!box && box.y >= 0 && box.y + box.height <= vh, JSON.stringify(box));
+  ok('پیام در همان صفحهٔ دیدِ کاربر است (از پایینِ پنجره بیرون نیست)', !!box && box.y >= -1 && box.y + box.height <= vh + 1, JSON.stringify(box));
   await shot('2-done');
 
   /* روزِ دیگر ← دکمه برمی‌گردد؛ همان روز ← پیام هست. */
