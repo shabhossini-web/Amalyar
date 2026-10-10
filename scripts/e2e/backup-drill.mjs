@@ -22,7 +22,7 @@
  */
 import { spawnSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -249,16 +249,26 @@ try {
   ok(b.code === 0 && !readdirSync(join(work, 'backups-nostorage', readFileSync(join(work, 'backups-nostorage', 'LATEST'), 'utf8').trim())).includes('storage.tar.gz'), 'SKIP_STORAGE=1 فقط دیتابیس را می‌گیرد', b.out);
 
   console.log('\n۷) نگهداری');
-  const BK3 = join(work, 'backups-retention');
+  /* ⚠️ نامِ پوشه فاصله دارد و «همسایه»ی قدیمی‌اش (`backups`) هست: با `for d in $(ls …)` شکستنِ کلمه‌ها یک مسیرِ دیگر را
+     (`…/backups`) به `rm -rf` می‌داد. */
+  const BK3 = join(work, 'backups retention');
   mkdirSync(BK3, { recursive: true });
   for (let i = 1; i <= 5; i++) {
     const old = join(BK3, `2020010${i}T000000Z`);
     mkdirSync(old); writeFileSync(join(old, 'x'), 'x');
     utimesSync(old, new Date('2020-01-0' + i), new Date('2020-01-0' + i));
   }
+  utimesSync(BK, new Date('2020-01-01'), new Date('2020-01-01'));
   b = run(BACKUP, { ...baseEnv, BACKUP_DIR: BK3, RETENTION_DAYS: '14' });
   const left = readdirSync(BK3).filter((n) => /^\d{8}T\d{6}Z$/.test(n)).sort();
   ok(b.code === 0 && left.length === 3 && left.includes('20200105T000000Z') && left.includes('20200104T000000Z') && !left.includes('20200101T000000Z'), `قدیمی‌ها پاک شدند ولی سه‌تای تازه ماند: ${left.join(' ')}`, b.out);
+  ok(existsSync(BK) && existsSync(join(BK, 'LATEST')), '**نامِ پوشه با فاصله مسیرِ همسایه را پاک نکرد** (شکستنِ کلمه‌ها `rm -rf` را به جای دیگر نمی‌برد)');
+
+  console.log('\n۷ب) دسترسیِ فایل‌ها — دامپ مدرکِ بیمار است');
+  const newest = join(BK3, readFileSync(join(BK3, 'LATEST'), 'utf8').trim());
+  const mode = (p) => (statSync(p).mode & 0o777).toString(8);
+  ok(mode(newest) === '700' && mode(join(newest, 'bk_acme.dump')) === '600' && mode(join(newest, 'globals.sql')) === '600' && mode(join(newest, 'storage.tar.gz')) === '600',
+    `**پوشه ۷۰۰ و فایل‌ها ۶۰۰** (کاربرِ دیگرِ سرور نمی‌خواند): ${mode(newest)} / ${mode(join(newest, 'bk_acme.dump'))}`);
 
   if (MODE === 'docker') {
     console.log('\n۸) volume (مسیرِ production)');

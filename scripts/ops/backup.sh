@@ -31,6 +31,8 @@
 #   BACKUP_PASSPHRASE   اگر پر باشد همهٔ فایل‌ها با AES-256 رمز می‌شوند (پسوندِ .enc) — برای بیرون‌بردن از سرور
 #   RCLONE_REMOTE       مثلاً arvan:amalyar-backups — اگر rclone نصب باشد پس از موفقیت همان پوشه آپلود می‌شود
 set -euo pipefail
+# دامپِ دیتابیس مدرکِ بیمار است: پوشه‌ها ۰۷۰۰ و فایل‌ها ۰۶۰۰ — کاربرِ دیگرِ سرور نباید بتواند بخواندشان.
+umask 077
 
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/amalyar}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
@@ -150,11 +152,12 @@ if [ -n "$RCLONE_REMOTE" ]; then
 fi
 
 # ── نگهداری: پوشه‌های قدیمی‌تر از RETENTION_DAYS، ولی همیشه سه‌تای تازه می‌مانند ──
+# ⚠️ فهرستِ null-جداشده، نه `for d in $(ls …)`: اگر BACKUP_DIR فاصله داشت، شکستنِ کلمه‌ها یک مسیرِ دیگر را به `rm -rf` می‌داد.
 n=0
-for d in $(ls -1d "$BACKUP_DIR"/[0-9]*T*Z 2>/dev/null | sort -r); do
+while IFS= read -r -d '' d; do
   n=$((n + 1))
   [ "$n" -gt 3 ] || continue
-  if [ -n "$(find "$d" -maxdepth 0 -mtime +"$RETENTION_DAYS" 2>/dev/null)" ]; then rm -rf "$d"; say "  – پاک شد (قدیمی): $(basename "$d")"; fi
-done
+  if [ -n "$(find "$d" -maxdepth 0 -mtime +"$RETENTION_DAYS" 2>/dev/null)" ]; then rm -rf -- "$d"; say "  – پاک شد (قدیمی): $(basename "$d")"; fi
+done < <(find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -type d -name '[0-9]*T*Z' -print0 | sort -z -r)
 
 say "تمام شد: $OUT"
