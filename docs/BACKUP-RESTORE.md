@@ -10,7 +10,7 @@
 |---|---|---|---|
 | ۱ | **دیتابیس‌ها** — مرکزی + یکی برای هر شرکت | Postgres (Coolify) | همه‌چیز رفته |
 | ۲ | **نقش‌های Postgres** (رمزِ دیتابیسِ هر شرکت) | همان Postgres (`pg_dumpall --globals-only`) | دیتابیس‌ها برمی‌گردند ولی برنامه به هیچ‌کدام وصل نمی‌شود |
-| ۳ | **پوشهٔ فایل‌ها** — عکس و مدارکِ بیماران | volume `amalyar-storage` روی `/app/storage` | ردیف‌های مدارک می‌مانند ولی فایلشان نیست |
+| ۳ | **پوشهٔ فایل‌ها** — عکس و مدارکِ بیماران | volume `ggdkvpdff3me1bzxqzhb2uud-amalyar-storage` روی `/app/storage` (Coolify ← amalyar-api ← Persistent Storage) | ردیف‌های مدارک می‌مانند ولی فایلشان نیست |
 | ۴ | **رازها** — `TENANT_DATABASE_ENCRYPTION_KEY`، `JWT_SECRET`، `MELI_API_KEY`، `MELI_FROM`، `PROVISIONING_DATABASE_URL`… | متغیرهای Coolify | بدونِ کلیدِ رمزنگاری، نشانیِ دیتابیسِ شرکت‌ها (رمزشده در دیتابیسِ مرکزی) خوانده نمی‌شود |
 
 ⚠️ **چهارمی را اسکریپت نمی‌گیرد و نباید هم بگیرد.** رازها را یک‌بار از Coolify کپی کن و در یک **مدیرِ رمز** (یا یک فایلِ رمزشدهٔ آفلاین)
@@ -24,7 +24,7 @@
 ## ۲) ده دقیقه تا اولین پشتیبانِ واقعی
 
 همهٔ دستورها روی **میزبانِ سرور** (`62.60.214.40`) اجرا می‌شوند — همان‌جا که Docker و Coolify هستند، نه داخلِ کانتینر.
-اگر SSH نداری: Coolify ← **Servers** ← `localhost` ← **Terminal** (اگر خاموش بود از Settings روشنش کن).
+اگر SSH نداری: Coolify ← منوی کناریِ **Terminal** ← سرورِ `localhost` (نه Terminalِ خودِ اپ — آن داخلِ کانتینر است و Docker ندارد).
 
 **گام ۱ — اسکریپت‌ها را روی سرور بگذار** (یک‌بار؛ بعد از هر تغییرِ اسکریپت در مخزن دوباره):
 
@@ -58,7 +58,7 @@ sudo /opt/amalyar-ops/backup.sh
 ```bash
 docker ps --format '{{.Names}}  {{.Image}}'        # نامِ کانتینرِ postgres:18-alpine
 docker volume ls | grep storage                     # نامِ volumeِ فایل‌ها
-sudo PG_CONTAINER=<نام> STORAGE_VOLUME=<نام> /opt/amalyar-ops/backup.sh
+sudo PG_CONTAINER=<نام> STORAGE_VOLUME=ggdkvpdff3me1bzxqzhb2uud-amalyar-storage /opt/amalyar-ops/backup.sh
 ```
 
 **گام ۳ — تمرینِ بازگردانی** (همان لحظه، تا مطمئن شوی پشتیبان واقعاً برمی‌گردد):
@@ -135,7 +135,7 @@ sudo /opt/amalyar-ops/restore-drill.sh 20261008T023001Z                  # یک�
    docker exec -i <pg> pg_restore -U postgres -d postgres --create < amalyar_control.dump   # برای هر فایلِ .dump
    ```
    (خطای «role postgres already exists» در مرحلهٔ نقش‌ها عادی است.)
-۵. فایل‌ها را در volume بریز: `docker run --rm -v amalyar-storage:/data -v $PWD:/b alpine tar -xzf /b/storage.tar.gz -C /data`.
+۵. فایل‌ها را در volume بریز: `docker run --rm -v <نامِ volume>:/data -v $PWD:/b alpine tar -xzf /b/storage.tar.gz -C /data` (Coolify جلوی نامِ volume شناسهٔ اپ را می‌گذارد، مثلِ `ggdkvpdff3me1bzxqzhb2uud-amalyar-storage`).
 ۶. برنامه را Deploy کن. در `/platform-admin` ← «آمادگیِ سامانه» ← فایل‌ها و پیامک سبز؛ و یک شرکت را باز کن و چند پرونده را ببین.
 
 اگر `restore-drill.sh` برای همین پشتیبان «تمرین موفق» داده، همین مراحل را قبلاً یک‌بار بی‌خطا رفته‌ای.
