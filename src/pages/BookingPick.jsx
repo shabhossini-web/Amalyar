@@ -28,6 +28,12 @@ export default function BookingPick({ token, booking, onBooked, disabled, error 
   const [day, setDay] = useState(booking?.appointment?.date ?? null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  /* اعلامِ «ثبت شد» فقط پس از رزروِ **خودِ بیمار** — نه هنگامِ بازکردنِ صفحه برای بیماری که از قبل نوبت دارد.
+     ناحیهٔ `role="status"` همیشه در صفحه است و فقط متنش عوض می‌شود: ناحیه‌ای که همراهِ متنش سوار شود را بسیاری
+     از صفحه‌خوان‌ها اعلام نمی‌کنند. `focusDone` کارت را یک‌بار به دید می‌آورد و فوکوس را رویش می‌گذارد، چون دکمه‌ای
+     که بیمار با صفحه‌کلید زده بود همان لحظه برداشته می‌شود و فوکوس به `<body>` می‌افتاد. */
+  const [announce, setAnnounce] = useState('');
+  const [focusDone, setFocusDone] = useState(false);
 
   const load = useCallback(async (y, m, tid) => {
     setErr('');
@@ -56,6 +62,12 @@ export default function BookingPick({ token, booking, onBooked, disabled, error 
         body: { date: day, ...(startMin != null ? { startMin } : {}), ...(topicId ? { topicId: Number(topicId) } : {}) },
       });
       onBooked?.(fresh);
+      /* پاسخ همان نمای کاملِ فرم است (`booking.appointment`)، نه خودِ نوبت. */
+      const a = fresh?.booking?.appointment ?? fresh?.appointment;
+      if (a?.date) {
+        setAnnounce(`نوبتِ شما ثبت شد: ${faDate(a.date) || a.date}${a.time ? ` ساعتِ ${faTime(a.time)}` : ''}`);
+        setFocusDone(true);
+      }
       await load(ym.y, ym.m, topicId);
     } catch (e) {
       setErr(e.message);
@@ -67,8 +79,12 @@ export default function BookingPick({ token, booking, onBooked, disabled, error 
   };
 
   const chosen = booking?.appointment;
+  /* موضوع هم جزوِ نوبت است (سرور با موضوعِ تازه جابه‌جا می‌کند): همان روز زیرِ موضوعِ دیگر «نوبتِ من» نیست، وگرنه
+     تعویضِ موضوع در همان روز ممکن نبود و تیک و «ثبت شد» زیرِ موضوعِ اشتباه می‌آمد. بی‌موضوع = هر موضوعی. */
+  const sameTopic = chosen?.topicId == null || topicId == null || Number(chosen.topicId) === Number(topicId);
+  const isMine = (date) => !!chosen && sameTopic && chosen.date === date;
   /* روزِ بازشده همان روزِ نوبتِ ثبت‌شدهٔ بیمار است؟ */
-  const mineDay = !!chosen && !!picked && chosen.date === picked.date;
+  const mineDay = !!picked && isMine(picked.date);
 
   return (
     <section className={`ik-book${error ? ' bad' : ''}`} aria-describedby={error ? 'ik-book-need' : undefined}>
@@ -113,7 +129,7 @@ export default function BookingPick({ token, booking, onBooked, disabled, error 
           /* هشدار: روزِ **نوبتِ خودِ بیمار** تیک می‌گیرد، نه نقطهٔ «باز» — حتی وقتی نوبتِ خودش آخرین جا را گرفته و
              سرور روز را دیگر «باز» نمی‌گوید. مالک (۱۴۰۵/۰۷/۱۵): «نوبت را انتخاب می‌کند و جایی نشانش نمی‌دهد
              که نوبتش انتخاب شده». */
-          const mine = !!chosen && cell.date === chosen.date;
+          const mine = isMine(cell.date);
           return (
             /* مینیمال: روزِ باز فقط یک نقطهٔ نئون می‌گیرد؛ عددِ «جا مانده» در
                کارتِ پایینِ تقویم می‌آید، نه داخلِ سلول — سلولِ شلوغ همان
@@ -137,7 +153,7 @@ export default function BookingPick({ token, booking, onBooked, disabled, error 
                   /* هشدار: ساعتِ **خودِ بیمار** «انتخاب‌شده» است، نه «پر» (بازبینیِ UX، بندِ ۹۶): سرور آن را
                      هم «گرفته» می‌شمارد (نوبتِ خودش جا را گرفته) و تا دیروز دکمه‌اش کم‌رنگ و خط‌خورده می‌شد —
                      بیمار فکر می‌کرد رزرو نشده. زدنِ دوباره‌اش کاری نمی‌کند. */
-                  const mine = chosen?.date === picked.date && chosen?.startMin === sl.startMin;
+                  const mine = isMine(picked.date) && chosen?.startMin === sl.startMin;
                   const state = mine ? '' : sl.past ? ' — گذشته' : sl.taken ? ' — پر' : '';
                   return (
                     <button
@@ -156,7 +172,7 @@ export default function BookingPick({ token, booking, onBooked, disabled, error 
                   );
                 })}
               </div>
-              {mineDay && <Done chosen={chosen} />}
+              {mineDay && <Done chosen={chosen} focusNow={focusDone} onFocused={() => setFocusDone(false)} />}
             </>
           ) : (
             <>
@@ -165,7 +181,7 @@ export default function BookingPick({ token, booking, onBooked, disabled, error 
               </small>
               {/* هشدار: همین‌جا که دکمه بود، «ثبت شد» می‌نشیند — جایی که چشمِ بیمار بعد از لمس مانده است. دکمه‌ای که
                   بعد از زدن هیچ تغییری نمی‌کرد یعنی بیمار نمی‌دانست نوبتش گرفته شد یا نه. */}
-              {mineDay ? <Done chosen={chosen} /> : (
+              {mineDay ? <Done chosen={chosen} focusNow={focusDone} onFocused={() => setFocusDone(false)} /> : (
                 <button type="button" className="ik-book-go" disabled={busy || disabled} onClick={() => book(null)}>
                   {busy ? 'در حال ثبت…' : 'همین روز را می‌خواهم'}
                 </button>
@@ -179,6 +195,8 @@ export default function BookingPick({ token, booking, onBooked, disabled, error 
           ثبتِ نوبت یک‌دفعه ۷۰ پیکسل می‌نشست و تقویم و دکمه‌ای که بیمار همان لحظه رویش بود را به پایین می‌پراند
           (و پیام از دیدِ او بیرون می‌افتاد). وقتی روزِ بازشده همان روزِ نوبت است، خودِ کارت (`Done`) جایگزینش
           است و این‌جا تکرار نمی‌شود؛ وقتی بیمار ماه/موضوع/روزِ دیگری را می‌بیند، همین یادآوری می‌ماند. */}
+      <p className="ik-sr" role="status" aria-live="polite">{announce}</p>
+
       {chosen && !mineDay && (
         <p className="ik-book-has">
           {/* هشدار: تاریخ به بیمار **شمسی** نشان داده می‌شود — ISOِ خامِ سرور
@@ -194,19 +212,23 @@ export default function BookingPick({ token, booking, onBooked, disabled, error 
 }
 
 /**
- * «نوبتِ شما ثبت شد» — پیامِ تأییدِ پایدار زیرِ همان روزی که بیمار زد. `role="status"` تا صفحه‌خوان هم
- * اعلامش کند؛ تاریخ شمسی و ساعت فارسی (همان قاعدهٔ بالای صفحه).
+ * «نوبتِ شما ثبت شد» — پیامِ تأییدِ پایدار زیرِ همان روزی که بیمار زد؛ تاریخ شمسی و ساعت فارسی (همان قاعدهٔ بالای
+ * صفحه). اعلامِ صفحه‌خوان از ناحیهٔ ثابتِ `role="status"`ِ بالاست، نه این کارت.
  */
-function Done({ chosen }) {
-  /* پیام زیرِ روزِ زده‌شده می‌نشیند و روی گوشی ممکن است زیرِ لبهٔ پایینِ صفحه بیفتد — همان «جایی نشان نمی‌دهد»ِ مالک.
-     پس به دید آورده می‌شود (فقط به‌اندازهٔ لازم، و بی‌انیمیشن برای کسی که حرکتِ کم خواسته). */
+function Done({ chosen, focusNow, onFocused }) {
+  /* فقط یک‌بار و فقط پس از رزروِ خودِ بیمار (`focusNow`): کارت زیرِ روزِ زده‌شده می‌نشیند و روی گوشی ممکن است زیرِ لبهٔ
+     پایینِ صفحه بیفتد — همان «جایی نشان نمی‌دهد»ِ مالک. به‌اندازهٔ لازم به دید می‌آید (بی‌انیمیشن برای کسی که حرکتِ
+     کم خواسته) و فوکوس می‌گیرد. بازکردنِ صفحه برای بیماری که از قبل نوبت دارد، یا برگشتن به روزِ نوبت، صفحه را نمی‌پراند. */
   const ref = useRef(null);
   useEffect(() => {
+    if (!focusNow) return;
     const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     ref.current?.scrollIntoView?.({ block: 'nearest', behavior: reduce ? 'auto' : 'smooth' });
-  }, [chosen?.date, chosen?.time]);
+    ref.current?.focus?.({ preventScroll: true });
+    onFocused?.();
+  }, [focusNow]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <p className="ik-book-done" role="status" ref={ref}>
+    <p className="ik-book-done" tabIndex={-1} ref={ref}>
       <CheckCircle width="20" height="20" aria-hidden="true" />
       <span>
         <b>نوبتِ شما ثبت شد: {faDate(chosen.date) || chosen.date}{chosen.time ? <> ساعتِ <bdi dir="ltr">{faTime(chosen.time)}</bdi></> : null}</b>

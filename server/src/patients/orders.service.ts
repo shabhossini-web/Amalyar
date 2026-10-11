@@ -14,6 +14,7 @@ import { toEnDigits } from '../common/identity';
 import { sniffMime } from '../common/file-type';
 import { RateLimitService } from '../common/rate-limit.service';
 import { StorageService } from '../storage/storage.service';
+import { emitSms, orderTokenIn } from '../reminders/send-reminders';
 
 /** چهار نوعِ سفارشِ بالینی — کلیدِ مسیر و جدول. */
 export const ORDER_KINDS = ['lab', 'imaging', 'consult', 'referral'] as const;
@@ -386,6 +387,10 @@ export class OrdersService {
     try {
       res = await this.sms.sendForStaff(to, text);
     } catch (e: any) {
+      /* «نامعلوم» با `code` جدا می‌شود تا رابط آن را «ناموفق» نخواند و به ارسالِ دوباره (= پیامِ احتمالاً تکراری) دعوت نکند. */
+      if (e?.smsOutcome === 'unknown') {
+        throw new ServiceUnavailableException({ message: `سفارش ثبت شد؛ ${String(e.message ?? 'نتیجهٔ ارسال مشخص نشد')}`, code: 'SMS_UNKNOWN' });
+      }
       if (e?.smsOutcome !== 'rejected' && e?.smsOutcome !== 'unconfigured') throw e;
       res = { sent: false, stub: false, detail: String(e.message ?? '') };
     }
@@ -413,7 +418,7 @@ export class OrdersService {
       await this.events.emit({
         type: 'sms.failed', patientId: row.patientId, visitId: row.visitId ?? null, actorId: user?.id ?? null,
         ...(rem ? { refType: 'reminder', refId: rem.id } : { refType: `${kind}_order`, refId: id }),
-        payload: { kind: 'notice', error: reason },
+        payload: { kind: 'notice', error: reason, direct: true },
       });
     }
     await this.audit.record({
@@ -422,7 +427,31 @@ export class OrdersService {
     });
     /* سفارش ذخیره است و همه‌چیز ثبت شد؛ ولی پاسخِ «ok» دروغ است وقتی پیامک نرفته — کارمند علتِ واقعی را می‌بیند. */
     if (!delivered) throw new ServiceUnavailableException(`سفارش ثبت شد ولی پیامک نرفت — ${reason}`);
+    await this.supersedeFailedLinks(row, rem?.id ?? null, user);
     return { ok: true, to, url, sent: res.sent, stub: res.stub };
+  }
+
+  /**
+   * همین لینک حالا رفت ← ردیف‌های «نرفت»ِ قبلیِ همان لینک کنار می‌روند و کارِ «ارسالِ دوباره»شان بسته می‌شود.
+   *
+   * ⚠️ شیت پس از ردِ پیامک باز می‌ماند و کارمند همان «ثبت و ارسال» را دوباره می‌زند؛ اگر ردیفِ «نرفت»ِ قبلی و کارش
+   * می‌ماندند، منشی بعداً «ارسالِ دوباره» را می‌زد و بیمار همان لینک را دو بار می‌گرفت. فقط ردیف‌های همان پرونده که
+   * دقیقاً همین توکن را دارند، و فقط `failed` (نه «نامعلوم» — آن را آدم باید ببیند).
+   */
+  private async supersedeFailedLinks(row: any, keepId: number | null, user: any) {
+    try {
+      const stale = await this.prisma.reminder.findMany({
+        where: { patientId: row.patientId, kind: 'notice', status: 'failed', text: { contains: `/o/${row.token}` },
+          ...(keepId ? { id: { not: keepId } } : {}) },
+        select: { id: true, patientId: true, visitId: true, appointmentId: true, kind: true, text: true },
+      });
+      for (const r of stale) {
+        if (orderTokenIn(r.text) !== row.token) continue;
+        const done = await this.prisma.reminder.updateMany({ where: { id: r.id, status: 'failed' },
+          data: { status: 'cancelled', error: 'همین لینک بعداً با موفقیت فرستاده شد' } });
+        if (done.count) await emitSms(this.prisma, r, 'sms.cancelled', { reason: 'superseded', actorId: user?.id ?? null });
+      }
+    } catch { /* پیامک رفته است؛ پاک‌سازیِ ردیفِ قدیمی نباید پاسخِ موفق را خراب کند */ }
   }
 
   /** صفحهٔ عمومیِ بیمار — بدونِ نامِ کارکنان و بدونِ شمارهٔ تماس. */

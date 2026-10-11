@@ -14,6 +14,7 @@
     "control:migrate": "prisma migrate deploy --schema prisma/control/schema.prisma",
     "tenant:provision": "node dist/scripts/provision-tenant.js",
     "tenants:migrate": "node dist/scripts/migrate-tenants.js",
+    "tenants:rehost": "node dist/scripts/rehost-tenants.js",
     "provisioning:worker": "node dist/scripts/provisioning-worker.js"
   },
   "dependencies": {

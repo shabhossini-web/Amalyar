@@ -385,4 +385,5 @@
 .pa-health-notes { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 12px; line-height: 1.9; }
 .pa-health-notes li.warn { color: var(--amber-text); }
 .pa-health-notes li.fail { color: var(--red-text); }
+.pa-health-notes li.run { color: var(--text2); }
 .pa-health-notes bdi { white-space: nowrap; } /* شکستنِ خط وسطِ «/app/storage» دوباره «/» را به انتها می‌برد */

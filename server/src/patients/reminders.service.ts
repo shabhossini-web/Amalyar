@@ -9,7 +9,7 @@ import { TenantContext } from '../tenant/tenant-context';
 import { submissionPhone, toEnDigits } from '../common/identity';
 import { faDateStr } from './summary.service';
 import { renderSms } from '../common/sms-template';
-import { sendReminders } from '../reminders/send-reminders';
+import { emitSms, sendReminders } from '../reminders/send-reminders';
 import { AuditService } from '../audit/audit.service';
 import { diagnosisIds, procedureIds } from './visit-coding';
 import { toJalali } from '../common/jalali';
@@ -800,11 +800,15 @@ export class RemindersService {
       timeline.push({ t: e.at.getTime(), line: `${at(e.at)} · ${outcome} · ${kindFa(row?.kind ?? payload.kind)} · ${code(row)}`
         + (e.refId ? ` · ردیفِ ${fa(e.refId)}` : '')
         + (sz ? ` · ${fa(sz.n)} نویسه / ${fa(sz.parts)} بخش` : '')
-        + ` · ${manual ? '«ارسالِ دوباره»ی دستی' : 'خودکار'}${why}` });
+        + ` · ${payload.direct ? 'دکمهٔ ارسالِ مستقیم' : manual ? '«ارسالِ دوباره»ی دستی' : 'خودکار'}${why}` });
     }
+    /* ردِ دکمهٔ «ثبت و ارسال»ِ سفارش هم رویدادِ `sms.failed` (با علت) دارد و هم ممیزی؛ یک کلیک باید یک سطر باشد —
+       همان سطرِ رویداد که علت را دارد. */
+    const directFails = events.filter((e) => e.type === 'sms.failed' && (e.payload as any)?.direct).map((e) => e.at.getTime());
     for (const d of direct) {
       const after = (d.afterJson ?? {}) as Record<string, any>;
       const order = /^order\.(\w+)\.send$/.exec(d.action)?.[1];
+      if (order && !after.sent && !after.stub && directFails.some((t) => Math.abs(t - d.createdAt.getTime()) < 15_000)) continue;
       const label = DIRECT_SMS[d.action] ?? (order ? `دستورِ ${ORDER_KIND_LABELS[order] ?? order}` : d.action);
       const result = after.sent ? 'رفت' : after.stub ? 'آزمایشی (نرفت)' : 'نرفت';
       timeline.push({ t: d.createdAt.getTime(), line: `${at(d.createdAt)} · ${result} · ${label} · دکمهٔ ارسالِ مستقیم` });
@@ -860,6 +864,8 @@ export class RemindersService {
       where: { id },
       data: { status: 'cancelled', error: (reason ?? '').trim().slice(0, 300) || null },
     });
+    /* ردیفِ «نرفت» که لغو شد کارِ «ارسالِ دوباره»اش هم بسته می‌شود — وگرنه منشی از فهرستِ کارها همان پیامِ لغوشده را می‌فرستاد. */
+    if (row.status === 'failed') await emitSms(this.prisma, row, 'sms.cancelled', { reason: 'cancelled', actorId: user?.id ?? null });
     await this.audit?.record({ actorId: user?.id ?? null, action: 'reminder.cancel',
       entityType: 'reminder', entityId: id, before: { status: row.status }, after: { status: 'cancelled', reason: reason ?? null } });
     return fresh;

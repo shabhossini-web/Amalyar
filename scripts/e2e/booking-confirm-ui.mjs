@@ -113,6 +113,10 @@ const run = async (theme) => {
   ok('دکمهٔ «همین روز…» رفت (جایش را پیام گرفت)', (await page.locator('.ik-book-go').count()) === 0);
   ok('روی تقویم همان روز تیک دارد', (await page.locator('.ik-cell.mine .ik-tick').count()) === 1);
   ok('**بدونِ پرش:** پیامِ «نوبتِ شما: …»ِ جدا تکرار نمی‌شود (خودِ کارت جایش را گرفته)', (await page.locator('.ik-book-has').count()) === 0);
+  /* بازبینیِ ۱۴۰۵/۰۷/۱۹: ناحیهٔ اعلامِ ثابت (نه ناحیه‌ای که همراهِ متنش سوار شود) و فوکوس روی کارت — دکمهٔ زده‌شده
+     همان لحظه برداشته می‌شود و فوکوسِ صفحه‌کلید به body می‌افتاد. */
+  ok('**صفحه‌خوان «نوبتِ شما ثبت شد» را از ناحیهٔ ثابتِ status می‌شنود**', /نوبتِ شما ثبت شد/.test(await page.locator('.ik-book > .ik-sr[role="status"]').innerText()));
+  ok('فوکوس روی کارتِ «ثبت شد» است (نه body)', await page.evaluate(() => document.activeElement?.classList.contains('ik-book-done')));
   /* کارت خودش را (نرم) به دید می‌آورد — منتظرِ نتیجه می‌مانیم، نه ساعت. */
   await page.waitForFunction(() => { const r = document.querySelector('.ik-book-done')?.getBoundingClientRect(); return r && r.top >= 0 && r.bottom <= innerHeight; }, null, { timeout: 4000 }).catch(() => {});
   const box = await done.boundingBox();
@@ -133,8 +137,18 @@ const run = async (theme) => {
   ok('برگشت به روزِ نوبت ← پیام دوباره هست', (await page.locator('.ik-book-done').count()) === 1);
 
   console.log(`— تم ${theme === 'dark' ? 'تیره' : 'روشن'} · موضوعِ ساعتی —`);
+  const mineIdx = await page.locator('.jg-cell').evaluateAll((els) => els.findIndex((e) => e.querySelector('.ik-cell.mine')));
   await page.locator('.ik-book-topics button', { hasText: topicSlot.name }).tap();
   await page.waitForTimeout(600);
+  /* موضوع جزوِ نوبت است: همان روز زیرِ موضوعِ دیگر «نوبتِ من» نیست — تعویضِ موضوع در همان روز باید ممکن باشد. */
+  ok('**موضوعِ دیگر: روزِ نوبتِ موضوعِ قبلی تیک نمی‌خورد**', (await page.locator('.ik-cell.mine').count()) === 0);
+  if (mineIdx >= 0 && (await page.locator('.jg-cell').nth(mineIdx).locator('.ik-cell.open').count())) {
+    await page.locator('.jg-cell').nth(mineIdx).tap();
+    await page.waitForTimeout(400);
+    ok('**همان روز زیرِ موضوعِ دیگر: «ثبت شد» نیست و ساعتی انتخاب‌شده نیست** (می‌شود جابه‌جا کرد)',
+      (await page.locator('.ik-book-done').count()) === 0 && (await page.locator('.ik-slots button[aria-checked="true"]').count()) === 0
+      && (await page.locator('.ik-slots button:not([disabled])').count()) > 0);
+  }
   for (let i = 0; i < 2 && (await openCell().count()) === 0; i++) {
     await page.getByRole('button', { name: 'ماهِ بعد' }).tap();
     await page.waitForTimeout(500);
@@ -151,6 +165,17 @@ const run = async (theme) => {
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   ok('بدونِ سرریزِ افقی روی موبایل ۳۹۰', overflow <= 1, overflow + 'px');
+
+  /* بیمارِ دارای نوبت که صفحه را دوباره باز می‌کند: کارت هست ولی صفحه خودبه‌خود نمی‌پرد و فوکوس را نمی‌دزدد. */
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.reload();
+  await page.locator('.ik-book-done').waitFor({ timeout: 15000 }).catch(() => {});
+  await page.waitForTimeout(800);
+  ok('بازکردنِ دوباره: «ثبت شد» زیرِ روزِ نوبت هست', (await page.locator('.ik-book-done').count()) === 1);
+  ok('**بازکردنِ دوباره: صفحه خودبه‌خود اسکرول نمی‌شود و فوکوس دزدیده نمی‌شود**',
+    (await page.evaluate(() => scrollY)) === 0 && !(await page.evaluate(() => document.activeElement?.classList.contains('ik-book-done'))),
+    `scrollY=${await page.evaluate(() => scrollY)}`);
+  ok('و ناحیهٔ اعلام خالی است (چیزی اعلام نشده)', (await page.locator('.ik-book > .ik-sr[role="status"]').innerText()).trim() === '');
   await ctx.close();
 };
 

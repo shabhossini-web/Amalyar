@@ -112,7 +112,9 @@ const domainsOf = (tenant) => (
 );
 
 /// یک ثابت، تا هیچ‌جا snapshot با آرایهٔ جاافتاده ست نشود (باگِ واقعیِ خروج).
-const EMPTY_SNAPSHOT = { tenants: [], jobs: [], deletions: [], profileOptions: { kinds: [], services: [] } };
+/* `loaded`: «گزینه‌های نوعِ نصب نیامده» دو معنی دارد — سرورِ قدیمی (فیلد پنهان، ساخت مجاز) یا snapshotی که هنوز نرسیده یا
+   شکست خورده. دومی نباید فرم را بی‌نوع بفرستد (شرکت بی‌صدا نوعِ پیش‌فرض می‌گرفت)، پس ساخت تا اولین snapshotِ موفق بسته است. */
+const EMPTY_SNAPSHOT = { loaded: false, tenants: [], jobs: [], deletions: [], profileOptions: { kinds: [], services: [] } };
 
 /**
  * «تمام‌شده» فقط `succeeded` است؛ هر وضعیتِ دیگری — حتی وضعیتی که این نسخه نمی‌شناسد —
@@ -198,6 +200,7 @@ export default function PlatformAdmin() {
   const load = async () => {
     const data = await platformApi('/snapshot');
     setSnapshot({
+      loaded: true,
       tenants: Array.isArray(data?.tenants) ? data.tenants : [],
       jobs: Array.isArray(data?.jobs) ? data.jobs : [],
       deletions: Array.isArray(data?.deletions) ? data.deletions : [],
@@ -319,7 +322,7 @@ export default function PlatformAdmin() {
 
   const createJob = async (event) => {
     event.preventDefault();
-    if (busy) return;
+    if (busy || !snapshot.loaded) return;
     setBusy(true);
     setNotice('');
     try {
@@ -572,7 +575,7 @@ export default function PlatformAdmin() {
                   )}
                 </>
               )}
-              <button disabled={busy || (kindOptions.length > 0 && (!form.kind || (form.kind === 'company' && !form.services.length)))}>{busy ? 'در حال ثبت…' : 'ساخت امن شرکت'}</button>
+              <button disabled={busy || !snapshot.loaded || (kindOptions.length > 0 && (!form.kind || (form.kind === 'company' && !form.services.length)))}>{busy ? 'در حال ثبت…' : !snapshot.loaded ? 'در حال خواندنِ گزینه‌ها…' : 'ساخت امن شرکت'}</button>
               <p className="pa-hint">رمز دیتابیس در UI یا API نمایش داده نمی‌شود.</p>
             </form>
 
@@ -880,16 +883,21 @@ function HealthPanel() {
     { key: 'storage', title: 'فایل‌ها', tone: STORAGE_TONE[data.storage?.verdict] ?? 'warn', label: STORAGE_LABEL[data.storage?.verdict] ?? '—', hint: faNum(data.storage?.message) },
     { key: 'sms', title: 'پیامک', tone: data.sms?.configured ? 'ok' : 'fail', label: data.sms?.configured ? 'آماده' : 'تنظیم نیست', hint: data.sms?.message },
     { key: 'runtime', title: 'نسخه', tone: 'run', label: data.runtime?.commit ?? 'نامشخص', hint: `روشن‌شده ${faDate(data.runtime?.bootedAt)}`, ltr: true },
-    { key: 'backup', title: 'پشتیبان', tone: 'run', label: 'خارج از برنامه', hint: 'پشتیبان‌گیری در Coolify انجام می‌شود و از اینجا دیده نمی‌شود — شرحِ گام‌به‌گام در docs/BACKUP-RESTORE.md' },
+    /* پشتیبانِ اصلی `backup.sh` با cron روی **میزبانِ سرور** است (Backupsِ Coolify فقط لایهٔ دومِ اختیاری است و نقش‌ها و
+       فایل‌ها را ندارد). برنامه از آن خبر ندارد، پس سبزِ ساختگی ممنوع است و توضیحش همیشه زیرِ چیپ‌ها دیده می‌شود —
+       نه فقط در `title` که لمس و صفحه‌کلید و صفحه‌خوان نمی‌بینند. */
+    { key: 'backup', title: 'پشتیبان', tone: 'run', label: 'خارج از برنامه', hint: 'از برنامه دیده نمی‌شود — آخرین پشتیبانِ شبانه (backup.sh روی سرور) و تمرینِ بازگردانی را طبقِ docs/BACKUP-RESTORE.md بررسی کن', always: true },
   ] : [];
-  const notes = items.filter((i) => (i.tone === 'fail' || i.tone === 'warn') && i.hint);
+  const notes = items.filter((i) => (i.tone === 'fail' || i.tone === 'warn' || i.always) && i.hint);
 
   return (
     <section className="pa-card pa-health" data-section="health" aria-label="آمادگیِ سامانه">
+      {/* یک ناحیهٔ زندهٔ ثابت دورِ چیپ‌ها، یادداشت‌ها و خطا — هر تغییری اعلام می‌شود، نه فقط خطایی که تازه سوار شده. */}
+      <div role="status" aria-live="polite">
       <div className="pa-health-row">
         <h2>آمادگیِ سامانه</h2>
         {error
-          ? <span className="pa-badge fail" role="status">خوانده نشد — {error}</span>
+          ? <span className="pa-badge fail">خوانده نشد — {error}</span>
           : (
             <ul className="pa-health-chips">
               {items.map((i) => (
@@ -904,11 +912,13 @@ function HealthPanel() {
           )}
         <button type="button" className="pa-refresh" onClick={load} disabled={busy}>{busy ? 'در حال بررسی…' : 'بازخوانی'}</button>
       </div>
-      {notes.length > 0 && (
+      {/* بازخوانیِ ناموفق یادداشت‌های پاسخِ قبلی را زیرِ «خوانده نشد» نگه نمی‌دارد — آن‌ها دیگر وضعیتِ فعلی نیستند. */}
+      {!error && notes.length > 0 && (
         <ul className="pa-health-notes">
           {notes.map((n) => <li key={n.key} className={n.tone}>{n.title}: <Bidi text={n.hint} /></li>)}
         </ul>
       )}
+      </div>
     </section>
   );
 }

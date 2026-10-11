@@ -16,6 +16,9 @@
  *   - پشتیبانِ رمزشده: بی‌رمز و با رمزِ غلط ناموفق، با رمزِ درست موفق، و هیچ دامپِ بی‌رمز روی دیسک نمی‌ماند
  *   - تمرین روی سرورِ پُر (زنده) **رد می‌شود** (هرگز روی دیتابیسِ زنده بازگردانی نمی‌کند)
  *   - پشتیبانِ نیمه‌کاره: فایلِ FAILED، کدِ خروجیِ غیرصفر، LATEST عوض نمی‌شود، و تمرین آن را ناقص می‌داند
+ *   - (بازبینیِ ۱۴۰۵/۰۷/۱۹) همهٔ نقش‌ها سنجیده می‌شوند نه فقط اولی؛ شرکتِ فعال با نامِ دیتابیسش (یتیم جایش را پر نمی‌کند)؛
+ *     فایل در پوشهٔ همان شرکت؛ رمزِ دارای $ ` ; # از فایلِ تنظیمات بی‌تفسیرِ شل؛ coolify-db کنار؛ شکستِ rclone ← کدِ ۳ و
+ *     UPLOAD_FAILED (نه FAILED) و نگهداری پیش از آپلود
  *  نباید بیفتد:
  *   - نگهداری: پوشه‌های قدیمی پاک می‌شوند ولی سه‌تای تازه همیشه می‌مانند
  *   - دیتابیسِ `postgres` و قالب‌ها پشتیبان گرفته نمی‌شوند
@@ -103,7 +106,7 @@ const sha = (text) => createHash('sha256').update(text).digest('hex');
 const acme = randomUUID(); const beta = randomUUID(); const gone = randomUUID();
 const files = { acme: ['a1', 'a2', 'a3'].map((t) => ({ t, h: sha(`acme-${t}`) })), beta: [{ t: 'b1', h: sha('beta-b1') }], proof: sha('acme-proof'), deleted: sha('acme-deleted') };
 function seed(src) {
-  psql(src, 'postgres', `CREATE ROLE bk_provisioner LOGIN CREATEDB CREATEROLE PASSWORD 'p1'; CREATE ROLE bk_acme LOGIN PASSWORD 'secret-acme'; CREATE ROLE bk_beta LOGIN PASSWORD 'secret-beta';`);
+  psql(src, 'postgres', `CREATE ROLE bk_provisioner LOGIN CREATEDB CREATEROLE PASSWORD 'p1'; CREATE ROLE amalyar_acme_app LOGIN PASSWORD 'secret-acme'; CREATE ROLE amalyar_beta_app LOGIN PASSWORD 'secret-beta';`);
   psql(src, 'postgres', 'CREATE DATABASE bk_control OWNER bk_provisioner');
   psql(src, 'bk_control', `CREATE TABLE tenants (id uuid PRIMARY KEY, slug text, status text, database_url_encrypted text);
     CREATE TABLE tenant_domains (id serial PRIMARY KEY, tenant_id uuid, hostname text);
@@ -114,21 +117,21 @@ function seed(src) {
     CREATE TABLE visits (id serial PRIMARY KEY, patient_id int);
     CREATE TABLE documents (id serial PRIMARY KEY, sha256 text NOT NULL, deleted_at timestamptz);
     CREATE TABLE stop_proofs (id serial PRIMARY KEY, sha256 text NOT NULL);`;
-  psql(src, 'postgres', 'CREATE DATABASE bk_acme OWNER bk_acme');
-  psql(src, 'bk_acme', `${tenantShape}
+  psql(src, 'postgres', 'CREATE DATABASE amalyar_acme OWNER amalyar_acme_app');
+  psql(src, 'amalyar_acme', `${tenantShape}
     INSERT INTO _prisma_migrations VALUES ('m1'),('m2');
     INSERT INTO patients (first_name) VALUES ('علی'),('مریم'),('رضا');
     INSERT INTO visits (patient_id) VALUES (1),(2);
     INSERT INTO documents (sha256) VALUES ${files.acme.map((f) => `('${f.h}')`).join(',')};
     INSERT INTO documents (sha256, deleted_at) VALUES ('${files.deleted}', now());
     INSERT INTO stop_proofs (sha256) VALUES ('${files.proof}');`);
-  psql(src, 'postgres', 'CREATE DATABASE bk_beta OWNER bk_beta');
-  psql(src, 'bk_beta', `${tenantShape}
+  psql(src, 'postgres', 'CREATE DATABASE amalyar_beta OWNER amalyar_beta_app');
+  psql(src, 'amalyar_beta', `${tenantShape}
     INSERT INTO _prisma_migrations VALUES ('m1');
     INSERT INTO patients (first_name) VALUES ('سارا');
     INSERT INTO documents (sha256) VALUES ('${files.beta[0].h}');`);
 }
-function writeStorage(dir, { skip } = {}) {
+function writeStorage(dir, { skip, betaInto } = {}) {
   rmSync(dir, { recursive: true, force: true });
   const put = (tenant, hash, text) => {
     if (hash === skip) return;
@@ -137,7 +140,7 @@ function writeStorage(dir, { skip } = {}) {
   };
   for (const f of files.acme) put(acme, f.h, `acme-${f.t}`);
   put(acme, files.proof, 'acme-proof');
-  for (const f of files.beta) put(beta, f.h, `beta-${f.t}`);
+  for (const f of files.beta) put(betaInto ?? beta, f.h, `beta-${f.t}`);
   mkdirSync(join(dir, '.ledger'), { recursive: true });
   writeFileSync(join(dir, '.ledger', 'containers.json'), '{"v":1,"first":"x","seen":[]}'); // نباید ارجاعِ فایل حساب شود
 }
@@ -165,9 +168,9 @@ try {
   const latest = readFileSync(join(BK, 'LATEST'), 'utf8').trim();
   const dir = join(BK, latest);
   const names = readdirSync(dir).sort();
-  ok(JSON.stringify(names) === JSON.stringify(['MANIFEST.txt', 'SHA256SUMS', 'bk_acme.dump', 'bk_beta.dump', 'bk_control.dump', 'globals.sql', 'storage.tar.gz']), `محتوای پوشه: ${names.join(' ')}`);
+  ok(JSON.stringify(names) === JSON.stringify(['MANIFEST.txt', 'SHA256SUMS', 'amalyar_acme.dump', 'amalyar_beta.dump', 'bk_control.dump', 'globals.sql', 'storage.tar.gz']), `محتوای پوشه: ${names.join(' ')}`);
   ok(!names.some((n) => /^postgres\.dump$|template/.test(n)), 'دیتابیسِ postgres و قالب‌ها پشتیبان نمی‌شوند');
-  ok(readFileSync(join(dir, 'globals.sql'), 'utf8').includes('bk_acme') && !readFileSync(join(dir, 'globals.sql'), 'utf8').includes('secret-acme'), 'نقش‌ها در globals هست (رمز به‌صورتِ چکیده، نه متنِ ساده)');
+  ok(readFileSync(join(dir, 'globals.sql'), 'utf8').includes('amalyar_acme_app') && !readFileSync(join(dir, 'globals.sql'), 'utf8').includes('secret-acme'), 'نقش‌ها در globals هست (رمز به‌صورتِ چکیده، نه متنِ ساده)');
   ok(/دیتابیس‌ها \(3\)/.test(readFileSync(join(dir, 'MANIFEST.txt'), 'utf8')) && /رمزشده: خیر/.test(readFileSync(join(dir, 'MANIFEST.txt'), 'utf8')), 'خلاصه: سه دیتابیس، بی‌رمز');
   ok(!existsSync(join(dir, 'FAILED')), 'علامتِ FAILED نیست');
   ok(!readdirSync(BK).some((n) => n.startsWith('.tmp')), 'پوشهٔ موقت پاک شد');
@@ -178,15 +181,21 @@ try {
   let d = run(DRILL, await drillEnv({ BACKUP_DIR: BK }), [latest]);
   const df = flat(d.out);
   ok(d.code === 0 && /تمرین موفق/.test(d.out), '**تمرینِ بازگردانی موفق**', d.out);
-  ok(/نقش‌ها برگشتند \(3 نقش|نقش‌ها برگشتند \(\d+ نقش\)/.test(d.out), 'نقش‌ها برگشتند');
-  ok(/bk_acme 2 3 2 4/.test(df) && /bk_beta 1 1 0 1/.test(df), `**شمارِ ردیف‌ها بعد از بازگردانی درست است** (acme: ۲ migration، ۳ بیمار، ۲ مراجعه، ۴ مدرک؛ beta: ۱ migration، ۱ بیمار، ۰ مراجعه، ۱ مدرک)`, df.slice(df.indexOf('دیتابیس'), df.indexOf('دیتابیس') + 400));
-  ok(/دیتابیسِ مرکزی: bk_control \(2 شرکتِ فعال\)/.test(d.out) && /همهٔ شرکت‌های فعال برگشت \(2 از 2\)/.test(d.out), 'مرکزی و دیتابیسِ هر شرکتِ فعال برگشت (شرکتِ در حال حذف شمرده نمی‌شود)');
-  ok(/همهٔ 5 فایلِ ارجاع‌شده/.test(d.out), '**هر فایلِ ارجاع‌شده در آرشیو هست** (۳ مدرکِ آکمه + یک مدرکِ بتا + یک اثبات = ۵؛ مدرکِ حذف‌شده و دفترِ کانتینرها شمرده نمی‌شوند)', d.out);
+  /* شمارِ نقش‌های گزارش‌شده باید دقیقاً همهٔ CREATE ROLEهای پشتیبان باشد — در حالتِ Docker، `docker exec -i` داخلِ حلقه
+     بقیهٔ فهرست را می‌بلعید و فقط نقشِ اول سنجیده می‌شد. */
+  const roleCount = (readFileSync(join(dir, 'globals.sql'), 'utf8').match(/^CREATE ROLE /gm) ?? []).length;
+  ok(roleCount >= 3 && new RegExp(`نقش‌ها برگشتند \\(${roleCount} نقش\\)`).test(d.out), `**همهٔ ${roleCount} نقشِ پشتیبان سنجیده شد** (نه فقط اولی)`, d.out.match(/نقش‌ها[^\n]*/)?.[0]);
+  ok(!/بی‌اجازهٔ ورود یا بی‌رمز/.test(d.out), 'نقشِ هر شرکت با اجازهٔ ورود و رمز برگشت');
+  ok(/amalyar_acme 2 3 2 4/.test(df) && /amalyar_beta 1 1 0 1/.test(df), `**شمارِ ردیف‌ها بعد از بازگردانی درست است** (acme: ۲ migration، ۳ بیمار، ۲ مراجعه، ۴ مدرک؛ beta: ۱ migration، ۱ بیمار، ۰ مراجعه، ۱ مدرک)`, df.slice(df.indexOf('دیتابیس'), df.indexOf('دیتابیس') + 400));
+  ok(/دیتابیسِ مرکزی: bk_control \(2 شرکتِ فعال\)/.test(d.out) && /همهٔ شرکت‌های فعال برگشت \(2 از 2، هرکدام با نامِ خودش\)/.test(d.out), '**دیتابیسِ هر شرکتِ فعال با نامِ خودش برگشت** (شرکتِ در حال حذف شمرده نمی‌شود)', d.out);
+  ok(/همهٔ 4 فایلِ ارجاع‌شدهٔ amalyar_acme در پوشهٔ همان شرکت/.test(d.out) && /همهٔ 1 فایلِ ارجاع‌شدهٔ amalyar_beta در پوشهٔ همان شرکت/.test(d.out),
+    '**هر فایلِ ارجاع‌شده در پوشهٔ همان شرکت هست** (آکمه: ۳ مدرک + یک اثبات؛ بتا: یک مدرک؛ مدرکِ حذف‌شده و دفترِ کانتینرها شمرده نمی‌شوند)', d.out);
+  ok(!/ ! /.test(d.out) && /کامل برگشت/.test(d.out), 'بی‌هشدار — «کامل برگشت»', d.out);
   ok(/ثانیه/.test(d.out), 'زمانِ بازگردانی گزارش شد');
   if (MODE === 'docker') ok(sh('docker', ['ps', '-a', '--format', '{{.Names}}']).stdout.indexOf('amalyar-drill-') < 0, 'کانتینرِ تمرین پاک شد');
 
   console.log('\n۳) چیزی که باید قرمز شود');
-  const dump = join(dir, 'bk_acme.dump');
+  const dump = join(dir, 'amalyar_acme.dump');
   const original = readFileSync(dump);
   const flipped = Buffer.from(original); flipped[Math.floor(flipped.length / 2)] ^= 0xff;
   writeFileSync(dump, flipped);
@@ -201,7 +210,7 @@ try {
   const latest2 = readFileSync(join(BK, 'LATEST'), 'utf8').trim();
   ok(latest2 !== latest, 'LATEST جلو رفت');
   d = run(DRILL, await drillEnv({ BACKUP_DIR: BK }), [latest2]);
-  ok(d.code === 1 && /1 فایلِ ارجاع‌شده در آرشیوِ فایل‌ها نیست/.test(d.out), '**فایلِ گم‌شده‌ی ارجاع‌شده ← تمرین ناموفق** (DB و فایل‌ها هم‌خوان نیستند)', d.out);
+  ok(d.code === 1 && /1 فایلِ ارجاع‌شدهٔ amalyar_acme در پوشهٔ شرکتش نیست/.test(d.out), '**فایلِ گم‌شده‌ی ارجاع‌شده ← تمرین ناموفق** (DB و فایل‌ها هم‌خوان نیستند)', d.out);
   ok(!/دیتابیسِ .* برنگشت/.test(d.out), 'با این‌همه دیتابیس‌ها برگشته‌اند (فقط فایل کم است)');
   writeStorage(ST);
 
@@ -209,11 +218,11 @@ try {
   if (MODE === 'local') {
     d = run(DRILL, { ...src.env, DRILL_LOCAL: 'yes', BACKUP_DIR: BK }, [latest]);
     ok(d.code === 2 && /سرورِ تمرین باید خالی باشد/.test(d.out) && /هرگز روی سرورِ زنده/.test(d.out), '**روی سرورِ پُر بازگردانی نمی‌کند** (کدِ ۲)', d.out);
-    ok(psql(src, 'bk_acme', 'SELECT count(*) FROM patients') === '3', 'دیتابیسِ زنده دست‌نخورده ماند');
+    ok(psql(src, 'amalyar_acme', 'SELECT count(*) FROM patients') === '3', 'دیتابیسِ زنده دست‌نخورده ماند');
     const bare = { ...(await drillEnv()) }; delete bare.DRILL_LOCAL;
     d = run(DRILL, { ...bare, BACKUP_DIR: BK, PATH: '/usr/bin:/bin' }, [latest]);
     ok(d.code === 2 && /Docker|کانتینرِ تمرین بالا نیامد/.test(d.out), 'بدونِ DRILL_LOCAL=yes هرگز از PG* به‌عنوانِ سرورِ تمرین استفاده نمی‌کند', d.out);
-    ok(psql({ env: bare }, 'postgres', "SELECT count(*) FROM pg_database WHERE datname LIKE 'bk_%'") === '0', 'و چیزی روی آن سرور بازگردانی نشد');
+    ok(psql({ env: bare }, 'postgres', "SELECT count(*) FROM pg_database WHERE datname LIKE 'bk_%' OR datname LIKE 'amalyar_%'") === '0', 'و چیزی روی آن سرور بازگردانی نشد');
   } else ok(true, '(حالتِ docker: سرورِ تمرین همیشه تازه است؛ ردِ سرورِ پُر فقط در حالتِ محلی معنا دارد)');
 
   console.log('\n۵) پشتیبانِ رمزشده');
@@ -222,9 +231,9 @@ try {
   ok(b.code === 0, 'پشتیبانِ رمزشده گرفته شد', b.out);
   const encDir = join(BK2, readFileSync(join(BK2, 'LATEST'), 'utf8').trim());
   const encNames = readdirSync(encDir).sort();
-  ok(encNames.includes('bk_acme.dump.enc') && encNames.includes('globals.sql.enc') && encNames.includes('storage.tar.gz.enc'), `فایل‌ها .enc اند: ${encNames.join(' ')}`);
+  ok(encNames.includes('amalyar_acme.dump.enc') && encNames.includes('globals.sql.enc') && encNames.includes('storage.tar.gz.enc'), `فایل‌ها .enc اند: ${encNames.join(' ')}`);
   ok(!encNames.some((n) => /\.dump$|globals\.sql$|\.tar\.gz$/.test(n)), '**هیچ دامپِ بی‌رمزی روی دیسک نماند**');
-  ok(!readFileSync(join(encDir, 'bk_acme.dump.enc')).includes('first_name') && !readFileSync(join(encDir, 'bk_acme.dump.enc')).includes(Buffer.from('PGDMP')), 'محتوای دامپ خوانا نیست');
+  ok(!readFileSync(join(encDir, 'amalyar_acme.dump.enc')).includes('first_name') && !readFileSync(join(encDir, 'amalyar_acme.dump.enc')).includes(Buffer.from('PGDMP')), 'محتوای دامپ خوانا نیست');
   ok(/رمزشده: بله/.test(readFileSync(join(encDir, 'MANIFEST.txt'), 'utf8')), 'خلاصه می‌گوید رمزشده');
   const encName = encDir.split('/').pop();
   d = run(DRILL, await drillEnv({ BACKUP_DIR: BK2 }), [encName]);
@@ -267,8 +276,59 @@ try {
   console.log('\n۷ب) دسترسیِ فایل‌ها — دامپ مدرکِ بیمار است');
   const newest = join(BK3, readFileSync(join(BK3, 'LATEST'), 'utf8').trim());
   const mode = (p) => (statSync(p).mode & 0o777).toString(8);
-  ok(mode(newest) === '700' && mode(join(newest, 'bk_acme.dump')) === '600' && mode(join(newest, 'globals.sql')) === '600' && mode(join(newest, 'storage.tar.gz')) === '600',
-    `**پوشه ۷۰۰ و فایل‌ها ۶۰۰** (کاربرِ دیگرِ سرور نمی‌خواند): ${mode(newest)} / ${mode(join(newest, 'bk_acme.dump'))}`);
+  ok(mode(newest) === '700' && mode(join(newest, 'amalyar_acme.dump')) === '600' && mode(join(newest, 'globals.sql')) === '600' && mode(join(newest, 'storage.tar.gz')) === '600',
+    `**پوشه ۷۰۰ و فایل‌ها ۶۰۰** (کاربرِ دیگرِ سرور نمی‌خواند): ${mode(newest)} / ${mode(join(newest, 'amalyar_acme.dump'))}`);
+
+  console.log('\n۷ج) فایلِ تنظیمات — رمزِ دارای نویسه‌های ویژه همان‌طور می‌ماند');
+  /* ⚠️ دستورِ قبلیِ سند فایل را با heredocِ بی‌نقل می‌ساخت و cron با `. فایل` می‌خواندش: $ و ` هنگامِ نوشتن و فاصله/#/; هنگامِ
+     خواندن عوض می‌شد و cron با رمزی جز رمزِ مدیرِ رمزِ مالک رمز می‌کرد. حالا فایل متنی خوانده می‌شود. */
+  const BK4 = join(work, 'backups-envfile');
+  const PASS = 'p@ss $HOME ' + '`id`' + ' ; # & (x) "q"';
+  const envFile = join(work, 'amalyar-backup.env');
+  writeFileSync(envFile, `# تنظیماتِ پشتیبان\nBACKUP_DIR=${BK4}\nBACKUP_PASSPHRASE='${PASS}'\nRETENTION_DAYS=14\n`, { mode: 0o600 });
+  b = run(BACKUP, { ...srcEnv, STORAGE_DIR: ST, BACKUP_ENV: envFile });
+  ok(b.code === 0 && existsSync(join(BK4, 'LATEST')), 'backup.sh پوشه و رمز را از فایل خواند', b.out);
+  const envDir = join(BK4, readFileSync(join(BK4, 'LATEST'), 'utf8').trim());
+  const dec = sh('openssl', ['enc', '-d', '-aes-256-cbc', '-pbkdf2', '-pass', 'env:LIT', '-in', join(envDir, 'globals.sql.enc')], { env: { ...process.env, LIT: PASS } });
+  ok(dec.status === 0 && /CREATE ROLE/.test(dec.stdout), '**با همان رمزِ نوشته‌شده در فایل باز می‌شود** (بی‌تفسیرِ شل)', dec.stderr);
+  d = run(DRILL, await drillEnv({ BACKUP_ENV: envFile }), []);
+  ok(d.code === 0 && /تمرین موفق/.test(d.out), '**تمرین رمز و پوشه را از همان فایل می‌خواند** (رمز در خطِ فرمان نمی‌آید)', d.out);
+  writeFileSync(envFile, `BACKUP_DIR=${BK4}\nPG_CONTAINR=x\n`);
+  b = run(BACKUP, { ...srcEnv, STORAGE_DIR: ST, BACKUP_ENV: envFile });
+  ok(b.code !== 0 && /کلیدِ ناشناخته/.test(b.out) && /PG_CONTAINR/.test(b.out), 'کلیدِ غلط‌تایپی بی‌صدا نادیده گرفته نمی‌شود', b.out);
+
+  console.log('\n۷د) میزبانِ Coolify: کانتینرِ coolify-db کنار گذاشته می‌شود');
+  const fakeDocker = join(work, 'shim-docker'); mkdirSync(fakeDocker);
+  const dockerShim = (lines) => writeFileSync(join(fakeDocker, 'docker'), `#!/bin/sh\nif [ "$1" = ps ]; then printf '${lines.join('\\n')}\\n'; exit 0; fi\nexit 1\n`, { mode: 0o755 });
+  const noPg = { PATH: `${fakeDocker}:${process.env.PATH}`, PGHOST: '', PG_CONTAINER: '', BACKUP_DIR: join(work, 'backups-shim'), STORAGE_DIR: ST, BACKUP_ENV: '/nonexistent' };
+  dockerShim(['coolify-db postgres:15-alpine', 'amalyar-pg-x postgres:18-alpine', 'coolify-redis redis:7-alpine']);
+  b = run(BACKUP, noPg);
+  ok(b.code !== 0 && /کانتینر «amalyar-pg-x»/.test(b.out) && !/یکتا پیدا کنم/.test(b.out), '**از میانِ coolify-db و Postgresِ عمل‌یار، دومی انتخاب شد**', b.out);
+  dockerShim(['coolify-db postgres:15-alpine', 'pg-a postgres:18-alpine', 'pg-b postgres:18-alpine']);
+  b = run(BACKUP, noPg);
+  ok(b.code !== 0 && /یکتا پیدا کنم/.test(b.out) && /PG_CONTAINER/.test(b.out), 'دو Postgresِ غیرِ Coolify ← می‌ایستد و نام می‌خواهد (حدس نمی‌زند)', b.out);
+
+  console.log('\n۷ه) آپلودِ بیرونی شکست خورد — پشتیبانِ محلی سالم می‌ماند');
+  const fakeRclone = join(work, 'shim-rclone'); mkdirSync(fakeRclone);
+  writeFileSync(join(fakeRclone, 'rclone'), '#!/bin/sh\necho "network down" >&2\nexit 1\n', { mode: 0o755 });
+  const BK5 = join(work, 'backups-rclone'); mkdirSync(BK5);
+  for (let i = 1; i <= 4; i++) {
+    const old = join(BK5, `2020020${i}T000000Z`); mkdirSync(old); writeFileSync(join(old, 'x'), 'x');
+    utimesSync(old, new Date('2020-02-0' + i), new Date('2020-02-0' + i));
+  }
+  const withRclone = { ...baseEnv, BACKUP_DIR: BK5, RCLONE_REMOTE: join(work, 'remote'), PATH: `${fakeRclone}:${process.env.PATH}` };
+  b = run(BACKUP, withRclone);
+  const rdir = join(BK5, readFileSync(join(BK5, 'LATEST'), 'utf8').trim());
+  ok(b.code === 3 && /آپلود با rclone شکست خورد/.test(b.out) && /پشتیبانِ محلی کامل است/.test(b.out), 'کدِ خروجیِ ۳ و پیامِ روشن', b.out);
+  ok(existsSync(join(rdir, 'UPLOAD_FAILED')) && !existsSync(join(rdir, 'FAILED')), '**پوشهٔ سالم «ناقص» علامت نخورد** (UPLOAD_FAILED، نه FAILED)');
+  ok(existsSync(join(BK5, 'LAST_UPLOAD_FAILED')) && readFileSync(join(BK5, 'LAST_SUCCESS'), 'utf8').startsWith(rdir.split('/').pop()), 'LAST_UPLOAD_FAILED و LAST_SUCCESS کنارِ LATEST');
+  ok(!existsSync(join(BK5, '20200201T000000Z')) && existsSync(join(BK5, '20200204T000000Z')), '**نگهداری پیش از آپلود دوید** (شکستِ شبکه دیسک را پر نمی‌کند)');
+  d = run(DRILL, await drillEnv({ BACKUP_DIR: BK5 }), []);
+  ok(d.code === 0 && /تمرین موفق/.test(d.out), 'همان پشتیبان در تمرین موفق است', d.out);
+  writeFileSync(join(fakeRclone, 'rclone'), '#!/bin/sh\n[ "$1" = copy ] || exit 2\nmkdir -p "$3" && cp -R "$2"/. "$3"/\n', { mode: 0o755 });
+  b = run(BACKUP, withRclone);
+  const okStamp = readFileSync(join(BK5, 'LATEST'), 'utf8').trim();
+  ok(b.code === 0 && !existsSync(join(BK5, 'LAST_UPLOAD_FAILED')) && existsSync(join(work, 'remote', okStamp, 'SHA256SUMS')), 'آپلودِ موفقِ بعدی LAST_UPLOAD_FAILED را پاک می‌کند و پوشه بیرون است', b.out);
 
   if (MODE === 'docker') {
     console.log('\n۸) volume (مسیرِ production)');
@@ -283,6 +343,23 @@ try {
     ok(b.code === 0 && listing.includes(files.proof), 'پشتیبانِ volume (docker run alpine tar) فایل‌ها را دارد', b.out);
     sh('docker', ['volume', 'rm', '-f', vol]);
   }
+
+  console.log('\n۹) شرکتِ گم‌شده پشتِ دیتابیسِ یتیم، و فایلِ شرکتی در پوشهٔ شرکتِ دیگر (باید قرمز شود)');
+  /* شمارش «۳ دیتابیسِ شرکت ≥ ۳ شرکتِ فعال» را پاس می‌کرد و مجموعهٔ هش‌های همهٔ پوشه‌ها، فایلِ هم‌محتوای شرکتِ دیگر را
+     جای فایلِ گم‌شده می‌پذیرفت. */
+  psql(src, 'bk_control', `INSERT INTO tenants VALUES ('${randomUUID()}','gamma','active','x')`);
+  psql(src, 'postgres', 'CREATE DATABASE amalyar_old');
+  psql(src, 'amalyar_old', `CREATE TABLE _prisma_migrations (id text PRIMARY KEY); INSERT INTO _prisma_migrations VALUES ('m1');
+    CREATE TABLE patients (id serial PRIMARY KEY); CREATE TABLE documents (id serial PRIMARY KEY, sha256 text NOT NULL, deleted_at timestamptz);
+    CREATE TABLE stop_proofs (id serial PRIMARY KEY, sha256 text NOT NULL);`);
+  writeStorage(ST, { betaInto: acme });
+  const BK6 = join(work, 'backups-orphan');
+  b = run(BACKUP, { ...baseEnv, BACKUP_DIR: BK6 });
+  ok(b.code === 0, 'پشتیبان گرفته شد', b.out);
+  d = run(DRILL, await drillEnv({ BACKUP_DIR: BK6 }), []);
+  ok(d.code === 1 && /دیتابیسِ این شرکت‌های فعال برنگشت: gamma/.test(d.out), '**دیتابیسِ یتیمِ amalyar_old جای شرکتِ گم‌شدهٔ gamma را پر نمی‌کند**', d.out);
+  ok(/amalyar_old به هیچ شرکتِ فعالی نمی‌خورد/.test(d.out), 'و دیتابیسِ یتیم گزارش می‌شود');
+  ok(/1 فایلِ ارجاع‌شدهٔ amalyar_beta در پوشهٔ شرکتش نیست/.test(d.out), '**فایلِ بتا در پوشهٔ آکمه جای فایلِ بتا را پر نمی‌کند**', d.out);
 } catch (e) {
   fails.push('استثنا: ' + (e?.stack ?? e));
   console.log('  ✘ استثنا: ' + (e?.stack ?? e));

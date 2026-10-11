@@ -1,12 +1,34 @@
 /** One sender for the manual action and tenant worker. Never treat a stub or a claim as delivery. */
 /* W2.2: outboxِ رویداد (CONTRACTS §۲) — sms.failed ← کارِ «ارسالِ دوباره»؛ sms.sent آن را می‌بندد. هرگز ارسال را نمی‌شکند. */
-async function emitSms(client: any, row: any, type: string, payload: Record<string, unknown>) {
+export async function emitSms(client: any, row: any, type: string, payload: Record<string, unknown>) {
   try {
     await client.domainEvent.create({ data: {
       type, patientId: row.patientId ?? null, visitId: row.visitId ?? null, appointmentId: row.appointmentId ?? null,
       refType: 'reminder', refId: row.id, payload: { kind: row.kind, ...payload },
     } });
   } catch { /* جدولِ رویداد هنوز migrate نشده یا خطای گذرا — یادآوری خودش ثبت شده است */ }
+}
+/**
+ * لینکِ سفارشی (`/o/<توکن>`) که واقعاً رفت ← سفارشِ «پیش‌نویس» «فرستاده‌شده» می‌شود.
+ *
+ * ⚠️ گذارِ draft→sent باید به **رفتنِ پیامک** گره بخورد، نه به این‌که کدام مسیر فرستادش. وقتی دکمهٔ «ثبت و ارسال»
+ * پیامک را رد می‌گرفت، ردیفِ «نرفت» + کارِ «ارسالِ دوباره» ساخته می‌شد؛ «ارسالِ دوباره» از همین تابع می‌گذرد و
+ * لینک را واقعاً می‌رساند، ولی سفارش «پیش‌نویس» می‌ماند و صفحهٔ بیمار پاسخ و فایل را با ۴۰۹ رد می‌کرد. شمارهٔ
+ * پرونده هم شرط است تا متنی که اتفاقاً شبیهِ لینک است سفارشِ کسِ دیگری را جلو نبرد. هرگز ارسال را نمی‌شکند.
+ */
+const ORDER_TABLES = ['labOrder', 'imagingOrder', 'consultOrder', 'referralOrder'];
+const ORDER_LINK = /\/o\/([A-Za-z0-9_-]{16,64})(?![A-Za-z0-9_-])/;
+export function orderTokenIn(text: unknown): string | null {
+  return ORDER_LINK.exec(String(text ?? ''))?.[1] ?? null;
+}
+async function promoteOrderLink(client: any, row: any) {
+  const token = row.kind === 'notice' ? orderTokenIn(row.text) : null;
+  if (!token || !row.patientId) return;
+  for (const t of ORDER_TABLES) {
+    try {
+      await client[t]?.updateMany({ where: { token, patientId: row.patientId, status: 'draft' }, data: { status: 'sent', sentAt: new Date() } });
+    } catch { /* جدولِ آن نوع هنوز migrate نشده — پیام خودش رفته است */ }
+  }
 }
 /**
  * سه تلاشِ دوباره با مکثِ ۵ → ۱۵ → ۴۵ دقیقه (قراردادِ §۸).
@@ -49,6 +71,7 @@ export async function sendReminders(client: any, sms: any, ids?: number[]) {
       await client.reminder.update({ where: { id: row.id }, data: { status: result.stub ? 'simulated' : 'sent', sentAt: result.sent ? new Date() : null, providerId: result.providerId ?? null, deliveryStatus: result.sent ? 'unknown' : 'not_sent', error: result.stub ? 'حالت آزمایشی؛ پیام واقعی ارسال نشده است' : null } });
       if (result.sent) sent++; else skipped++;
       if (result.sent) await emitSms(client, row, 'sms.sent', { providerId: result.providerId ?? null });
+      await promoteOrderLink(client, row);
     } catch (e) {
       failed++;
       /* علتِ واقعی (`smsDetail`: کلید/خط تنظیم نیست، یا متنِ ردِ ملی‌پیامک)، نه پیامِ

@@ -313,6 +313,12 @@ export class AuthService {
         },
         include: WITH_PERSON,
       });
+      /* 🔴 نقشِ «پزشک» بدونِ تعریفِ جراح نصفِ کار است (همان درسِ `promoteSoleFounder` و `setJobRole`): بنیان‌گذارِ مطبی
+         که Worker پیش از اولین ورود «مطب» کرده، تا امروز همین‌جا `jobRole='doctor'` می‌گرفت ولی در `GET /surgeons` نبود —
+         کشویِ اجباریِ «پزشک» در فرمِ ویزیت خالی بود و اولین ویزیتش ثبت نمی‌شد. هم‌تراکنش، تا نیمه‌کاره نماند. */
+      if (account.jobRole === 'doctor') {
+        await tx.surgeon.upsert({ where: { personId: account.personId }, update: {}, create: { personId: account.personId } });
+      }
       return { account, bootstrap, claimed: false };
     });
 

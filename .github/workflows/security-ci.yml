@@ -3308,8 +3308,9 @@ jobs:
           const bad = [];
           const worker = read('server/src/scripts/provisioning-worker.ts');
           if (!/assertJobProfile\\(/.test(worker) || !/seedTenantProfile\\(/.test(worker)) bad.push('Worker نوعِ نصب را اعتبارسنجی و در دیتابیسِ tenant نمی‌کارد');
-          if (worker.indexOf('seedTenantProfile(') > worker.indexOf('tx.tenant.create(')) bad.push('نوعِ نصب باید پیش از ثبتِ شرکت در control-db کاشته شود (وگرنه اولین ورود با نوعِ پیش‌فرض می‌رسد)');
-          if (worker.indexOf('seedTenantProfile(') < worker.indexOf('migrateTenant(')) bad.push('نوع پیش از migration کاشته شده؛ ردیف‌های ماژول هنوز نیست');
+          if (worker.indexOf('await seedTenantProfile(') < 0 || worker.indexOf('await seedTenantProfile(') > worker.indexOf('tx.tenant.create(')) bad.push('نوعِ نصب باید پیش از ثبتِ شرکت در control-db کاشته شود (وگرنه اولین ورود با نوعِ پیش‌فرض می‌رسد)');
+          /* محلِ فراخوان، نه اعلانِ تابع: اولین «migrateTenant(» خودِ اعلانِ تابع است و مقایسه با آن هرگز نمی‌افتاد. */
+          if (worker.indexOf('await migrateTenant(') < 0 || worker.indexOf('await seedTenantProfile(') < worker.indexOf('await migrateTenant(')) bad.push('نوع پیش از migration کاشته شده؛ ردیف‌های ماژول هنوز نیست');
           const feat = read('server/src/features/features.service.ts');
           if ((feat.match(/export async function applyProfileFeatures/g) || []).length !== 1) bad.push('applyProfileFeatures باید دقیقاً یک‌بار تعریف شود');
           for (const f of ['server/src/config/config.service.ts', 'server/src/scripts/seed-profile.ts']) {

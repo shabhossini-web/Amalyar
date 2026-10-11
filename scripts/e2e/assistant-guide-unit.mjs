@@ -36,6 +36,7 @@ const bundle = (rel, name) => {
 const K = await bundle('server/src/ai/assistant-knowledge.ts', 'knowledge');
 const R = await bundle('server/src/auth/access-registry.ts', 'registry');
 const P = await bundle('server/src/config/tenant-profile.ts', 'profile');
+const L = await bundle('server/src/patients/labels.ts', 'labels');
 const read = (rel) => readFileSync(resolve(root, rel), 'utf8');
 
 let pass = 0; const fails = [];
@@ -71,7 +72,7 @@ const profiles = [
   ['شرکت — ایمپلنت', 'company', ['implant']],
   ['شرکت — هر دو خدمت', 'company', ['ionm', 'implant']],
 ];
-const ctxOf = (kind, services) => ({ kind, enabled: new Set(Object.keys(P.featurePlanForProfile(kind, services))) });
+const ctxOf = (kind, services) => ({ kind, services, enabled: new Set(Object.keys(P.featurePlanForProfile(kind, services))) });
 const guides = {};
 for (const [label, kind, services] of profiles) {
   const ctx = ctxOf(kind, services);
@@ -102,6 +103,23 @@ ok(/«نامِ فرم»/.test(clinic) && /09…/.test(clinic), 'مطب: «نام
 ok(/نوبتِ شما ثبت شد/.test(clinic) && /نوبتِ شما ثبت شد/.test(ionm), 'هر دو: تأییدِ نوبتِ انتخاب‌شده را می‌دانند');
 ok(/پاسخ و پیوست‌ها/.test(clinic) && /پاسخ و پیوست‌ها/.test(ionm), 'هر دو: ویسِ مشاوره زیرِ «پاسخ و پیوست‌ها» را می‌دانند');
 ok(/چرخهٔ عمر|نسخهٔ آزمایشی/.test(clinic) && /نسخهٔ آزمایشی/.test(ionm), 'هر دو: چرخهٔ عمرِ حساب (دمو/مهلت) را می‌دانند');
+/* بازبینیِ ۱۴۰۵/۰۷/۱۹: ماژول کافی نبود — «فاکتورِ نورو» به `dashboard` بسته بود که شرکتِ فقط‌ایمپلنت هم دارد. */
+const implant = guides['شرکت — ایمپلنت'];
+/* نامِ خدمت («نورومانیتورینگ») در توضیحِ نوعِ نصب مجاز است؛ چیزی که نباید بیاید صفحه/قابلیتِ مخصوصِ نورو است. */
+const NEURO_ONLY = /فاکتور نورو|پیش‌فرض نورو/;
+ok(!NEURO_ONLY.test(implant), '**شرکتِ فقط‌ایمپلنت دربارهٔ فاکتور/مصرفیِ نورو نمی‌شنود**',
+  implant.split('\n').filter((l) => NEURO_ONLY.test(l)).map((l) => l.slice(0, 70)).join(' || '));
+ok(/فاکتور نورو/.test(ionm) && /فاکتور نورو/.test(guides['شرکت — هر دو خدمت']), 'شرکتِ نورو (تنها یا با ایمپلنت) فاکتورِ نورو را می‌داند');
+const waitLine = clinic.split('\n').find((l) => l.startsWith('/app/waitlist')) ?? '';
+const missingStatus = Object.values(L.WAITLIST_LABELS).filter((x) => !waitLine.includes(x));
+ok(missingStatus.length === 0, '**فهرستِ انتظار همهٔ وضعیت‌های خودِ کد را می‌گوید** (از WAITLIST_LABELS)', missingStatus.join(' | '));
+ok(/بستنِ تصمیم انتخابِ دلیل می‌خواهد/.test(waitLine) && /بازکردنِ دوباره‌اش دلیل نمی‌خواهد/.test(waitLine), 'فقط بستنِ تصمیم دلیل می‌خواهد، نه بازکردنش');
+/* هر «…» در راهنما که شبیهِ وضعیتِ سفارش است باید برچسبِ واقعیِ ORDER_LABELS باشد. */
+const orderish = [...new Set(K.GUIDE.flatMap((e) => [...e.text.matchAll(/«([^»]*(?:پاسخ آمد|نتیجه آمد)[^»]*)»/g)].map((m) => m[1])))];
+ok(orderish.length > 0 && orderish.every((x) => Object.values(L.ORDER_LABELS).includes(x)), '**وضعیتِ سفارشِ نقل‌شده در راهنما برچسبِ واقعیِ کد است**', orderish.join(' | '));
+ok(!/پاسخِ سفارش\) شمارهٔ موبایل|نوبت، پاسخِ سفارش/.test(clinic), 'ادعای «+98» فقط برای فرم‌هایی است که واقعاً شماره می‌گیرند');
+const noDash = K.assistantGuide({ kind: 'clinic', services: [], enabled: new Set([...ctxOf('clinic', []).enabled].filter((x) => x !== 'dashboard')) });
+ok(/\/app\/settings — سربرگ/.test(noDash), '**تنظیمات به ماژولِ داشبورد بسته نیست** (با خاموشیِ آن هم راهنمایش می‌ماند)');
 
 console.log('\n۳) بندِ یک‌ماژوله با خاموش‌شدنِ همان ماژول می‌افتد (باید بیفتد)');
 for (const [label, kind, services] of profiles) {
@@ -109,14 +127,18 @@ for (const [label, kind, services] of profiles) {
   const baseline = K.assistantGuide(ctx);
   let checked = 0; const bad = [];
   for (const m of ctx.enabled) {
-    const without = K.assistantGuide({ kind, enabled: new Set([...ctx.enabled].filter((x) => x !== m)) });
+    const without = K.assistantGuide({ kind, services, enabled: new Set([...ctx.enabled].filter((x) => x !== m)) });
     /* هر بندی که m جزوِ شرطش است، با خاموشیِ m باید بیفتد («همه» نه «یکی از»). */
-    const lost = K.GUIDE.filter((e) => e.modules?.includes(m) && (!e.kind || e.kind === kind) && e.modules.every((x) => ctx.enabled.has(x)));
+    const lost = K.GUIDE.filter((e) => e.modules?.includes(m) && K.guideApplies(e, ctx));
     for (const e of lost) { checked++; if (without.includes(e.text) || !baseline.includes(e.text)) bad.push(`${m}`); }
-    if (K.FEATURE_ROUTES[m] && without.includes(`(${K.FEATURE_ROUTES[m]})`) && !lost.length && !baseline.includes(`(${K.FEATURE_ROUTES[m]})`)) bad.push(`${m}:سطرِ ماژول`);
-    if (baseline.includes(`(${K.FEATURE_ROUTES[m]})`) && without.split('\n').some((l) => l.startsWith(`${R.FEATURE_BY_KEY.get(m)?.label}`))) bad.push(`${m}:سطرِ ماژول ماند`);
+    /* سطرِ ماژول با نشانیِ پرانتزی‌اش شناخته می‌شود، نه برچسب — همان‌طور سطرِ جایگزینِ مطب («میزِ پزشک (/app/surgeon)») هم سنجیده می‌شود. */
+    if (K.FEATURE_ROUTES[m]) {
+      checked++;
+      if (!baseline.includes(`(${K.FEATURE_ROUTES[m]})`)) bad.push(`${m}:سطرِ ماژول نبود`);
+      if (without.includes(`(${K.FEATURE_ROUTES[m]})`)) bad.push(`${m}:سطرِ ماژول ماند`);
+    }
   }
-  ok(bad.length === 0, `${label}: خاموشیِ هر ماژول بندهایش را برمی‌دارد (${checked} بند)`, bad.join(','));
+  ok(bad.length === 0 && checked > 0, `${label}: خاموشیِ هر ماژول بندهایش را برمی‌دارد (${checked} سنجه)`, bad.join(',') || `checked=${checked}`);
 }
 const none = K.assistantGuide({ kind: 'company', enabled: new Set() });
 ok(!/\/app\/(dispatch|waitlist|inventory)/.test(none) && /\/app\/profile/.test(none), 'نصبِ بی‌ماژول فقط بندهای همیشگی را می‌گیرد، نه همه را');
@@ -124,14 +146,20 @@ ok(K.assistantGuide(ctxOf('clinic', [])) === K.assistantGuide(ctxOf('clinic', []
 
 console.log('\n۴) رابط و سرور با همین راهنما سیم‌کشی‌اند');
 const ai = read('server/src/ai/ai.service.ts');
-ok(/assistantGuide\(\s*\{\s*kind: profile\.kind, enabled \}\s*\)/.test(ai), '**سرور راهنما را از assistantGuide(...) می‌سازد**');
+ok(/assistantGuide\(\s*\{\s*kind: profile\.kind, enabled, services: profile\.services \}\s*\)/.test(ai), '**سرور راهنما را از assistantGuide(...) با نوع، ماژول‌ها و خدمات می‌سازد**');
 ok(!/ASSISTANT_GUIDE/.test(ai), 'متنِ ثابتِ ASSISTANT_GUIDE برنگشته');
 ok(!/سامانهٔ مدیریتِ کلینیک هستی/.test(ai), 'هویتِ دستیار «کلینیک»ِ ثابت نیست (از نوعِ نصب می‌آید)');
 ok(/seedFeatureRows\(this\.prisma, profile\)/.test(ai), 'ماژولِ نصبِ تازه (ردیفِ نساخته) هم به پلانِ نوعش دیده می‌شود');
 const asst = read('src/app/Assistant.jsx');
 const block = asst.slice(asst.indexOf('const STARTERS = {'), asst.indexOf('};', asst.indexOf('const STARTERS = {')));
-const startersOf = (k) => [...(block.split(new RegExp(`\\b${k}: \\[`))[1] ?? '').split('],')[0].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+const starterRows = (k) => [...(block.split(new RegExp(`\\b${k}: \\[`))[1] ?? '').split('\n  ],')[0]
+  .matchAll(/\{ text: '([^']+)'(?:, services: \[([^\]]*)\])? \}/g)].map((m) => ({ text: m[1], services: m[2] ? [...m[2].matchAll(/'(\w+)'/g)].map((x) => x[1]) : null }));
+const startersOf = (k) => starterRows(k).map((r) => r.text);
 const sc = startersOf('clinic'); const sy = startersOf('company');
+/* شرکتِ فقط‌ایمپلنت چینش و پنلِ کارشناسی ندارد — پیشنهادِ کارشناسان فقط با خدمتِ نورو. */
+const forImplant = starterRows('company').filter((r) => !r.services || r.services.includes('implant')).map((r) => r.text);
+ok(forImplant.length >= 3 && !forImplant.some((q) => /کارشناس|تحویل/.test(q)), '**پیشنهادهای شرکتِ فقط‌ایمپلنت از کارشناسان/تحویل نمی‌پرسند**', forImplant.join(' | '));
+ok(/startersFor\(kind, services\)/.test(asst), 'رابط پیشنهاد را با خدماتِ /config می‌چیند');
 ok(sc.length >= 3 && sy.length >= 3, `پیشنهادهای شروع برای هر دو نوع هست (${sc.length} / ${sy.length})`);
 ok(!sc.some((q) => /چینش|حمل|کارشناسان|ست |مصرفی/.test(q)), '**پیشنهادهای مطب واژگانِ شرکت را ندارند**', sc.join(' | '));
 ok(!sy.some((q) => /انتظارِ عمل|میزِ پذیرش|اتاقِ عمل/.test(q)), '**پیشنهادهای شرکت واژگانِ مطب را ندارند**', sy.join(' | '));

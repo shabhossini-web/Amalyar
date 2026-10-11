@@ -161,12 +161,14 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
          می‌فرستاد؛ یعنی «متنِ پاسخ»، لینک، نام کاربری و رمزی که پزشک همان لحظه
          تایپ کرده بود با بسته‌شدنِ شیت **بی‌صدا دور ریخته می‌شد**. تصمیمی که روی
          جوابی گرفته شده که ذخیره نشده، ردِ ممیزی ندارد. */
+      /* `ord` نه `order`: دکمه‌های بررسی از `ord` تصمیم می‌گیرند، پس سفارشی که همین شیت ساخته (و `order`ِ ورودی‌اش
+         تهی است) هم باید با همان شناسه بررسی شود — وگرنه `undefined.id`. */
       if (meta.hasResult) {
-        await api(`/orders/${kind}/${order.id}`, { method: 'PATCH', body: body() });
+        await api(`/orders/${kind}/${ord.id}`, { method: 'PATCH', body: body() });
       }
       // یادداشتِ خالی برای «بررسی شد» مجاز است؛ برچسبِ پیش‌فرض را **سرور** می‌گذارد
       // (قانون یک‌جا بماند، وگرنه دو لایه دو حرفِ متفاوت می‌زنند).
-      await api(`/orders/${kind}/${order.id}/review`, { method: 'POST', body: { status, reviewNote: note } });
+      await api(`/orders/${kind}/${ord.id}/review`, { method: 'POST', body: { status, reviewNote: note } });
       onToast(status === 'reviewed' ? 'ثبت شد — بررسی ثبت شد' : 'ثبت شد — بیمار باید دوباره بفرستد');
       onSaved();
       onClose();
@@ -221,7 +223,11 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
          همان سفارش دوباره فرستاده شود — نه یک سفارشِ تازه. */
       const msg = String(e?.message ?? '');
       if (saved) onSaved();
-      onToast(saved && !/ثبت شد/.test(msg) ? `سفارش ثبت شد ولی ارسالِ پیامک ناموفق بود — ${msg}` : msg);
+      /* «نتیجه نامعلوم» (قطعِ شبکه با ملی‌پیامک، یا پاسخِ خودِ ما که به مرورگر نرسید) «ناموفق» نیست: شاید رفته باشد و
+         ارسالِ دوباره پیامِ تکراری می‌سازد. سرور این حالت را با `code` جدا می‌کند، نه با متن. */
+      onToast(!saved ? msg
+        : e?.code === 'SMS_UNKNOWN' || e?.status === 0 ? 'سفارش ثبت شد؛ نتیجهٔ ارسالِ پیامک مشخص نیست — پیش از ارسالِ دوباره دفترِ پیامک‌ها را ببینید یا از بیمار بپرسید'
+          : /ثبت شد/.test(msg) ? msg : `سفارش ثبت شد ولی ارسالِ پیامک ناموفق بود — ${msg}`);
     } finally { setBusy(false); }
   };
 
@@ -332,9 +338,9 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
                    می‌شد و در همین فرم هیچ‌جا دیده نمی‌شد — مالک نوشت «ویس ثبت می‌شود، اتچ می‌شود، نشان داده
                    نمی‌شود». سفارشِ ساخته‌شده: همان لحظه با `documentIds` وصل می‌شود (سرور وضعیت را «پاسخ آمد» می‌کند،
                    مثلِ هر پاسخِ دیگری). سفارشِ هنوز ساخته‌نشده: در `pending` می‌ماند تا «ثبت». */
-                if (order?.id) {
+                if (ord?.id) {
                   try {
-                    setLive(await api(`/orders/${kind}/${order.id}`, { method: 'PATCH', body: { documentIds: [doc.id] } }));
+                    setLive(await api(`/orders/${kind}/${ord.id}`, { method: 'PATCH', body: { documentIds: [doc.id] } }));
                     onSaved?.();
                     onToast('توضیحِ صوتی به همین فرم پیوست شد');
                   } catch (e) {

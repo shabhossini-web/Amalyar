@@ -7,30 +7,58 @@
 #   ۱. چکیده‌ها (SHA256SUMS) — فایلِ دستکاری‌شده یا نیمه‌کاره
 #   ۲. نقش‌ها (globals.sql) بدونِ خطا برمی‌گردند و هر نقشِ پشتیبان واقعاً ساخته می‌شود
 #   ۳. هر دامپ بدونِ خطا برمی‌گردد (pg_restore --create، با همان مالکِ اصلی)
-#   ۴. دیتابیسِ مرکزی (جدول tenants) در پشتیبان هست و دیتابیسِ هر شرکتِ فعال هم برگشته و migration دارد
-#   ۵. هر فایلی که دیتابیس به آن ارجاع می‌دهد (documents.sha256، stop_proofs.sha256) در storage.tar.gz هست
+#   ۴. دیتابیسِ مرکزی (جدول tenants) در پشتیبان هست و دیتابیسِ **هر** شرکتِ فعال — با نامش (`amalyar_<شناسه>`) — برگشته
+#      و migration دارد؛ نقشِ هر شرکت با اجازهٔ ورود و رمز برگشته
+#   ۵. هر فایلی که دیتابیسِ یک شرکت به آن ارجاع می‌دهد (مدرک، اثباتِ تحویل، عکسِ سایت، سربرگ) در پوشهٔ **همان شرکت**
+#      در storage.tar.gz هست
 # و در پایان شمارِ ردیف‌های هر شرکت و **زمانِ بازگردانی** را می‌گوید (همان «چقدر طول می‌کشد؟»ی شبِ فاجعه).
 #
 # اجرا روی میزبانِ سرور (Docker لازم است؛ یک کانتینرِ postgres:18-alpine موقت می‌سازد و در پایان پاک می‌کند):
 #   sudo bash restore-drill.sh                    # آخرین پشتیبان در /var/backups/amalyar
 #   sudo bash restore-drill.sh 20261007T020000Z   # یک پشتیبانِ مشخص (نام یا مسیر)
-# اگر پشتیبان رمزشده بود: BACKUP_PASSPHRASE=… را هم بگذار.
+# اگر پشتیبان رمزشده بود: BACKUP_PASSPHRASE از همان فایلِ تنظیماتِ backup.sh (/etc/amalyar-backup.env) خوانده می‌شود —
+# رمز در خطِ فرمان نمی‌آید (تاریخچهٔ شل و لاگِ sudo). BACKUP_ENV=… فایلِ دیگری را نشان می‌دهد.
 #
 # بدونِ Docker (آزمون): یک سرورِ **خالی** و دورریختنی را با PGHOST/PGPORT/PGUSER نشان بده و DRILL_LOCAL=yes بگذار؛
 # اگر آن سرور جز postgres دیتابیسی داشته باشد اسکریپت می‌ایستد (مبادا روی سرورِ زنده بازگردانده شود).
 set -uo pipefail
+
+say() { printf '%s\n' "$*"; }
+FAILS=0; WARNS=0
+bad() { printf '  ✘ %s\n' "$*"; FAILS=$((FAILS + 1)); }
+good() { printf '  ✔ %s\n' "$*"; }
+warn() { printf '  ! %s\n' "$*"; WARNS=$((WARNS + 1)); }
+die() { printf 'خطا: %s\n' "$*" >&2; exit 2; }
+
+# همان خوانندهٔ متنیِ «کلید=مقدار»ِ backup.sh (نه `source`: رمزِ دارای $ و ` و فاصله همان‌طور می‌ماند). این‌جا فقط
+# BACKUP_DIR و BACKUP_PASSPHRASE به کار می‌آیند؛ بقیهٔ کلیدهای همان فایل نادیده گرفته می‌شوند.
+ENV_KEYS=" PG_CONTAINER PG_USER STORAGE_VOLUME STORAGE_DIR SKIP_STORAGE BACKUP_DIR RETENTION_DAYS BACKUP_PASSPHRASE RCLONE_REMOTE "
+load_env() {
+  local f="$1" line key val n=0
+  [ -f "$f" ] || return 0
+  [ -r "$f" ] || die "فایلِ تنظیمات خواندنی نیست: $f (با sudo اجرا کن)"
+  while IFS= read -r line || [ -n "$line" ]; do
+    n=$((n + 1)); line="${line%$'\r'}"
+    case "$line" in ''|'#'*|[[:space:]]'#'*) continue;; esac
+    [[ "$line" == *=* ]] || die "خطِ $n در $f «کلید=مقدار» نیست"
+    key="${line%%=*}"; val="${line#*=}"
+    key="${key#export }"; key="${key//[[:space:]]/}"
+    case "$ENV_KEYS" in *" $key "*) ;; *) die "کلیدِ ناشناخته در $f (خطِ $n): $key";; esac
+    case "$key" in BACKUP_DIR|BACKUP_PASSPHRASE) ;; *) continue;; esac
+    if [ "${#val}" -ge 2 ]; then
+      case "$val" in \'*\') val="${val:1:${#val}-2}";; \"*\") val="${val:1:${#val}-2}";; esac
+    fi
+    [ -n "${!key+x}" ] || printf -v "$key" '%s' "$val"
+  done < "$f"
+}
+load_env "${BACKUP_ENV:-/etc/amalyar-backup.env}"
 
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/amalyar}"
 DRILL_IMAGE="${DRILL_IMAGE:-postgres:18-alpine}"
 BACKUP_PASSPHRASE="${BACKUP_PASSPHRASE:-}"
 DRILL_LOCAL="${DRILL_LOCAL:-}"
 ARG="${1:-}"
-
-say() { printf '%s\n' "$*"; }
-FAILS=0
-bad() { printf '  ✘ %s\n' "$*"; FAILS=$((FAILS + 1)); }
-good() { printf '  ✔ %s\n' "$*"; }
-die() { printf 'خطا: %s\n' "$*" >&2; exit 2; }
+in_list() { local x="$1"; shift; local y; for y in "$@"; do [ "$x" = "$y" ] && return 0; done; return 1; }
 
 START="$(date +%s)"
 
@@ -86,7 +114,7 @@ shopt -s nullglob
 for f in "$SRC"/*; do
   b="$(basename "$f")"
   case "$b" in
-    SHA256SUMS|MANIFEST.txt|FAILED) continue;;
+    SHA256SUMS|MANIFEST.txt|FAILED|UPLOAD_FAILED) continue;;
     *.enc)
       [ -n "$BACKUP_PASSPHRASE" ] || die "پشتیبان رمزشده است؛ BACKUP_PASSPHRASE را بگذار"
       export BACKUP_PASSPHRASE
@@ -101,12 +129,17 @@ if [ -f "$W/globals.sql" ]; then
   # خطاهای «نقشِ postgres از قبل هست» عادی‌اند؛ ملاک ساخته‌شدنِ هر نقشِ پشتیبان است نه خروجیِ psql.
   pgx psql -U "$SU" -d postgres -X -q < "$W/globals.sql" > /dev/null 2> "$W/globals.err" || true
   miss=0; total=0
-  while IFS= read -r role; do
+  # ⚠️ فهرست از fd 3 خوانده می‌شود: در حالتِ Docker `psql_q` همان `docker exec -i` است که ورودیِ استاندارد را می‌بلعد —
+  # با `done < <(…)` فقط نقشِ اول سنجیده می‌شد و بقیه را exec می‌خورد (همان تلهٔ backup.sh).
+  while IFS= read -r role <&3; do
     [ -n "$role" ] || continue
     total=$((total + 1))
     [ "$(psql_q -c "SELECT count(*) FROM pg_roles WHERE rolname = '${role//\'/\'\'}'")" = 1 ] || { miss=$((miss + 1)); bad "نقشِ «$role» برنگشت"; }
-  done < <(grep -oE '^CREATE ROLE ("[^"]+"|[^ ;]+)' "$W/globals.sql" | sed -E 's/^CREATE ROLE //; s/^"//; s/"$//')
+  done 3< <(grep -oE '^CREATE ROLE ("[^"]+"|[^ ;]+)' "$W/globals.sql" | sed -E 's/^CREATE ROLE //; s/^"//; s/"$//')
   if [ "$total" -gt 0 ] && [ "$miss" -eq 0 ]; then good "نقش‌ها برگشتند ($total نقش)"; elif [ "$total" -eq 0 ]; then good "نقشی جز ابرکاربر در پشتیبان نبود"; fi
+  # نقشِ هر شرکت (`…_app`) باید بتواند وارد شود و رمز داشته باشد — وگرنه دیتابیس برگشته ولی برنامه به آن وصل نمی‌شود.
+  weak="$(psql_q -c "SELECT coalesce(string_agg(rolname, ' '), '') FROM pg_authid WHERE rolname LIKE '%\\_app' AND (NOT rolcanlogin OR rolpassword IS NULL)" 2>/dev/null || echo '؟')"
+  [ -z "$weak" ] || bad "نقشِ شرکت بی‌اجازهٔ ورود یا بی‌رمز برگشت: $weak"
 fi
 
 # ── ۳) دیتابیس‌ها ──
@@ -123,7 +156,8 @@ for f in "${DUMPS[@]}"; do
 done
 
 # ── ۴) سازگاریِ دیتابیسِ مرکزی و شرکت‌ها ──
-CONTROL=""; ACTIVE=0; TENANT_DBS=()
+CONTROL=""; TENANT_DBS=()
+declare -A DB_TENANT=()
 printf '\n  %-26s %10s %10s %10s %10s\n' 'دیتابیس' 'migration' 'بیمار' 'مراجعه' 'مدرک'
 for db in "${RESTORED[@]:-}"; do
   [ -n "$db" ] || continue
@@ -132,7 +166,7 @@ for db in "${RESTORED[@]:-}"; do
   mig="$(cnt _prisma_migrations)"; pat="$(cnt patients)"; vis="$(cnt visits)"; doc="$(cnt documents)"
   printf '  %-26s %10s %10s %10s %10s\n' "$db" "$mig" "$pat" "$vis" "$doc"
   if has tenants && has tenant_domains; then
-    CONTROL="$db"; ACTIVE="$(psql_db "$db" -c "SELECT count(*) FROM tenants WHERE status = 'active'")"
+    CONTROL="$db"
   elif has patients; then
     TENANT_DBS+=("$db")
     [ "$mig" != - ] && [ "$mig" -gt 0 ] 2>/dev/null || bad "دیتابیسِ $db هیچ migrationی ندارد (ساختارش ناقص برگشته)"
@@ -141,35 +175,83 @@ done
 echo
 if [ -z "$CONTROL" ]; then bad "دیتابیسِ مرکزی (جدولِ tenants) در پشتیبان نیست — بدونِ آن هیچ شرکتی پیدا نمی‌شود"
 else
+  # هر شرکتِ فعال ← دیتابیسِ خودش، نه «به تعدادِ کافی دیتابیس»: شمارش، دیتابیسِ شرکتِ حذف‌شده را جای شرکتِ گم‌شده می‌پذیرفت.
+  # Worker نامِ دیتابیس را از شناسه می‌سازد (`amalyar_<شناسه با _>`). شرکتی که با نام پیدا نشد (ساخته‌شده پیش از Worker)
+  # فقط با دیتابیسی پذیرفته می‌شود که نامِ Worker ندارد — `amalyar_*`ِ بی‌شرکت باقیماندهٔ شرکتِ حذف‌شده است.
+  ACTIVE=0; BYNAME=0; LEFT=()
+  if ! psql_db "$CONTROL" -v ON_ERROR_STOP=1 -F '|' -c "SELECT id, slug FROM tenants WHERE status = 'active' ORDER BY slug" > "$W/tenants.txt" 2> "$W/q.err"; then
+    bad "فهرستِ شرکت‌ها از $CONTROL خوانده نشد: $(head -c 160 "$W/q.err")"
+  fi
+  while IFS='|' read -r tid slug <&3; do
+    [ -n "$tid" ] || continue
+    ACTIVE=$((ACTIVE + 1))
+    want="amalyar_${slug//-/_}"
+    if in_list "$want" "${TENANT_DBS[@]:-}"; then DB_TENANT[$want]="$tid"; BYNAME=$((BYNAME + 1)); else LEFT+=("$slug"); fi
+  done 3< "$W/tenants.txt"
+  SPARE=()
+  for db in "${TENANT_DBS[@]:-}"; do
+    [ -n "$db" ] && [ -z "${DB_TENANT[$db]:-}" ] || continue
+    case "$db" in amalyar_*) warn "دیتابیسِ $db به هیچ شرکتِ فعالی نمی‌خورد (باقیماندهٔ شرکتِ حذف‌شده؟)";; *) SPARE+=("$db");; esac
+  done
   good "دیتابیسِ مرکزی: $CONTROL ($ACTIVE شرکتِ فعال)"
-  if [ "${#TENANT_DBS[@]}" -ge "$ACTIVE" ]; then good "دیتابیسِ همهٔ شرکت‌های فعال برگشت (${#TENANT_DBS[@]} از $ACTIVE)"
-  else bad "فقط ${#TENANT_DBS[@]} دیتابیسِ شرکت برگشت ولی $ACTIVE شرکتِ فعال هست"; fi
+  if [ "${#LEFT[@]}" -eq 0 ]; then good "دیتابیسِ همهٔ شرکت‌های فعال برگشت ($BYNAME از $ACTIVE، هرکدام با نامِ خودش)"
+  elif [ "${#SPARE[@]}" -ge "${#LEFT[@]}" ]; then
+    good "دیتابیسِ همهٔ شرکت‌های فعال برگشت ($BYNAME با نام، ${#LEFT[@]} قدیمی با شمارش)"
+    warn "این شرکت‌ها نامِ دیتابیسِ Worker را ندارند و فقط با شمارش پذیرفته شدند: ${LEFT[*]} ← ${SPARE[*]}"
+  else bad "دیتابیسِ این شرکت‌های فعال برنگشت: ${LEFT[*]}"; fi
 fi
 
-# ── ۵) فایل‌های ارجاع‌شده ──
+# ── ۵) فایل‌های ارجاع‌شده — هر شرکت در پوشهٔ خودش ──
+# ⚠️ هر پرس‌وجو با ON_ERROR_STOP و خطایش «ناموفق» است: تا دیروز خطا قورت داده می‌شد، فهرستِ لازم خالی می‌ماند و تمرین
+# «همهٔ ۰ فایل» را موفق اعلام می‌کرد. و پوشهٔ هر شرکت جدا سنجیده می‌شود (فایلِ هم‌محتوای شرکتِ دیگر جای فایلِ گم‌شده
+# را پر نمی‌کند).
+REFS=(
+  "documents|SELECT DISTINCT sha256 FROM documents WHERE sha256 <> '' AND deleted_at IS NULL|required"
+  "stop_proofs|SELECT DISTINCT sha256 FROM stop_proofs WHERE sha256 <> ''|required"
+  "site_items|SELECT image_sha FROM site_items WHERE coalesce(image_sha, '') <> '' UNION SELECT image2_sha FROM site_items WHERE coalesce(image2_sha, '') <> ''|optional"
+  "settings|SELECT value FROM settings WHERE key = 'letterhead_sha' AND coalesce(value, '') <> ''|optional"
+)
 if [ -f "$W/storage.tar.gz" ]; then
-  tar -tzf "$W/storage.tar.gz" 2>/dev/null | awk -F/ '{print $NF}' | grep -E '^[0-9a-f]{64}$' | sort -u > "$W/have.txt"
-  : > "$W/need.txt"
+  tar -tzf "$W/storage.tar.gz" 2>/dev/null | sed 's|^\./||' | awk -F/ 'NF >= 2 && $NF ~ /^[0-9a-f]+$/ && length($NF) == 64 {print $1, $NF}' | sort -u > "$W/have.txt"
+  ARCHIVED="$(wc -l < "$W/have.txt" | tr -d ' ')"
+  NEED_TOTAL=0
   for db in "${TENANT_DBS[@]:-}"; do
     [ -n "$db" ] || continue
-    for q in "documents:sha256:deleted_at IS NULL" "stop_proofs:sha256:true"; do
-      IFS=: read -r t c w <<< "$q"
-      [ "$(psql_db "$db" -c "SELECT to_regclass('public.$t') IS NOT NULL")" = t ] || continue
-      psql_db "$db" -c "SELECT DISTINCT $c FROM $t WHERE $c <> '' AND $w" >> "$W/need.txt"
+    : > "$W/need.raw"
+    for ref in "${REFS[@]}"; do
+      IFS='|' read -r t q kind <<< "$ref"
+      if [ "$(psql_db "$db" -c "SELECT to_regclass('public.$t') IS NOT NULL")" != t ]; then
+        [ "$kind" = optional ] || bad "در $db جدولِ $t نیست — ساختارش ناقص برگشته و ارجاع‌هایش سنجیده نشد"
+        continue
+      fi
+      psql_db "$db" -v ON_ERROR_STOP=1 -c "$q" >> "$W/need.raw" 2> "$W/q.err" || bad "ارجاع‌های $db.$t خوانده نشد: $(head -c 160 "$W/q.err")"
     done
+    grep -E '^[0-9a-f]{64}$' "$W/need.raw" | sort -u > "$W/need.txt"
+    n="$(wc -l < "$W/need.txt" | tr -d ' ')"; NEED_TOTAL=$((NEED_TOTAL + n))
+    [ "$n" -gt 0 ] || continue
+    folder="${DB_TENANT[$db]:-}"
+    # شرکتِ قدیمی (بی‌نامِ Worker): پوشه‌ای که بیشترین ارجاعِ همین دیتابیس را دارد.
+    [ -n "$folder" ] || folder="$(awk 'NR == FNR { need[$1] = 1; next } need[$2] { c[$1]++ } END { for (f in c) print c[f], f }' "$W/need.txt" "$W/have.txt" | sort -rn | head -1 | cut -d' ' -f2)"
+    awk -v f="$folder" '$1 == f { print $2 }' "$W/have.txt" | sort -u > "$W/have-db.txt"
+    missing="$(comm -23 "$W/need.txt" "$W/have-db.txt" | wc -l | tr -d ' ')"
+    if [ "$missing" -eq 0 ]; then good "همهٔ $n فایلِ ارجاع‌شدهٔ $db در پوشهٔ همان شرکت هست"
+    else bad "$missing فایلِ ارجاع‌شدهٔ $db در پوشهٔ شرکتش نیست (نمونه: $(comm -23 "$W/need.txt" "$W/have-db.txt" | head -2 | cut -c1-12 | tr '\n' ' '))"; fi
   done
-  sort -u -o "$W/need.txt" "$W/need.txt"
-  missing="$(comm -23 "$W/need.txt" "$W/have.txt" | wc -l | tr -d ' ')"
-  if [ "$missing" -eq 0 ]; then good "همهٔ $(wc -l < "$W/need.txt" | tr -d ' ') فایلِ ارجاع‌شده در آرشیوِ فایل‌ها هست"
-  else bad "$missing فایلِ ارجاع‌شده در آرشیوِ فایل‌ها نیست (نمونه: $(comm -23 "$W/need.txt" "$W/have.txt" | head -2 | cut -c1-12 | tr '\n' ' '))"; fi
+  if [ "$NEED_TOTAL" -eq 0 ] && [ "$ARCHIVED" -gt 0 ]; then
+    warn "هیچ دیتابیسی به فایلی ارجاع نمی‌دهد ولی آرشیو $ARCHIVED فایل دارد — جای ارجاع‌ها در ساختار عوض شده؟ این سنجه چیزی را ثابت نکرد"
+  fi
 else
-  say "  – آرشیوِ فایل‌ها در پشتیبان نیست؛ ارجاع‌های فایل سنجیده نشد"
+  warn "آرشیوِ فایل‌ها در پشتیبان نیست؛ ارجاع‌های فایل سنجیده نشد"
 fi
 
 ELAPSED=$(( $(date +%s) - START ))
 echo
-if [ "$FAILS" -eq 0 ]; then
+if [ "$FAILS" -eq 0 ] && [ "$WARNS" -eq 0 ]; then
   say "تمرین موفق — پشتیبانِ $(basename "$SRC") کامل برگشت (${ELAPSED} ثانیه، سرورِ تمرین دورریخته شد)"
+  exit 0
+fi
+if [ "$FAILS" -eq 0 ]; then
+  say "تمرین موفق با $WARNS هشدار — پشتیبانِ $(basename "$SRC") برگشت ولی بندهای «!» بالا را بخوان (${ELAPSED} ثانیه)"
   exit 0
 fi
 say "تمرین ناموفق — $FAILS مورد (${ELAPSED} ثانیه) — این پشتیبان را قابلِ اتکا نشمار"

@@ -38,10 +38,12 @@ function authHeaders(method, headers = {}) {
 export const apiUrl = (path) => (path ? `${BASE}${path}` : path);
 
 export class ApiError extends Error {
-  constructor(message, status) {
+  constructor(message, status, code = null) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    /* کدِ ماشینیِ اختیاریِ سرور (مثلاً `SMS_UNKNOWN`) — رابط تصمیم را از این می‌گیرد، نه از متنِ فارسیِ پیام. */
+    this.code = code;
   }
 }
 
@@ -90,7 +92,7 @@ export async function api(path, { method = 'GET', body, quiet401 = false } = {})
   const data = await parseBody(res);
   if (!res.ok) {
     if (res.status === 401) announceUnauthorized(path, quiet401);
-    throw new ApiError(messageOf(data, res.status), res.status);
+    throw new ApiError(messageOf(data, res.status), res.status, data && typeof data === 'object' && typeof data.code === 'string' ? data.code : null);
   }
   return data;
 }

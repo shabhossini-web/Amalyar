@@ -63,7 +63,7 @@
 
 | نشانه | علت و کار |
 |---|---|
-| کارتِ شرکت «ناموفق» ماند | دکمهٔ «تلاش مجدد» روی کارِ صف؛ علتِ دقیق در `GET /api/platform/provisioning-jobs/:id` |
+| کارتِ شرکت «ناموفق» ماند | دکمهٔ «تلاش مجدد» روی کارِ صف. مرحلهٔ شکست در `errorCode`ِ `GET /api/platform/provisioning-jobs/:id` (و لاگِ Worker): `TENANT_CONFLICT` شناسه/نشانی تکراری · `INVALID_PROFILE` نوعِ نصب نامعتبر · `ROLE_CREATE_FAILED` / `DATABASE_CREATE_FAILED` دسترسیِ کاربرِ ساخت در Postgres · `MIGRATION_FAILED` · `PROFILE_SEED_FAILED` · `CONTROL_REGISTER_FAILED`. متنِ کاملِ خطا عمداً ثبت نمی‌شود (نشانی و رمز دارد) |
 | صفحهٔ ورود «غیرفعال است» | شرکت معلق است: «دسترسی» ← رفعِ تعلیق |
 | بنرِ قرمزِ فقط‌خواندنی | مهلت تمام شده: «دسترسی» ← مهلتِ تازه |
 | پیامک نمی‌رسد | چیپِ «پیامک» در پنلِ پلتفرم؛ بعد `/api/reminders/diagnostics`؛ کدِ ۲ = اعتبارِ پنلِ ملی‌پیامک (**مشترکِ همهٔ شرکت‌ها و ملک‌طب**) |

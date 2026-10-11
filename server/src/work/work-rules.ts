@@ -304,6 +304,9 @@ export const RULES: Record<string, Rule> = {
     note: e.payload?.error ?? null,
   }),
   'sms.sent': (_e, ref) => close(ref, 'resend_sms'),
+  /* ردیفِ «نرفت» کنار رفت (لغو در دفترِ پیام‌ها، یا همان لینک بعداً از شیتِ سفارش رفت) — کارِ «ارسالِ دوباره»ی
+     بازمانده یعنی پیامِ تکراری برای بیمار. */
+  'sms.cancelled': (_e, ref) => close(ref, 'resend_sms'),
 };
 
 export function rulesFor(e: DomainEventLike): RuleOutcome {

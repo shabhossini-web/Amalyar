@@ -89,6 +89,9 @@ async function provision(control: PrismaClient, job: Awaited<ReturnType<typeof c
   let roleCreated = false;
   let databaseCreated = false;
   let tenantId: string | null = null;
+  /* کدِ **مرحله**ای که شکست خورد — شمارشی و بی‌متنِ خطا (متنِ خطای Postgres/Prisma نشانی و رمز را لو می‌دهد). تا امروز همه
+     «PROVISIONING_FAILED» بود و ناسازگاریِ نوعِ نصب از شکستِ migration یا ثبت در control-db جدا نمی‌شد. */
+  let stage = 'CONFLICT_CHECK_FAILED';
 
   try {
     const conflict = await control.tenant.findFirst({
@@ -97,18 +100,24 @@ async function provision(control: PrismaClient, job: Awaited<ReturnType<typeof c
     });
     if (conflict) throw new Error('TENANT_CONFLICT');
 
+    stage = 'ROLE_CREATE_FAILED';
     await admin.$executeRawUnsafe(`CREATE ROLE "${roleName}" LOGIN PASSWORD '${rolePassword}'`);
     roleCreated = true;
+    stage = 'DATABASE_CREATE_FAILED';
     await admin.$executeRawUnsafe(`CREATE DATABASE "${databaseName}" OWNER "${roleName}"`);
     databaseCreated = true;
 
+    stage = 'MIGRATION_FAILED';
     await migrateTenant(tenantUrl.toString());
 
     /* نوعِ نصب (مطب/شرکتی) **پیش از** ثبتِ شرکت در control-db و پیش از اولین درخواست روی دیتابیسِ تازه
        نوشته می‌شود: لانچر و ساختِ تنبلِ ماژول‌ها از همین دو ردیف می‌آیند، و بنیان‌گذارِ مطب
        باید هنگامِ ثبت‌نام `jobRole: doctor` بگیرد (مالک، ۱۴۰۵/۰۷/۱۵). درخواستِ بی‌پروفایل (قدیمی)
        همان پیش‌فرضِ نصب را می‌گیرد. */
+    stage = 'PROFILE_SEED_FAILED';
     if (job.profileKind) await seedTenantProfile(tenantUrl.toString(), job.profileKind, job.profileServices);
+
+    stage = 'CONTROL_REGISTER_FAILED';
 
     const tenant = await control.$transaction(async (tx) => {
       /* نوعِ حساب و مهلتِ اولیه از خودِ درخواست می‌آید — دموی ۱۴ روزه از همین لحظه فعال است. */
@@ -147,7 +156,10 @@ async function provision(control: PrismaClient, job: Awaited<ReturnType<typeof c
     });
     tenantId = tenant.id;
     console.log(`Provisioning job ${job.id} succeeded`);
-  } catch {
+  } catch (e: any) {
+    const reason = String(e?.message ?? '');
+    const errorCode = ['TENANT_CONFLICT', 'TENANT_NOT_FRESH', 'INVALID_PROFILE'].find((c) => reason.includes(c)) ?? stage;
+    console.error(`Provisioning job ${job.id} failed at ${errorCode}`);
     if (databaseCreated) {
       await admin.$executeRawUnsafe(
         `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${databaseName}' AND pid <> pg_backend_pid()`,
@@ -164,7 +176,7 @@ async function provision(control: PrismaClient, job: Awaited<ReturnType<typeof c
         data: {
           status: 'failed',
           tenantId: null,
-          errorCode: 'PROVISIONING_FAILED',
+          errorCode,
           finishedAt: new Date(),
         },
       }),

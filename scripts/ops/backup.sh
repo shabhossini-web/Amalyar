@@ -30,9 +30,40 @@
 #   SKIP_STORAGE=1      فقط دیتابیس (پیش‌فرض: نبودنِ فایل‌ها خطاست، نه هشدار)
 #   BACKUP_PASSPHRASE   اگر پر باشد همهٔ فایل‌ها با AES-256 رمز می‌شوند (پسوندِ .enc) — برای بیرون‌بردن از سرور
 #   RCLONE_REMOTE       مثلاً arvan:amalyar-backups — اگر rclone نصب باشد پس از موفقیت همان پوشه آپلود می‌شود
+#   BACKUP_ENV          فایلِ تنظیمات؛ پیش‌فرض /etc/amalyar-backup.env (اگر باشد). هر خط «کلید=مقدار» از همین متغیرها؛
+#                       **مثلِ شل تفسیر نمی‌شود** ($، `، فاصله و # در مقدار همان‌طور می‌مانند؛ یک جفت ' یا " دورش برداشته
+#                       می‌شود). کلیدِ ناشناخته خطاست (غلطِ تایپی بی‌صدا نماند). متغیرِ محیطی بر فایل مقدم است.
+#
+# کدِ خروجی: ۰ موفق · ۱ پشتیبان ناقص (FAILED کنارِ پوشه) · ۳ پشتیبانِ محلی کامل ولی آپلودِ بیرونی نشد (UPLOAD_FAILED).
 set -euo pipefail
 # دامپِ دیتابیس مدرکِ بیمار است: پوشه‌ها ۰۷۰۰ و فایل‌ها ۰۶۰۰ — کاربرِ دیگرِ سرور نباید بتواند بخواندشان.
 umask 077
+
+say() { printf '%s\n' "$*"; }
+die() { printf 'خطا: %s\n' "$*" >&2; exit 1; }
+
+# ── فایلِ تنظیمات: خواندنِ متنیِ «کلید=مقدار»، نه `source` ──
+# ⚠️ `. /etc/amalyar-backup.env` رمزی با $ یا ` یا فاصله را هنگامِ خواندن عوض می‌کرد؛ cron با رشتهٔ دیگری رمز می‌کرد
+# و پشتیبان با رمزی که مالک نگه داشته بود باز نمی‌شد. این‌جا مقدار هرگز به شل داده نمی‌شود.
+ENV_KEYS=" PG_CONTAINER PG_USER STORAGE_VOLUME STORAGE_DIR SKIP_STORAGE BACKUP_DIR RETENTION_DAYS BACKUP_PASSPHRASE RCLONE_REMOTE "
+load_env() {
+  local f="$1" line key val n=0
+  [ -f "$f" ] || return 0
+  [ -r "$f" ] || die "فایلِ تنظیمات خواندنی نیست: $f (با sudo اجرا کن)"
+  while IFS= read -r line || [ -n "$line" ]; do
+    n=$((n + 1)); line="${line%$'\r'}"
+    case "$line" in ''|'#'*|[[:space:]]'#'*) continue;; esac
+    [[ "$line" == *=* ]] || die "خطِ $n در $f «کلید=مقدار» نیست"
+    key="${line%%=*}"; val="${line#*=}"
+    key="${key#export }"; key="${key//[[:space:]]/}"
+    case "$ENV_KEYS" in *" $key "*) ;; *) die "کلیدِ ناشناخته در $f (خطِ $n): $key";; esac
+    if [ "${#val}" -ge 2 ]; then
+      case "$val" in \'*\') val="${val:1:${#val}-2}";; \"*\") val="${val:1:${#val}-2}";; esac
+    fi
+    [ -n "${!key+x}" ] || printf -v "$key" '%s' "$val"
+  done < "$f"
+}
+load_env "${BACKUP_ENV:-/etc/amalyar-backup.env}"
 
 BACKUP_DIR="${BACKUP_DIR:-/var/backups/amalyar}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
@@ -43,17 +74,16 @@ SKIP_STORAGE="${SKIP_STORAGE:-}"
 BACKUP_PASSPHRASE="${BACKUP_PASSPHRASE:-}"
 RCLONE_REMOTE="${RCLONE_REMOTE:-}"
 
-say() { printf '%s\n' "$*"; }
-die() { printf 'خطا: %s\n' "$*" >&2; exit 1; }
-
 # ابزارِ Postgres: داخلِ کانتینر (نسخهٔ هم‌خوانِ سرور) یا کلاینتِ محلی.
 pgx() { if [ -n "$PG_CONTAINER" ]; then docker exec -i "$PG_CONTAINER" "$@"; else "$@"; fi; }
 
 # ── کانتینرِ Postgres ──
 if [ -z "$PG_CONTAINER" ] && [ -z "${PGHOST:-}" ]; then
   command -v docker >/dev/null 2>&1 || die "Docker پیدا نشد؛ یا PG_CONTAINER بده یا PGHOST/PGPORT/PGUSER را برای کلاینتِ محلی"
-  found="$(docker ps --format '{{.Names}} {{.Image}}' | awk '$2 ~ /^(postgres|pgvector)/ {print $1}')"
-  [ "$(printf '%s\n' "$found" | grep -c .)" = 1 ] || die "کانتینرِ Postgres را نتوانستم یکتا پیدا کنم (${found:-هیچ}); PG_CONTAINER را بگذار"
+  # ⚠️ Coolify دیتابیسِ خودش را هم دارد (`coolify-db`، postgres:15) — همان Postgresی که داده‌های عمل‌یار رویش نیست.
+  # بی‌این فیلتر روی هر میزبانِ Coolify دو کانتینر پیدا می‌شد و پشتیبانِ شبانه هر شب بی‌صدا می‌افتاد.
+  found="$(docker ps --format '{{.Names}} {{.Image}}' | awk '$2 ~ /^(postgres|pgvector)/ && $1 !~ /^coolify/ {print $1}')"
+  [ "$(printf '%s\n' "$found" | grep -c .)" = 1 ] || die "کانتینرِ Postgres را نتوانستم یکتا پیدا کنم (${found:-هیچ}); PG_CONTAINER را در فایلِ تنظیمات بگذار"
   PG_CONTAINER="$found"
 fi
 if [ -n "$PG_CONTAINER" ]; then
@@ -75,7 +105,9 @@ if command -v flock >/dev/null 2>&1; then
 fi
 mkdir -p "$OUT"
 TMP="$(mktemp -d "$BACKUP_DIR/.tmp.XXXXXX")"
-trap 'rc=$?; rm -rf "$TMP"; if [ $rc -ne 0 ]; then echo "پشتیبان ناقص ماند (کد $rc)" > "$OUT/FAILED"; printf "خطا: پشتیبان کامل نشد — %s\n" "$OUT/FAILED" >&2; fi' EXIT
+# FAILED فقط وقتی پشتیبانِ **محلی** کامل نشده؛ شکستِ آپلودِ بیرونی پس از آن پوشهٔ سالم را «ناقص» علامت نمی‌زند.
+LOCAL_DONE=""
+trap 'rc=$?; rm -rf "$TMP"; if [ $rc -ne 0 ] && [ -z "$LOCAL_DONE" ]; then echo "پشتیبان ناقص ماند (کد $rc)" > "$OUT/FAILED"; printf "خطا: پشتیبان کامل نشد — %s\n" "$OUT/FAILED" >&2; fi' EXIT
 
 EXT=""
 enc() { if [ -n "$BACKUP_PASSPHRASE" ]; then openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:BACKUP_PASSPHRASE; else cat; fi; }
@@ -142,16 +174,13 @@ fi
   if [ -n "$EXT" ]; then echo "رمزشده: بله"; else echo "رمزشده: خیر"; fi
 } > "$OUT/MANIFEST.txt"
 echo "$STAMP" > "$BACKUP_DIR/LATEST"
+# برای سنجشِ تازگی: «آخرین پشتیبانِ موفق کِی بود؟» — `cat /var/backups/amalyar/LAST_SUCCESS`
+echo "$STAMP $(date -u '+%Y-%m-%d %H:%M UTC')" > "$BACKUP_DIR/LAST_SUCCESS"
+LOCAL_DONE=1
 say "  ✔ چکیده‌ها و خلاصه"
 
-# ── آپلودِ بیرونی (اختیاری) ──
-if [ -n "$RCLONE_REMOTE" ]; then
-  command -v rclone >/dev/null 2>&1 || die "RCLONE_REMOTE گذاشته‌ای ولی rclone نصب نیست"
-  rclone copy "$OUT" "$RCLONE_REMOTE/$STAMP" || die "آپلود با rclone شکست خورد"
-  say "  ✔ آپلود به $RCLONE_REMOTE/$STAMP"
-fi
-
 # ── نگهداری: پوشه‌های قدیمی‌تر از RETENTION_DAYS، ولی همیشه سه‌تای تازه می‌مانند ──
+# پیش از آپلود: شکستِ شبکه نباید جلوی پاک‌شدنِ پوشه‌های قدیمی را بگیرد و دیسک را شب‌به‌شب پر کند.
 # ⚠️ فهرستِ null-جداشده، نه `for d in $(ls …)`: اگر BACKUP_DIR فاصله داشت، شکستنِ کلمه‌ها یک مسیرِ دیگر را به `rm -rf` می‌داد.
 n=0
 while IFS= read -r -d '' d; do
@@ -159,5 +188,21 @@ while IFS= read -r -d '' d; do
   [ "$n" -gt 3 ] || continue
   if [ -n "$(find "$d" -maxdepth 0 -mtime +"$RETENTION_DAYS" 2>/dev/null)" ]; then rm -rf -- "$d"; say "  – پاک شد (قدیمی): $(basename "$d")"; fi
 done < <(find "$BACKUP_DIR" -mindepth 1 -maxdepth 1 -type d -name '[0-9]*T*Z' -print0 | sort -z -r)
+
+# ── آپلودِ بیرونی (اختیاری) ──
+# شکستش پشتیبانِ محلیِ سالم را «ناقص» نمی‌کند (LATEST همان می‌ماند)، ولی بی‌صدا هم نیست: UPLOAD_FAILED کنارِ پوشه،
+# LAST_UPLOAD_FAILED کنارِ LATEST و کدِ خروجیِ ۳ تا cron/پایش ببیند.
+if [ -n "$RCLONE_REMOTE" ]; then
+  if ! command -v rclone >/dev/null 2>&1; then
+    echo "rclone نصب نیست" > "$OUT/UPLOAD_FAILED"; echo "$STAMP" > "$BACKUP_DIR/LAST_UPLOAD_FAILED"
+    printf 'خطا: RCLONE_REMOTE گذاشته‌ای ولی rclone نصب نیست — پشتیبانِ محلی کامل است: %s\n' "$OUT" >&2; exit 3
+  fi
+  if ! rclone copy "$OUT" "$RCLONE_REMOTE/$STAMP"; then
+    echo "آپلود به $RCLONE_REMOTE شکست خورد" > "$OUT/UPLOAD_FAILED"; echo "$STAMP" > "$BACKUP_DIR/LAST_UPLOAD_FAILED"
+    printf 'خطا: آپلود با rclone شکست خورد — پشتیبانِ محلی کامل است: %s\n' "$OUT" >&2; exit 3
+  fi
+  rm -f "$BACKUP_DIR/LAST_UPLOAD_FAILED"
+  say "  ✔ آپلود به $RCLONE_REMOTE/$STAMP"
+fi
 
 say "تمام شد: $OUT"

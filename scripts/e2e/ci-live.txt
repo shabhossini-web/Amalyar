@@ -17,6 +17,7 @@ card-targets
 care-reminders
 central-tariffs-ui
 central-tariffs
+clinic-founder-signup
 clinical-notes
 clinical-orders
 cookie-auth
@@ -66,6 +67,7 @@ record-direct
 record-forms
 record-popups
 record-texts
+rehost-tenants
 reminders-ui
 role-fields
 schedule-panel

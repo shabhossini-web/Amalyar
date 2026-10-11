@@ -69,6 +69,7 @@ const EVENT_FA: Record<string, string> = {
   'invoice.issued': 'فاکتور صادر شد',
   'sms.failed': 'پیامک نرسید',
   'sms.sent': 'پیامک رفت',
+  'sms.cancelled': 'پیامکِ ناموفق کنار گذاشته شد',
 };
 
 /**

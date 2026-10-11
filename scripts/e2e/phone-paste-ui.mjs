@@ -106,6 +106,10 @@ const link = (await send('/intake/links', 'POST', { title: `[e2e] شماره ${t
   ok('و به‌صورتِ «09125268655» ذخیره شد', pid && sql(`SELECT phone FROM patients WHERE id=${pid}`) === '09125268655', pid ? sql(`SELECT phone FROM patients WHERE id=${pid}`) : '-');
   const bad = await send('/visits', 'POST', { kind: KIND, firstName: 'شمارهٔ', lastName: `بد ${tag}`, phone: '+98 912', opDate: new Date().toISOString() });
   ok('**نباید بیفتد:** «+98 912»ِ ناقص هنوز رد می‌شود', bad.status === 400, String(bad.status));
+  /* ورودیِ بی‌رقم به `''` نرمال نمی‌شود — فیلدِ اختیاری `''` را «پاک‌کردنِ شماره» می‌خواند (بازبینیِ ۱۴۰۵/۰۷/۱۹). */
+  const junk = pid ? await send(`/patients/${pid}`, 'PATCH', { phone: 'abc' }) : { status: 0 };
+  ok('**نباید بیفتد:** «abc» شمارهٔ ثبت‌شده را پاک نمی‌کند (۴۰۰)', junk.status === 400 && sql(`SELECT phone FROM patients WHERE id=${pid}`) === '09125268655',
+    `${junk.status} ${pid ? sql(`SELECT coalesce(phone,'-') FROM patients WHERE id=${pid}`) : '-'}`);
 }
 
 console.log('\n۳) مرورگر — فرمِ عمومیِ ثبت‌نام (اندروید ۳۹۰)');

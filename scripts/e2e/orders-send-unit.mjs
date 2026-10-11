@@ -16,30 +16,57 @@
  *   - نتیجهٔ نامعلوم (قطعِ شبکه) و خطای برنامه: همان خطا بالا می‌آید و **چیزی ثبت نمی‌شود** (شاید پیام رفته باشد؛
  *     «ارسالِ دوباره»ی خودکار پیامِ تکراری می‌ساخت)
  *   - علت شماره‌ای نمی‌ماند
+ *  و دو قراردادِ «ارسالِ دوباره» (بازبینیِ ۱۴۰۵/۰۷/۱۹):
+ *   - لینکی که بعداً از دفترِ پیام‌ها (`sendReminders`) واقعاً رفت سفارش را «فرستاده‌شده» می‌کند — وگرنه صفحهٔ بیمار
+ *     پاسخ و فایل را با ۴۰۹ رد می‌کرد؛ ولی ردِ دوباره یا لینکِ پرونده‌ای دیگر آن را جلو نمی‌برد
+ *   - ارسالِ موفقِ بعدی از همان شیت ردیفِ «نرفت»ِ قبلی را کنار می‌گذارد و کارِ «ارسالِ دوباره»اش را می‌بندد
+ *     (`sms.cancelled`) — وگرنه بیمار همان لینک را دو بار می‌گرفت
+ *   - «نتیجه نامعلوم» کدِ ماشینیِ `SMS_UNKNOWN` دارد تا رابط آن را «ناموفق» نخواند
  */
 import { createRequire } from 'node:module';
 
 const require = createRequire(new URL('../../server/package.json', import.meta.url));
 const { SmsService } = require('./dist/sms/sms.service');
 const { OrdersService } = require('./dist/patients/orders.service');
+const { sendReminders } = require('./dist/reminders/send-reminders');
 
 let pass = 0; const fails = [];
 const ok = (c, m, d = '') => { if (c) { pass++; console.log('  ✔ ' + m); } else { fails.push(m); console.log('  ✘ ' + m + (d ? ' — ' + d : '')); } };
 const PUBLIC = 'سرویس پیامک موقتاً در دسترس نیست';
 
 /* دیتابیسِ جعلی: فقط آنچه `send()` لمس می‌کند. */
+const TOKEN = 'tok123tok123tok123AB';
 function world() {
-  const state = { order: { id: 1, patientId: 5, visitId: 9, token: 'tok123', status: 'draft', tests: ['CBC'], note: '', patient: { phone: '09121234567' } },
-    reminders: [], events: [], audits: [] };
+  const state = { order: { id: 1, patientId: 5, visitId: 9, token: TOKEN, status: 'draft', tests: ['CBC'], note: '', patient: { phone: '09121234567' } },
+    reminders: [], events: [], audits: [], outbox: [] };
+  const matches = (row, where = {}) => Object.entries(where).every(([k, v]) => {
+    if (v && typeof v === 'object' && !(v instanceof Date)) {
+      if ('contains' in v) return String(row[k] ?? '').includes(v.contains);
+      if ('not' in v) return row[k] !== v.not;
+      if ('in' in v) return v.in.includes(row[k]);
+      if ('lte' in v) return row[k] <= v.lte;
+      if ('lt' in v) return row[k] < v.lt;
+      return true;
+    }
+    return row[k] === v;
+  });
   const labOrder = {
     findUnique: async () => ({ ...state.order }),
     update: async ({ data }) => { Object.assign(state.order, data); return { ...state.order }; },
+    updateMany: async ({ where, data }) => { if (!matches(state.order, where)) return { count: 0 }; Object.assign(state.order, data); return { count: 1 }; },
   };
   const tx = { $queryRawUnsafe: async () => [], labOrder };
+  const reminder = {
+    create: async ({ data }) => { const row = { id: 70 + state.reminders.length, channel: 'sms', attempts: 0, kind: 'notice', ...data }; state.reminders.push(row); return row; },
+    findMany: async ({ where }) => state.reminders.filter((r) => matches(r, where)).map((r) => ({ ...r })),
+    updateMany: async ({ where, data }) => { const hit = state.reminders.filter((r) => matches(r, where)); hit.forEach((r) => Object.assign(r, data)); return { count: hit.length }; },
+    update: async ({ where, data }) => { const r = state.reminders.find((x) => x.id === where.id); Object.assign(r, data); return r; },
+  };
   const prisma = {
     labOrder,
     patient: { findFirst: async () => ({ id: 5 }) },
-    reminder: { create: async ({ data }) => { const row = { id: 70 + state.reminders.length, ...data }; state.reminders.push(row); return row; } },
+    reminder,
+    domainEvent: { create: async ({ data }) => { state.outbox.push(data); return data; } },
     $transaction: async (fn) => fn(tx),
   };
   const svc = (sms) => new OrdersService(
@@ -51,9 +78,11 @@ function world() {
     { emit: async (e) => { state.events.push(e); } },
     {}, {},
   );
-  return { state, svc };
+  return { state, svc, client: prisma };
 }
 
+/* همان کلاینتِ جعلی، شکلی که `sendReminders` می‌خواهد. */
+const worldClient = (w) => w.client;
 const answer = (status, body) => {
   global.fetch = async () => ({ ok: status < 400, status, json: async () => body });
 };
@@ -99,6 +128,7 @@ w = world();
 global.fetch = async () => { throw new Error('socket hang up'); };
 r = await attempt(w.svc(new SmsService()));
 ok(r.err?.getStatus?.() === 503 && /مشخص نشد/.test(r.err?.message ?? ''), 'قطعِ شبکه ← همان «نتیجه مشخص نشد»', r.err?.message);
+ok(r.err?.getResponse?.()?.code === 'SMS_UNKNOWN' && /سفارش ثبت شد/.test(r.err?.message ?? ''), '**نامعلوم کدِ SMS_UNKNOWN دارد** (رابط آن را «ناموفق» نمی‌خواند و به ارسالِ تکراری دعوت نمی‌کند)', JSON.stringify(r.err?.getResponse?.()));
 ok(w.state.reminders.length === 0 && w.state.events.length === 0 && w.state.order.status === 'draft', '**نامعلوم: ردیف و کارِ ارسالِ دوباره نمی‌سازد** (شاید رفته باشد؛ تکراری می‌شد)');
 w = world();
 r = await attempt(w.svc({ sendForStaff: async () => { throw new TypeError('bug'); } }));
@@ -124,6 +154,44 @@ w = world();
 answer(200, { recIds: [], status: 'گیرنده 09121234567 با کد 123456 رد شد' });
 r = await attempt(w.svc(new SmsService()));
 ok(!/[0-9]{4,}/.test(r.err?.message ?? '') && !/[0-9]{4,}/.test(w.state.reminders[0]?.error ?? '') && !/[0-9]{4,}/.test(w.state.events[0]?.payload?.error ?? ''), 'شماره و کد از پیام، ردیف و کارِ ارسالِ دوباره پاک است');
+
+console.log('\n۷) «ارسالِ دوباره» از دفترِ پیام‌ها — لینک که رفت، سفارش «فرستاده‌شده» می‌شود');
+process.env.NODE_ENV = 'production';
+w = world();
+answer(200, { recIds: [14] });
+await attempt(w.svc(new SmsService()));
+const failedRow = w.state.reminders[0];
+ok(w.state.order.status === 'draft' && failedRow?.status === 'failed', 'پیش‌شرط: ردِ اول، سفارش پیش‌نویس و ردیفِ «نرفت»');
+/* همان کارِ `RemindersService.retry`: ردیف به صف و `sendReminders` روی همان شناسه. */
+Object.assign(failedRow, { status: 'pending', attempts: 0, dueAt: new Date(), error: null });
+answer(200, { recIds: [14] });
+await sendReminders(worldClient(w), new SmsService(), [failedRow.id]);
+ok(w.state.order.status === 'draft', 'ردِ دوباره سفارش را جلو نمی‌برد');
+Object.assign(failedRow, { status: 'pending', attempts: 0, dueAt: new Date(), error: null });
+answer(200, { recIds: [3741437414] });
+await sendReminders(worldClient(w), new SmsService(), [failedRow.id]);
+ok(failedRow.status === 'sent', 'ارسالِ دوباره رفت');
+ok(w.state.order.status === 'sent' && w.state.order.sentAt instanceof Date, '**سفارش «فرستاده‌شده» شد** — صفحهٔ بیمار دیگر پاسخ و فایل را با ۴۰۹ رد نمی‌کند');
+w = world();
+w.state.order.patientId = 6;
+w.state.reminders.push({ id: 90, channel: 'sms', kind: 'notice', status: 'pending', attempts: 0, dueAt: new Date(), patientId: 5, phone: '09121234567', text: `x\nhttps://t.amalyar.com/o/${TOKEN}` });
+answer(200, { recIds: [3741437414] });
+await sendReminders(worldClient(w), new SmsService(), [90]);
+ok(w.state.order.status === 'draft', 'لینکی در پیامِ پرونده‌ای دیگر سفارش را جلو نمی‌برد');
+
+console.log('\n۸) ارسالِ موفقِ بعدی از همان شیت — ردیفِ «نرفت»ِ قبلی کنار می‌رود');
+w = world();
+answer(200, { recIds: [14] });
+await attempt(w.svc(new SmsService()));
+answer(200, { recIds: [3741437414] });
+r = await attempt(w.svc(new SmsService()));
+ok(r.res?.sent === true && w.state.order.status === 'sent', 'بارِ دوم رفت');
+ok(w.state.reminders[0].status === 'cancelled' && /بعداً/.test(w.state.reminders[0].error ?? ''), '**ردیفِ «نرفت»ِ قبلی لغو شد** — دیگر «ارسالِ دوباره» ندارد');
+ok(w.state.reminders[1].status === 'sent', 'ردیفِ تازه «رفت» است و دست نخورد');
+ok(w.state.outbox.some((e) => e.type === 'sms.cancelled' && e.refType === 'reminder' && e.refId === w.state.reminders[0].id), '**`sms.cancelled` برای همان ردیف ← کارِ «ارسالِ دوباره» بسته می‌شود**');
+const { rulesFor } = require('./dist/work/work-rules');
+const closes = rulesFor({ type: 'sms.cancelled', refType: 'reminder', refId: 70, patientId: 5 }).closes;
+ok(closes.some((c) => c.type === 'resend_sms' && c.refId === 70), 'قاعدهٔ کارها `sms.cancelled` را به بستنِ resend_sms وصل می‌کند');
 
 console.log(`\nسبز: ${pass}  قرمز: ${fails.length}`);
 if (fails.length) process.exit(1);

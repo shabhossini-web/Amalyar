@@ -245,9 +245,13 @@ try {
   let c = await chips(pa);
   ok(c.length === 4 && c[0] === 'فایل‌ها: ماندگار' && c[1] === 'پیامک: آماده' && c[2] === 'نسخه: abc1234' && c[3] === 'پشتیبان: خارج از برنامه', `چیپ‌ها: ${c.join(' | ')}`);
   ok(await pa.locator('.pa-health .pa-badge.ok').count() === 2, 'فایل‌ها و پیامک سبزند');
-  ok(await pa.locator('.pa-health-notes').count() === 0, '**وقتی همه سالم است هیچ سطرِ علتی نیست** (نوار باریک می‌ماند)');
-  ok((await pa.locator('.pa-health').boundingBox())?.height < 90, `نوارِ سالم کم‌جاست (${Math.round((await pa.locator('.pa-health').boundingBox())?.height)} پیکسل)`);
-  ok(await pa.locator('.pa-health-chips li').nth(3).locator('.pa-badge').getAttribute('title').then((t) => /Coolify/.test(t) && /BACKUP-RESTORE/.test(t)), 'چیپِ پشتیبان صادقانه «خارج از برنامه» است و به راهنما اشاره می‌کند، نه سبزِ ساختگی');
+  /* بازبینیِ ۱۴۰۵/۰۷/۱۹: توضیحِ پشتیبان فقط در `title` بود (لمس و صفحه‌کلید و صفحه‌خوان نمی‌بینند) و اشتباه می‌گفت «Coolify
+     پشتیبان می‌گیرد». حالا یک سطرِ خنثی همیشه زیرِ چیپ‌هاست و به backup.sh روی سرور اشاره می‌کند. */
+  ok(await pa.locator('.pa-health-notes li:not(.run)').count() === 0, '**وقتی همه سالم است هیچ سطرِ علتِ قرمز/کهربایی نیست**');
+  const bnote = await pa.locator('.pa-health-notes li.run').allInnerTexts();
+  ok(bnote.length === 1 && /backup\.sh/.test(bnote[0]) && /BACKUP-RESTORE/.test(bnote[0]) && !/Coolify/.test(bnote[0]), `**توضیحِ پشتیبان روی صفحه دیده می‌شود و درست است** (backup.sh روی سرور، نه Coolify): ${bnote.join(' | ')}`);
+  ok((await pa.locator('.pa-health').boundingBox())?.height < 130, `نوارِ سالم کم‌جاست (${Math.round((await pa.locator('.pa-health').boundingBox())?.height)} پیکسل)`);
+  ok(await pa.locator('.pa-health > [role="status"][aria-live="polite"]').count() === 1, 'یک ناحیهٔ زندهٔ ثابت دورِ چیپ‌ها و یادداشت‌ها');
   ok(!(await pa.locator('.pa-health .pa-badge.ok').allInnerTexts()).some((t) => /پشتیبان/.test(t)), 'پشتیبان هیچ‌وقت سبز نیست');
   const rb = await pa.locator('.pa-health .pa-refresh').boundingBox();
   ok(rb && rb.height >= 44, `هدفِ لمسِ «بازخوانی» ≥ ۴۴ پیکسل (${Math.round(rb?.height)})`);
@@ -266,11 +270,12 @@ try {
     sms: { configured: false, shared: true, message: 'کلید یا خطِ ملی‌پیامک (MELI_API_KEY / MELI_FROM) در سرور تنظیم نیست — هیچ شرکتی پیامک نمی‌فرستد' },
   };
   await pa.locator('.pa-health .pa-refresh').click();
-  await pa.locator('.pa-health-notes li').first().waitFor({ timeout: 5000 });
+  /* سطرِ خنثیِ پشتیبان از قبل هست؛ منتظرِ سطرِ علتِ قرمز می‌مانیم، نه هر سطری. */
+  await pa.locator('.pa-health-notes li.fail').first().waitFor({ timeout: 5000 });
   c = await chips(pa);
   ok(c[0] === 'فایل‌ها: روی volume نیست' && c[1] === 'پیامک: تنظیم نیست', `**حالتِ بد در چیپ‌ها: ${c.slice(0, 2).join(' | ')}**`);
   ok(await pa.locator('.pa-health .pa-badge.fail').count() === 2, 'هر دو قرمزند');
-  const notes = await pa.locator('.pa-health-notes li').allInnerTexts();
+  const notes = await pa.locator('.pa-health-notes li:not(.run)').allInnerTexts();
   ok(notes.length === 2 && /\/app\/storage/.test(notes[0]) && /MELI_API_KEY/.test(notes[1]), `**علتِ فارسی و راهِ درمان زیرِ چیپ‌ها: ${notes.length} سطر**`);
   ok(await pa.locator('.pa-health-notes li.fail').count() === 2, 'سطرهای علت قرمزند');
   const ltr = await pa.locator('.pa-health-notes bdi[dir="ltr"]').allInnerTexts();
@@ -291,6 +296,8 @@ try {
   await pa.locator('.pa-health .pa-refresh').click();
   await pa.locator('.pa-health .pa-badge.fail').first().waitFor({ timeout: 5000 });
   ok(/خوانده نشد/.test(await pa.locator('.pa-health .pa-badge.fail').first().innerText()) && await pa.locator('.pa-health-chips').count() === 0, 'خطای سرور: «خوانده نشد» با علت، بی‌چیپِ دروغین');
+  ok(await pa.locator('.pa-health-notes').count() === 0, '**یادداشت‌های پاسخِ قبلی زیرِ «خوانده نشد» نمی‌مانند** (دیگر وضعیتِ فعلی نیستند)');
+  ok(await pa.locator('.pa-health > [role="status"]').count() === 1 && /خوانده نشد/.test(await pa.locator('.pa-health > [role="status"]').innerText()), 'خطا داخلِ همان ناحیهٔ زندهٔ ثابت اعلام می‌شود');
   ok(await pa.locator('.pa-row').count() >= 1, 'خطای سلامت بقیهٔ پنل را نمی‌شکند');
   healthStatus = 200;
 
@@ -304,7 +311,7 @@ try {
   ok(await noHScroll(paPhone), 'پنل روی گوشی بی‌اسکرولِ افقی');
   health = { ...health, storage: { ...health.storage, verdict: 'ephemeral', message: 'پوشهٔ فایل‌ها روی volume نیست؛ با دیپلوی بعدی همهٔ فایل‌های آپلودی پاک می‌شود — در Coolify یک volume روی /app/storage سوار کنید' }, sms: { ...health.sms, configured: false, message: 'کلید یا خطِ ملی‌پیامک (MELI_API_KEY / MELI_FROM) در سرور تنظیم نیست — هیچ شرکتی پیامک نمی‌فرستد' } };
   await paPhone.reload({ waitUntil: 'networkidle' });
-  await paPhone.locator('.pa-health-notes li').first().waitFor({ timeout: 5000 });
+  await paPhone.locator('.pa-health-notes li.fail').first().waitFor({ timeout: 5000 });
   ok(await noHScroll(paPhone), 'گوشی: نوارِ آمادگی با علت‌های بلند اسکرولِ افقی نمی‌سازد');
   ok((await paPhone.locator('.pa-health .pa-refresh').boundingBox())?.height >= 44, 'گوشی: «بازخوانی» ≥ ۴۴ پیکسل');
   const ph = await paPhone.evaluate(() => {
@@ -312,7 +319,7 @@ try {
     const chips = box('.pa-health-chips'); const title = box('.pa-health h2'); const total = box('.pa-health');
     return { chipsBelow: chips.top >= title.bottom - 1, total: total.height };
   });
-  ok(ph.chipsBelow && ph.total < 380, `گوشی: چیپ‌ها زیرِ عنوان‌اند و نوار کم‌جاست (${Math.round(ph.total)} پیکسل)`);
+  ok(ph.chipsBelow && ph.total < 470, `گوشی: چیپ‌ها زیرِ عنوان‌اند و نوار کم‌جاست (${Math.round(ph.total)} پیکسل)`);
   if (SHOTS) {
     await paPhone.locator('.pa-health').screenshot({ path: `${SHOTS}/platform-health-bad-phone.png` });
     await paPhone.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
