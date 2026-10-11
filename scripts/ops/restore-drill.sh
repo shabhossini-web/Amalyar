@@ -83,6 +83,9 @@ if [ -n "$DRILL_LOCAL" ]; then
   pgx() { "$@"; }
   others="$(psql -U "$SU" -d postgres -X -qAt -c "SELECT count(*) FROM pg_database WHERE NOT datistemplate AND datname <> 'postgres'" 2>/dev/null || echo ?)"
   [ "$others" = 0 ] || die "سرورِ تمرین باید خالی باشد (جز postgres $others دیتابیس دارد) — هرگز روی سرورِ زنده بازگردانی نکن"
+  # خودِ `postgres` هم باید خالی باشد: در نصبِ واقعی دیتابیسِ مرکزی همان‌جاست، پس «فقط postgres دارد» یعنی هنوز شاید زنده.
+  pgt="$(psql -U "$SU" -d postgres -X -qAt -c "SELECT count(*) FROM pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema')" 2>/dev/null || echo ?)"
+  [ "$pgt" = 0 ] || die "سرورِ تمرین باید خالی باشد (دیتابیسِ postgres $pgt جدول دارد) — هرگز روی سرورِ زنده بازگردانی نکن"
 else
   command -v docker >/dev/null 2>&1 || die "Docker پیدا نشد؛ یا Docker نصب کن یا یک سرورِ خالی را با DRILL_LOCAL=yes و PG* نشان بده"
   NAME="amalyar-drill-$$"
@@ -148,7 +151,9 @@ DUMPS=("$W"/*.dump)
 RESTORED=()
 for f in "${DUMPS[@]}"; do
   db="$(basename "$f" .dump)"
-  if pgx pg_restore -U "$SU" -d postgres --create --exit-on-error < "$f" > "$W/$db.out" 2>&1; then
+  # `postgres` روی هر سروری از قبل هست؛ `--create` برایش «از قبل هست» می‌دهد — پس در همان دیتابیسِ (خالیِ) موجود.
+  if [ "$db" = postgres ]; then restore=(pg_restore -U "$SU" -d postgres --exit-on-error); else restore=(pg_restore -U "$SU" -d postgres --create --exit-on-error); fi
+  if pgx "${restore[@]}" < "$f" > "$W/$db.out" 2>&1; then
     RESTORED+=("$db"); good "دیتابیسِ $db برگشت"
   else
     bad "دیتابیسِ $db برنگشت"; tail -n 5 "$W/$db.out" | sed 's/^/        /'

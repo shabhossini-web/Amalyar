@@ -21,7 +21,7 @@
  *     UPLOAD_FAILED (نه FAILED) و نگهداری پیش از آپلود
  *  نباید بیفتد:
  *   - نگهداری: پوشه‌های قدیمی پاک می‌شوند ولی سه‌تای تازه همیشه می‌مانند
- *   - دیتابیسِ `postgres` و قالب‌ها پشتیبان گرفته نمی‌شوند
+ *   - دیتابیسِ `postgres`ِ خالی و قالب‌ها پشتیبان گرفته نمی‌شوند (`postgres`ِ دارای جدول — دیتابیسِ مرکزیِ نصبِ واقعی — گرفته می‌شود)
  */
 import { spawnSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
@@ -159,6 +159,7 @@ try {
   const BK = join(work, 'backups'); const ST = join(work, 'storage');
   writeStorage(ST);
   const srcEnv = MODE === 'docker' ? { PG_CONTAINER: src.container } : src.env;
+  let ctl = 'bk_control';
   const baseEnv = { ...srcEnv, BACKUP_DIR: BK, STORAGE_DIR: ST };
   ok(true, 'سرورها و داده آماده شد');
 
@@ -330,6 +331,29 @@ try {
   const okStamp = readFileSync(join(BK5, 'LATEST'), 'utf8').trim();
   ok(b.code === 0 && !existsSync(join(BK5, 'LAST_UPLOAD_FAILED')) && existsSync(join(work, 'remote', okStamp, 'SHA256SUMS')), 'آپلودِ موفقِ بعدی LAST_UPLOAD_FAILED را پاک می‌کند و پوشه بیرون است', b.out);
 
+  console.log('\n۷و) دیتابیسِ مرکزی در دیتابیسِ پیش‌فرضِ `postgres` (همان شکلِ نصبِ واقعی)');
+  /* پشتیبانِ اولِ مالک (۱۴۰۵/۰۷/۲۰) هشت شرکت را گرفت ولی دیتابیسِ مرکزی را نه: Coolify آن را «Initial DB» یعنی `postgres`
+     ساخته بود و اسکریپت `postgres` را همیشه کنار می‌گذاشت. */
+  psql(src, 'postgres', `CREATE TABLE tenants (id uuid PRIMARY KEY, slug text, status text, database_url_encrypted text);
+    CREATE TABLE tenant_domains (id serial PRIMARY KEY, tenant_id uuid, hostname text);
+    INSERT INTO tenants VALUES ('${acme}','acme','active','x'),('${beta}','beta','active','x'),('${gone}','gone','deleting','x');
+    INSERT INTO tenant_domains (tenant_id, hostname) VALUES ('${acme}','acme.example.com'),('${beta}','beta.example.com');`);
+  psql(src, 'postgres', 'DROP DATABASE bk_control');
+  ctl = 'postgres';
+  const BK7 = join(work, 'backups-pgctl');
+  b = run(BACKUP, { ...baseEnv, BACKUP_DIR: BK7 });
+  const pgDir = join(BK7, readFileSync(join(BK7, 'LATEST'), 'utf8').trim());
+  ok(b.code === 0 && readdirSync(pgDir).includes('postgres.dump') && /✔ postgres/.test(b.out), '**`postgres` که جدول دارد پشتیبان گرفته شد** (دیتابیسِ مرکزی جا نمی‌ماند)', b.out);
+  d = run(DRILL, await drillEnv({ BACKUP_DIR: BK7 }), []);
+  ok(d.code === 0 && /دیتابیسِ postgres برگشت/.test(d.out) && /دیتابیسِ مرکزی: postgres \(2 شرکتِ فعال\)/.test(d.out)
+    && /همهٔ شرکت‌های فعال برگشت \(2 از 2، هرکدام با نامِ خودش\)/.test(d.out), '**تمرین `postgres` را در همان دیتابیسِ موجود برمی‌گرداند و مرکزی را پیدا می‌کند**', d.out);
+  if (MODE === 'local') {
+    const live = { ...(await drillEnv()) };
+    psql({ env: live }, 'postgres', 'CREATE TABLE still_live (id int)');
+    d = run(DRILL, { ...live, BACKUP_DIR: BK7 }, []);
+    ok(d.code === 2 && /دیتابیسِ postgres 1 جدول دارد/.test(d.out), '**سرورِ تمرینی که فقط `postgres`ِ پُر دارد (مثلِ نصبِ واقعی) هم رد می‌شود**', d.out);
+  }
+
   if (MODE === 'docker') {
     console.log('\n۸) volume (مسیرِ production)');
     const vol = `ad-vol-${process.pid}`;
@@ -347,7 +371,7 @@ try {
   console.log('\n۹) شرکتِ گم‌شده پشتِ دیتابیسِ یتیم، و فایلِ شرکتی در پوشهٔ شرکتِ دیگر (باید قرمز شود)');
   /* شمارش «۳ دیتابیسِ شرکت ≥ ۳ شرکتِ فعال» را پاس می‌کرد و مجموعهٔ هش‌های همهٔ پوشه‌ها، فایلِ هم‌محتوای شرکتِ دیگر را
      جای فایلِ گم‌شده می‌پذیرفت. */
-  psql(src, 'bk_control', `INSERT INTO tenants VALUES ('${randomUUID()}','gamma','active','x')`);
+  psql(src, ctl, `INSERT INTO tenants VALUES ('${randomUUID()}','gamma','active','x')`);
   psql(src, 'postgres', 'CREATE DATABASE amalyar_old');
   psql(src, 'amalyar_old', `CREATE TABLE _prisma_migrations (id text PRIMARY KEY); INSERT INTO _prisma_migrations VALUES ('m1');
     CREATE TABLE patients (id serial PRIMARY KEY); CREATE TABLE documents (id serial PRIMARY KEY, sha256 text NOT NULL, deleted_at timestamptz);

@@ -19,6 +19,8 @@
 
 دو نکته که اسکریپت خودش رعایت می‌کند:
 - **فهرستِ دیتابیس‌ها از خودِ Postgres خوانده می‌شود**، نه از فهرستی که دستی بنویسی — شرکتِ تازه خودکار پوشش داده می‌شود.
+  دیتابیسِ پیش‌فرضِ `postgres` هم اگر جدولی دارد گرفته می‌شود: **در نصبِ فعلی دیتابیسِ مرکزی همان‌جاست** (پشتیبانِ اول
+  بدونِ این قاعده هشت شرکت را گرفت و مرکزی را جا انداخت).
 - **فایل‌ها بعد از دیتابیس‌ها** گرفته می‌شوند (با نامِ محتوا ذخیره‌اند)؛ پس هر فایلی که یک ردیفِ دامپ به آن ارجاع می‌دهد در
   آرشیو هست — مگر فایلی که درست میانِ دو گام پاک شده باشد. تمرینِ بازگردانی همین را برای هر شرکت جدا می‌سنجد.
 
@@ -151,9 +153,11 @@ sudo /opt/amalyar-ops/restore-drill.sh 20261008T023001Z      # یکی از قب�
 ۴. داخلِ کانتینرِ Postgres، **اول نقش‌ها، بعد هر دیتابیس**:
    ```bash
    docker exec -i <pg> psql -U postgres -d postgres < globals.sql
-   docker exec -i <pg> pg_restore -U postgres -d postgres --create < amalyar_control.dump   # برای هر فایلِ .dump
+   docker exec -i <pg> pg_restore -U postgres -d postgres < postgres.dump                   # دیتابیسِ مرکزی — بی‌‌--create
+   docker exec -i <pg> pg_restore -U postgres -d postgres --create < amalyar_dr_gorji.dump  # برای هر فایلِ .dumpِ دیگر
    ```
-   (خطای «role postgres already exists» در مرحلهٔ نقش‌ها عادی است.)
+   (خطای «role postgres already exists» در مرحلهٔ نقش‌ها عادی است.) **دیتابیسِ مرکزیِ نصبِ فعلی همان دیتابیسِ پیش‌فرضِ
+   `postgres` است** (Coolify آن را «Initial DB» ساخت)؛ چون روی هر سروری از قبل هست، بی‌`--create` در همان برمی‌گردد.
 ۵. فایل‌ها را در volume بریز: `docker run --rm -v <نامِ volume>:/data -v $PWD:/b alpine tar -xzf /b/storage.tar.gz -C /data` (Coolify جلوی نامِ volume شناسهٔ اپ را می‌گذارد، مثلِ `ggdkvpdff3me1bzxqzhb2uud-amalyar-storage`).
 ۶. بک‌اند را Deploy کن. **نشانیِ دیتابیسِ شرکت‌ها هنوز به Postgresِ سرورِ قبلی اشاره می‌کند** (رمزشده در دیتابیسِ مرکزی ساخته شده
    بود)؛ پس دیتابیسِ مرکزی کار می‌کند ولی هیچ شرکتی باز نمی‌شود. Coolify ← بک‌اند (amalyar-api) ← **Terminal**:

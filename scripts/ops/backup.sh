@@ -8,6 +8,7 @@
 # چه می‌سازد (در $BACKUP_DIR/<زمانِ UTC>/):
 #   globals.sql        نقش‌ها و رمزشان (pg_dumpall --globals-only)
 #   <db>.dump          هر دیتابیس، قالبِ custom (pg_dump -Fc) — پیش از ذخیره با pg_restore --list خوانده‌شدنش سنجیده می‌شود
+#                      (`postgres.dump` فقط وقتی دیتابیسِ پیش‌فرض جدول دارد — در نصبِ واقعی دیتابیسِ مرکزی همان‌جاست)
 #   storage.tar.gz     پوشهٔ فایل‌ها (عکس و مدارک) — **بعد** از دیتابیس‌ها گرفته می‌شود تا هر فایلِ ارجاع‌شده در دامپ باشد
 #                      (بدونِ `.ledger`: دفترِ کانتینرها اثباتِ ماندگاریِ همان volume است و با بازگردانی نباید منتقل شود)
 #   SHA256SUMS         چکیدهٔ همهٔ فایل‌ها — تمرینِ بازگردانی اول همین را می‌سنجد
@@ -124,6 +125,12 @@ say "  ✔ نقش‌ها"
 
 # ── دیتابیس‌ها: فهرست از خودِ Postgres ──
 DBS="$(psql_q -c "SELECT datname FROM pg_database WHERE NOT datistemplate AND datname <> 'postgres' ORDER BY 1")"
+# ⚠️ دیتابیسِ پیش‌فرضِ `postgres` معمولاً خالی است، ولی در نصبِ واقعی **دیتابیسِ مرکزی همان‌جاست** (Coolify آن را
+# «Initial DB» ساخت و CONTROL_DATABASE_URL به `/postgres` اشاره می‌کند). پشتیبانِ اولِ مالک هشت شرکت را گرفت و همین را
+# جا انداخت — بی‌آن، پس از خرابی برنامه نمی‌داند هر نشانی به کدام دیتابیس وصل است. پس اگر جدولی دارد گرفته می‌شود.
+PG_TABLES="$(pgx psql -U "$PG_USER" -d postgres -X -qAt -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM pg_tables WHERE schemaname NOT IN ('pg_catalog', 'information_schema')")"
+NL=$'\n'
+if [ "${PG_TABLES:-0}" -gt 0 ] 2>/dev/null; then DBS="postgres${DBS:+$NL$DBS}"; fi
 [ -n "$DBS" ] || die "هیچ دیتابیسی (به‌جز postgres) پیدا نشد"
 COUNT=0
 # ⚠️ فهرست از fd 3 خوانده می‌شود: `docker exec -i` ورودیِ استاندارد را می‌بلعد و نامِ دیتابیس‌های بعدی را می‌خورد.
