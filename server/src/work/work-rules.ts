@@ -285,6 +285,23 @@ export const RULES: Record<string, Rule> = {
   }),
   'delivery.confirmed': (_e, ref) => close(ref, 'confirm_delivery'),
 
+  /* ── مدرکِ بی‌فایل (مالک، ۱۴۰۵/۰۷/۲۰) ── ردیفِ مدرک هست ولی فایلش روی سرور نیست (`detectLostFiles`).
+     کارِ **منشی**: از بیمار یا پزشک دوباره بگیرد و روی همان ردیف «آپلودِ دوباره» بزند. با آپلودِ دوباره یا
+     حذفِ خودِ ردیف بسته می‌شود. `reopen` برای فایلی است که بعد از آپلودِ دوباره **باز** نیست؛ کاری که منشی
+     «بستن بدونِ اقدام» زده (بیمار مدرک را ندارد) را آشکارساز اصلاً دوباره نمی‌فرستد (`detectLostFiles`). */
+  'document.file_missing': (e, ref) => upsert({
+    ...base(e, 'reupload_doc', ref),
+    title: `فایلِ «${String(e.payload?.title ?? 'مدرک').slice(0, 80)}» روی سرور نیست — دوباره آپلود کنید`,
+    ownerRole: 'secretary',
+    /* سه روز برای گرفتنِ دوبارهٔ مدرک از بیمار — مدرک همین حالا گم شده ولی کارِ منشی همین حالا «عقب‌افتاده» نیست. */
+    dueAt: inDays(3, e.at),
+    priority: 2,
+    note: 'ردیفِ مدرک در پرونده مانده ولی خودِ فایل از دست رفته؛ از بیمار یا پزشک دوباره بگیرید و روی همان ردیف «آپلودِ دوباره» را بزنید.',
+    reopen: true,
+  }),
+  'document.file_restored': (_e, ref) => close(ref, 'reupload_doc'),
+  'document.deleted': (_e, ref) => close(ref, 'reupload_doc'),
+
   /* ── مالی ── */
   'invoice.ready': (e, ref) => upsert({
     ...base(e, 'issue_invoice', ref),

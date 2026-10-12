@@ -708,7 +708,10 @@ export class PlatformProvisioningService {
     /* نوعِ فعلیِ هر شرکت از خودِ همان شرکت (کَش‌شده، با سقفِ زمان) — شرکتی که پاسخ ندهد `null` است. */
     const profiles = await Promise.all(tenants.map((tenant) => this.probe?.of(tenant) ?? null));
     return {
-      tenants: tenants.map((tenant, i) => ({ ...this.shapeTenant(tenant), profile: profiles[i] })),
+      tenants: tenants.map((tenant, i) => {
+        const p = profiles[i];
+        return { ...this.shapeTenant(tenant), profile: p ? { kind: p.kind, services: p.services, label: p.label } : null, lostDocs: p?.lostDocs ?? 0 };
+      }),
       jobs: [...openJobs, ...doneJobs].map((job) => this.shapeJob(job)),
       deletions: await this.deletionJobs(),
       /* گزینه‌های فرمِ ساخت از همین‌جا می‌آید تا برچسب‌ها در کلاینت دوباره نوشته نشوند (قانونِ ۱۵). */

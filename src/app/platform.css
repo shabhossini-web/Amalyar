@@ -358,6 +358,7 @@
 .pa-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 14px; }
 /* نوعِ نصبِ شرکت (مطب/شرکتی + خدمات) — برچسبِ کوچکِ رنگِ برند، همان وزنِ بقیهٔ خط‌های فرعیِ کارت. */
 .pa-row small.pa-profile, .pa-job small.pa-profile { color: var(--brand-text); font-weight: 800; }
+.pa-row small.pa-lost { color: var(--amber-text); font-weight: 700; line-height: 1.8; }
 /* خدماتِ شرکت زیرِ «نوعِ نصب» — دو تیک‌خور؛ هدفِ لمس ۴۴ پیکسل (فرم روی موبایل هم پر می‌شود). */
 .pa-services { display: grid; gap: 6px; margin: 2px 0 0; padding: 10px 12px; border-radius: 13px; border: 1px solid rgba(var(--brand-soft-rgb), .3); background: rgba(var(--surface-rgb), .5); }
 .pa-services legend { padding: 0 6px; font-size: 12px; color: var(--text2); }

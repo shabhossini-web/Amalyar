@@ -119,6 +119,10 @@ export const Alert = (p) => (
   </Svg>
 );
 export const Clock = (p) => <Svg {...p}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></Svg>;
+/** فایلی که ردیفش هست ولی خودش روی سرور نیست — برگه با ضربدر (پروندهٔ بیمار، مدرکِ بی‌فایل). */
+export const FileMissing = (p) => (
+  <Svg {...p}><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" /><path d="m10 12 4 4m0-4-4 4" /></Svg>
+);
 /** «دوباره» — پرسشِ امنیتیِ تازه و مانندِ آن. */
 export const Refresh = (p) => (
   <Svg {...p}><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8" /><path d="M4 4v4h4" /><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16" /><path d="M20 20v-4h-4" /></Svg>

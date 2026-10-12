@@ -635,3 +635,22 @@
 .rc-subs b { font-size: 12px; color: var(--text2); }
 .rc-subs .rc-subs-ph { font-style: normal; font-weight: 600; color: var(--text3); }
 .rc-subs span { color: var(--text1); overflow-wrap: anywhere; }
+
+/* ── مدرکِ بی‌فایل (۱۴۰۵/۰۷/۲۰) ──
+   ردیفی که فایلش روی سرور نیست: بنرِ کهربایی بالای فهرست + ردیفِ قرمز + «آپلودِ دوباره» به‌جای دانلود.
+   رنگ‌ها از توکن‌های وضعیت (`--amber-*`, `--red-text`) — در هر دو تم خوانا (قانون ۲۳). */
+.rc-lost-banner {
+  display: flex; align-items: flex-start; gap: 9px; margin: 0 0 12px; padding: 10px 14px; border-radius: 12px;
+  font-size: 13px; line-height: 1.9; color: var(--amber-text); background: var(--amber-bg);
+  border: 1px solid color-mix(in srgb, var(--amber-text) 45%, transparent);
+}
+.rc-lost-banner svg { flex-shrink: 0; margin-top: 4px; }
+.rc-doc.missing { border-color: color-mix(in srgb, var(--red-text) 55%, transparent); }
+.rc-thumb-missing { color: var(--red-text); border-color: color-mix(in srgb, var(--red-text) 40%, transparent); }
+.rc-doc-main small.rc-doc-missing-note { color: var(--red-text); font-weight: 700; line-height: 1.8; white-space: normal; }
+.df-acts .rc-doc-reup {
+  width: auto; display: inline-flex; align-items: center; gap: 6px; padding: 0 12px;
+  font: inherit; font-size: 12px; font-weight: 700; color: var(--brand-text); white-space: nowrap;
+}
+.df-acts .rc-doc-reup:disabled { opacity: .55; cursor: progress; }
+.df-acts .rc-doc-reup:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }

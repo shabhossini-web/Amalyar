@@ -20,7 +20,7 @@ export const TYPE_FA = {
   call_patient: 'تماس با بیمار', confirm_appointment: 'تأییدِ نوبت', confirm_surgery_done: 'وضعیتِ عمل',
   complete_report: 'گزارشِ خدمت', confirm_usage: 'تأییدِ مصرف', confirm_delivery: 'تأییدِ تحویل', issue_invoice: 'صدورِ فاکتور', resend_sms: 'پیامک',
   follow_up_unanswered: 'پیگیریِ بی‌پاسخ', fill_form: 'فرم', upload_result: 'ارسالِ نتیجه', pick_slot: 'انتخابِ زمان', manual: 'یادداشت',
-  repair_data: 'تطبیقِ دادهٔ ناقص',
+  repair_data: 'تطبیقِ دادهٔ ناقص', reupload_doc: 'مدرکِ بی‌فایل',
 };
 
 const faNum = (n) => Number(n || 0).toLocaleString('fa-IR');
@@ -35,6 +35,7 @@ function actVerb(w, target, t, kind) {
   if (target.type === 'report') return 'بارگذاریِ گزارش';
   if (target.type === 'intake') return 'بررسی و تأیید';
   if (target.type === 'order' && w.type === 'review_result') return 'بررسیِ نتیجه';
+  if (target.type === 'docs') return 'رفتن به مدارک';
   /* مطب: «گزارش» همان شرحِ عملِ داخلِ فرمِ عمل است. در شرکت، کارِ گزارشی که پاپ‌آپش برای
      این کاربر باز نیست (`visit.techPopup`) فرمِ مراجعه را باز می‌کند — «نوشتن» آن‌جا دروغ است. */
   if (w.type === 'complete_report' && kind === 'clinic') return `نوشتنِ ${t.workReport}`;
@@ -47,6 +48,7 @@ function notDone(w, t) {
   if (w.type === 'complete_report') return `${t.workReport} ثبت نمی‌شود`;
   if (w.type === 'approve_intake') return 'ثبت‌نام تأیید نمی‌شود';
   if (w.type === 'review_result') return 'نتیجه «بررسی‌شده» ثبت نمی‌شود';
+  if (w.type === 'reupload_doc') return 'فایلِ مدرک برنمی‌گردد و ردیفش در پرونده قرمز می‌ماند';
   return 'خودِ کار انجام‌شده ثبت نمی‌شود';
 }
 

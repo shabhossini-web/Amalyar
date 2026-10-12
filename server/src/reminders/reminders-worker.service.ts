@@ -7,7 +7,8 @@ import { SmsService } from '../sms/sms.service';
 import { sendReminders } from './send-reminders';
 import { expireProvisional } from '../accounts/provisional';
 import { processDomainEvents } from '../work/work-processor';
-import { detectStaleWork } from '../work/work-detectors';
+import { detectLostFiles, detectStaleWork, storageTrusted } from '../work/work-detectors';
+import { storageHealth } from '../storage/storage-health';
 import { repairRun } from '../patients/repair-core';
 
 /**
@@ -35,6 +36,9 @@ import { repairRun } from '../patients/repair-core';
  * مطلوب است (idempotent است و هر چیزی که تازه لغزیده باشد را می‌گیرد).
  * خاموش‌کردن: REPAIR_DISABLED=1.
  */
+/** سنجشِ «مدرکِ بی‌فایل» به‌ازای هر شرکت — ساعتی. */
+const LOST_FILES_EVERY_MS = 3600_000;
+
 @Injectable()
 export class RemindersWorkerService implements OnModuleInit, OnModuleDestroy {
   private readonly log = new Logger('RemindersWorker');
@@ -42,6 +46,8 @@ export class RemindersWorkerService implements OnModuleInit, OnModuleDestroy {
   private running = false;
   /** شرکت‌هایی که ترمیمشان در همین پروسه یک‌بار دویده. */
   private repaired = new Set<string>();
+  /** آخرین سنجشِ «مدرکِ بی‌فایل» به‌ازای هر شرکت — ساعتی یک‌بار، نه هر sweep (یک `stat` به‌ازای هر فایل). */
+  private lostFilesAt = new Map<string, number>();
 
   constructor(private control: ControlPrismaService, private sms: SmsService) {}
 
@@ -67,15 +73,22 @@ export class RemindersWorkerService implements OnModuleInit, OnModuleDestroy {
     try {
       const tenants = await this.control.tenant.findMany({
         where: { status: 'active' },
-        select: { slug: true, databaseUrlEncrypted: true, plan: true, accessUntil: true, suspendedAt: true },
+        select: { id: true, slug: true, databaseUrlEncrypted: true, plan: true, accessUntil: true, suspendedAt: true },
       });
+      /* مدرکِ بی‌فایل فقط روی ذخیره‌سازیِ سالم سنجیده می‌شود (`detectLostFiles`): ریشه‌ای که اشتباه سوار شده
+         یعنی «همهٔ فایل‌ها نیستند» و برای هر مدرکِ هر شرکت یک کارِ دروغین. سلامتِ ریشه یک‌بار در هر sweep و فقط
+         وقتی شرکتی نوبتِ سنجشِ ساعتی‌اش رسیده (خودِ سنجه یک نوشتنِ آزمایشی روی دیسک است). */
+      const due = tenants.some((t) => Date.now() - (this.lostFilesAt.get(t.slug) ?? 0) >= LOST_FILES_EVERY_MS);
+      const storageOk = due && storageTrusted(await storageHealth().catch(() => null));
       for (const t of tenants) {
         /* چرخهٔ عمرِ تجاری (`tenant-access.ts`، همان قاعدهٔ میان‌افزار): شرکتِ معلق هیچ کاری نمی‌گیرد
            و شرکتِ منقضی پیامک نمی‌فرستد — اعتبارِ پیامک برای حسابی که بسته یا تمام شده نمی‌سوزد. */
         const access = tenantAccess(t);
         if (access.state === 'suspended') continue;
         try {
-          await this.sweepTenant(decryptDatabaseUrl(t.databaseUrlEncrypted), t.slug, { sendSms: !access.readOnly });
+          await this.sweepTenant(decryptDatabaseUrl(t.databaseUrlEncrypted), t.slug, {
+            sendSms: !access.readOnly, lostFilesTenantId: storageOk ? t.id : null,
+          });
         } catch (e) {
           this.log.error(`sweep(${t.slug}) شکست خورد: ${e instanceof Error ? e.message : e}`);
         }
@@ -85,7 +98,9 @@ export class RemindersWorkerService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  private async sweepTenant(url: string, slug: string, opts: { sendSms: boolean } = { sendSms: true }) {
+  private async sweepTenant(
+    url: string, slug: string, opts: { sendSms: boolean; lostFilesTenantId?: string | null } = { sendSms: true },
+  ) {
     const client = new PrismaClient({ datasources: { db: { url } }, log: [] });
     try {
       await expireProvisional(client);
@@ -96,6 +111,7 @@ export class RemindersWorkerService implements OnModuleInit, OnModuleDestroy {
       /* لایهٔ کار (W2.1): رویدادهای پردازش‌نشده ← کار. همان sweep، همان client. */
       /* W2.2: حالت‌های بیات (عملِ بی‌وضعیت، گزارشِ نیامده، مصرفِ تأییدنشده، فرمِ بی‌پاسخ) ← رویداد. */
       await detectStaleWork(client);
+      await this.lostFilesHourly(client, slug, opts.lostFilesTenantId ?? null);
       const work = await processDomainEvents(client);
       if (work.events) this.log.log(`${slug}: ${work.events} رویداد ← ${work.created} کارِ تازه، ${work.closed} بسته`);
       await this.repairOnce(client, slug);
@@ -106,6 +122,23 @@ export class RemindersWorkerService implements OnModuleInit, OnModuleDestroy {
       throw e;
     } finally {
       await client.$disconnect().catch(() => undefined);
+    }
+  }
+
+  /**
+   * مدرکِ بی‌فایل ← کارِ منشی (`detectLostFiles`) — ساعتی یک‌بار به‌ازای هر شرکت. شکستش sweep را نمی‌شکند:
+   * یادآوری و پردازشِ رویداد حساس به زمان‌اند، این سنجش نه.
+   */
+  private async lostFilesHourly(client: PrismaClient, slug: string, tenantId: string | null) {
+    if (!tenantId) return;
+    const last = this.lostFilesAt.get(slug) ?? 0;
+    if (Date.now() - last < LOST_FILES_EVERY_MS) return;
+    this.lostFilesAt.set(slug, Date.now());
+    try {
+      const r = await detectLostFiles(client, tenantId);
+      if (r.emitted || r.restored) this.log.log(`${slug}: مدرکِ بی‌فایل — ${r.missing} مورد، ${r.emitted} کارِ تازه، ${r.restored} برگشته`);
+    } catch (e) {
+      this.log.error(`سنجشِ مدرکِ بی‌فایل (${slug}) شکست خورد: ${e instanceof Error ? e.message : e}`);
     }
   }
 

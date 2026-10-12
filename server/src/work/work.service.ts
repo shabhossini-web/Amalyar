@@ -5,7 +5,9 @@ import { LEVEL } from '../common/levels';
 import { isUnrestricted, ownVisitWhere } from '../common/own-scope';
 import { jobRoleLabel } from '../common/job-roles';
 import { canAccess } from '../auth/access-check';
-import { detectStaleWork } from './work-detectors';
+import { detectLostFiles, detectStaleWork, storageTrusted } from './work-detectors';
+import { TenantContext } from '../tenant/tenant-context';
+import { storageHealth } from '../storage/storage-health';
 import { closeWork, processDomainEvents, upsertWork } from './work-processor';
 import type { WorkUpsert } from './work-rules';
 import { OWNER_ROLE_FA } from './work-rules';
@@ -91,7 +93,7 @@ const nameOf = (a: NamedAccount) =>
  */
 @Injectable()
 export class WorkService {
-  constructor(private prisma: PrismaService, private audit: AuditService) {}
+  constructor(private prisma: PrismaService, private audit: AuditService, private tenant: TenantContext) {}
 
   private isSupervisor(user: any) {
     return (user?.level ?? 0) >= LEVEL.SUPERVISOR;
@@ -577,7 +579,11 @@ export class WorkService {
 
   async process(user: any) {
     const detected = await detectStaleWork(this.prisma);
-    const res = { ...(await processDomainEvents(this.prisma)), detected };
+    /* مدرکِ بی‌فایل — فقط روی ذخیره‌سازیِ سالم (گیتِ `detectLostFiles`). */
+    const lostFiles = storageTrusted(await storageHealth().catch(() => null))
+      ? await detectLostFiles(this.prisma, this.tenant.require().tenantId)
+      : null;
+    const res = { ...(await processDomainEvents(this.prisma)), detected, lostFiles };
     await this.audit.record({ actorId: user?.id ?? null, action: 'work.process', entityType: 'domain_event', entityId: 0, after: res });
     return res;
   }

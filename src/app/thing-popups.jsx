@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence } from 'framer-motion';
 import { api, apiUpload } from '../lib/api.js';
 import { faDate } from '../lib/jalali.js';
@@ -9,6 +9,7 @@ import VisitForm, { surgeryPrefill } from './VisitForm.jsx';
 import OrderSheet from './OrderSheet.jsx';
 import { useVisitDefs } from './visit-defs.js';
 import { targetForKind } from './work-target.js';
+import { guardedNavigate } from '../lib/leave-guard.js';
 import Overlay from '../ui/Overlay.jsx';
 import FileDrop from '../ui/FileDrop.jsx';
 import { Calendar, Close, Send, Upload } from '../ui/icons.jsx';
@@ -67,6 +68,7 @@ const visitBrief = (spec) => ({
 export function useThings({ patientId = null, onChanged, toast } = {}) {
   const [pop, setPop] = useState(null);
   const { kind } = useConfig();
+  const navigate = useNavigate();
   /* ref، تا `open` با هر رندرِ صفحه (که toast/onChanged را inline می‌سازد) عوض نشود. */
   const cb = useRef({ onChanged, toast });
   useEffect(() => { cb.current = { onChanged, toast }; });
@@ -103,9 +105,13 @@ export function useThings({ patientId = null, onChanged, toast } = {}) {
         setPop({ type: 'reminder', row: (Array.isArray(rows) ? rows : []).find((x) => x.id === spec.id) ?? null, item: spec.item, patientId: pid });
       } else if (spec.type === 'appointment') {
         setPop({ type: 'appointment', id: spec.id, item: spec.item, patientId: pid });
+      } else if (spec.type === 'docs') {
+        /* پاپ‌آپ نیست: خودِ پرونده (تبِ مدارک) — همان مسیرِ `state.open`ِ زنگ؛ پرونده آن را می‌شناسد. */
+        if (!pid) throw new Error('بیمارِ این مدرک مشخص نیست');
+        guardedNavigate(navigate, `/app/patients/${pid}`, { state: { open: spec } });
       }
     } catch (e) { cb.current.toast?.(e.message, true); }
-  }, [patientId, kind]);
+  }, [patientId, kind, navigate]);
   const close = useCallback(() => setPop(null), []);
   const changed = useCallback(() => cb.current.onChanged?.(), []);
   const say = useCallback((m, bad) => cb.current.toast?.(m, bad), []);

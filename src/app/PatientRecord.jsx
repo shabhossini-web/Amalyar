@@ -16,8 +16,8 @@ import JDate from './JDate.jsx';
 import './work.css';
 import './record.css';
 import {
-  Alert, Book, Calendar, Check, Clock, Close, Copy, Doctor, Download, Form, LinkIcon, Lock,
-  Mic, Money, Pencil, Phone, Plus, Send, Trash,
+  Alert, Book, Calendar, Check, Clock, Close, Copy, Doctor, Download, FileMissing, Form, LinkIcon, Lock,
+  Mic, Money, Pencil, Phone, Plus, Send, Trash, Upload,
 } from '../ui/icons.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import PageHeader from '../ui/PageHeader.jsx';
@@ -519,6 +519,33 @@ function DocsTab({ rec, reload, toast }) {
     } catch (e) { toast(e.message, true); }
   };
 
+  /* مدرکِ بی‌فایل (۱۴۰۵/۰۷/۲۰): ردیف مانده ولی فایلش روی سرور نیست (`missing` از سرور). «آپلودِ دوباره» فایلِ
+     تازه را روی **همان** ردیف می‌نشاند — عنوان، دسته و مراجعه دست نمی‌خورند — و کارِ منشی را می‌بندد. */
+  const reRef = useRef(null);
+  const [reDoc, setReDoc] = useState(null);
+  const pickReupload = (doc) => {
+    setReDoc(doc.id);
+    if (reRef.current) { reRef.current.value = ''; reRef.current.click(); }
+  };
+  const reupload = async (file) => {
+    const id = reDoc;
+    if (!file || !id) return;
+    setBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      await apiUpload(`/patients/documents/${id}/file`, fd);
+      await reload();
+      toast('فایلِ مدرک دوباره آپلود شد');
+    } catch (e) {
+      toast(e.message, true);
+    } finally {
+      setBusy(false);
+      setReDoc(null);
+    }
+  };
+  const lost = rec.documents.filter((d) => d.missing).length;
+
   const shown = rec.documents.filter((d) => (filter === 'all' || d.category === filter)
     && (phaseFilter === 'all' || (phaseFilter === 'none' ? !d.phase : d.phase === phaseFilter)));
   const present = [...new Set(rec.documents.map((d) => d.category))];
@@ -628,11 +655,24 @@ function DocsTab({ rec, reload, toast }) {
         </div>
       )}
 
+      {lost > 0 && (
+        <div className="rc-lost-banner" role="status">
+          <Alert width="16" height="16" aria-hidden="true" />
+          <span>
+            <b>{faNum(lost)} مدرکِ این پرونده فایلش روی سرور نیست.</b>{' '}
+            ردیفش مانده ولی خودِ فایل از دست رفته — «آپلودِ دوباره» را روی همان ردیف بزنید.
+          </span>
+        </div>
+      )}
+      <input ref={reRef} type="file" hidden onChange={(e) => reupload(e.target.files?.[0])} />
+
       {shown.length === 0 ? <div className="df-empty">مدرکی ثبت نشده است</div> : (
         <div className="rc-docs">
           {shown.map((d) => (
-            <div key={d.id} className="rc-doc">
-              {d.isLink
+            <div key={d.id} className={`rc-doc${d.missing ? ' missing' : ''}`}>
+              {d.missing
+                ? <div className="rc-thumb rc-thumb-file rc-thumb-missing"><FileMissing width="18" height="18" /></div>
+                : d.isLink
                 ? <div className="rc-thumb rc-thumb-file"><LinkIcon width="16" height="16" /></div>
                 : d.isAudio
                   ? <div className="rc-thumb rc-thumb-file"><Mic size={16} /></div>
@@ -654,10 +694,15 @@ function DocsTab({ rec, reload, toast }) {
                   </small>
                 )}
                 {d.isLink && (d.externalUser || d.externalPass) && <DocCred user={d.externalUser} pass={d.externalPass} />}
-                {d.isAudio && <VoiceClip load={() => apiBlobUrl(`/patients/documents/${d.id}/file`)} name="پخش" />}
+                {d.isAudio && !d.missing && <VoiceClip load={() => apiBlobUrl(`/patients/documents/${d.id}/file`)} name="پخش" />}
+                {d.missing && <small className="rc-doc-missing-note">{d.missingNote}</small>}
               </div>
               <div className="df-acts">
-                {d.isLink ? (
+                {d.missing ? (
+                  <button type="button" className="rc-doc-reup" disabled={busy} onClick={() => pickReupload(d)}>
+                    <Upload width="14" height="14" /> آپلودِ دوباره
+                  </button>
+                ) : d.isLink ? (
                   /* لینکِ خارجی در تبِ تازه — `noopener` تا صفحهٔ مقصد به پنجرهٔ پرونده دست نیابد. */
                   <a className="rc-doc-open" href={d.externalUrl} target="_blank" rel="noopener noreferrer" title="بازکردنِ لینک">
                     <LinkIcon width="14" height="14" />
@@ -1558,7 +1603,9 @@ export default function PatientRecord() {
   useEffect(() => {
     const spec = location.state?.open;
     if (!spec?.type) return;
-    openThing({ ...spec, patientId: spec.patientId ?? Number(id) });
+    /* مدرکِ بی‌فایل: مقصد خودِ تبِ مدارک است، نه پاپ‌آپ. */
+    if (spec.type === 'docs') goTab('docs');
+    else openThing({ ...spec, patientId: spec.patientId ?? Number(id) });
     navigate(location.pathname, { replace: true, state: null });
   }, [location.key]);
 

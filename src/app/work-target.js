@@ -15,6 +15,7 @@
  *  - `report`   — بارگذاریِ گزارشِ خدمت
  *  - `intake`   — پنجرهٔ تأییدِ همان ثبت‌نام
  *  - `order`    — شیتِ همان سفارش · `visit` — فرمِ همان مراجعه
+ *  - `docs`     — تبِ «مدارک»ِ پروندهٔ همان بیمار (مدرکِ بی‌فایل: «آپلودِ دوباره» روی همان ردیف است)
  */
 
 /**
@@ -53,6 +54,8 @@ export function workTarget(w, kind) {
   if (w?.type === 'approve_intake' && w.refType === 'intake_submission' && w.refId) {
     return w.intakePopup === true ? { type: 'intake', id: w.refId, patientId: pid } : null;
   }
+  /* مدرکِ بی‌فایل (۱۴۰۵/۰۷/۲۰): کارِ منشی جایی انجام می‌شود که ردیفِ قرمز هست — تبِ مدارکِ همان پرونده. */
+  if (w?.type === 'reupload_doc' && pid) return { type: 'docs', id: w.refId ?? null, patientId: pid };
   const m = /^(lab|imaging|consult|referral)_order$/.exec(w?.refType ?? '');
   if (m && w.refId) return { type: 'order', kind: m[1], id: w.refId, patientId: pid };
   if (visitId) return { type: 'visit', id: visitId, patientId: pid };

@@ -91,6 +91,21 @@ export class RecordController {
     stream.pipe(res);
   }
 
+  /**
+   * آپلودِ دوبارهٔ فایلِ **ازدست‌رفتهٔ** همین مدرک (`missing` در فهرست) — ردیف و عنوانش می‌مانند. برای مدرکی که
+   * فایلش سالم است ۴۰۹ می‌دهد؛ فایلِ تازه برای مدرکِ سالم = مدرکِ تازه (`POST :id/documents`).
+   */
+  @RequirePermissions('documents.write')
+  @Post('documents/:documentId/file')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_DOCUMENT_BYTES } }))
+  reupload(
+    @Param('documentId', ParseIntPipe) documentId: number,
+    @UploadedFile() file: any,
+    @CurrentUser() user: any,
+  ) {
+    return this.record.reuploadDocument(documentId, file, user);
+  }
+
   @RequirePermissions('documents.delete')
   @Delete('documents/:documentId')
   removeDocument(@Param('documentId', ParseIntPipe) documentId: number, @CurrentUser() user: any) {

@@ -1,8 +1,9 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Readable } from 'node:stream';
 import { PrismaService } from '../prisma/prisma.service';
 import { StorageService } from '../storage/storage.service';
 import { AuditService } from '../audit/audit.service';
+import { EventsService } from '../work/events.service';
 import { LEVEL } from '../common/levels';
 import { ownPatientWhere } from '../common/own-scope';
 import { toEnDigits } from '../common/identity';
@@ -125,12 +126,27 @@ export function answerParts(v: any): {
   return { text: one(v), items };
 }
 
+/** مدرکی که محتوایش فایلی روی دیسک است — نه لینک، نه پاسخِ متنیِ سفارش. */
+const hasFile = (d: { externalUrl: string | null; contentText: string | null; sha256: string }) =>
+  !d.externalUrl && d.contentText === null && /^[0-9a-f]{64}$/.test(d.sha256);
+
+/**
+ * ۱۴۰۵/۰۷/۰۱ ساعتِ ۰۰:۰۰ تهران — از حدودِ این روز پوشهٔ فایل‌ها روی volumeِ ماندگار است. مدرکِ پیش از آن که
+ * فایلش نیست، با یکی از دیپلوی‌های قبل از دست رفته (اولین تمرینِ بازگردانی، `STATUS.md`)؛ بعد از آن علتِ دیگری دارد
+ * و نباید همان توضیح را بگیرد.
+ */
+const STORAGE_DURABLE_SINCE = new Date('2026-09-22T20:30:00Z');
+const missingNoteOf = (createdAt: Date) => createdAt < STORAGE_DURABLE_SINCE
+  ? 'فایلش روی سرور نیست — پیش از ۱۴۰۵/۰۷/۰۱ آپلود شده و با یک به‌روزرسانی از دست رفته؛ دوباره آپلود کنید'
+  : 'فایلش روی سرور نیست — دوباره آپلود کنید';
+
 @Injectable()
 export class RecordService {
   constructor(
     private prisma: PrismaService,
     private storage: StorageService,
     private audit: AuditService,
+    private events: EventsService,
   ) {}
 
   /**
@@ -695,6 +711,11 @@ export class RecordService {
       where: { patientId, deletedAt: null },
       orderBy: [{ takenAt: { sort: 'desc', nulls: 'last' } }, { id: 'desc' }],
     });
+    /* مدرکِ بی‌فایل (۱۴۰۵/۰۷/۲۰): ردیفی که فایلش روی دیسک نیست — یک `stat` به‌ازای هر محتوای یکتا. */
+    const present = new Map<string, boolean>();
+    await Promise.all([...new Set(rows.filter(hasFile).map((d) => d.sha256))].map(async (sha) => {
+      present.set(sha, await this.storage.exists(sha));
+    }));
     return rows.map((d) => ({
       id: d.id, patientId: d.patientId, visitId: d.visitId, category: d.category,
       refType: d.refType, refId: d.refId, contentText: d.contentText,
@@ -714,7 +735,56 @@ export class RecordService {
       /// ورودِ پورتالِ لینک — زیرِ همان لینک نشان داده می‌شود.
       externalUser: d.externalUser,
       externalPass: d.externalPass,
+      /// فایلِ این ردیف روی سرور نیست — کلاینت به‌جای «دانلود» دکمهٔ «آپلودِ دوباره» می‌گذارد.
+      missing: hasFile(d) && present.get(d.sha256) === false,
+      /// توضیحِ همان ردیف — **سمتِ سرور** (قانون ۱۵) چون به تاریخِ ماندگارشدنِ پوشهٔ فایل‌ها گره خورده.
+      missingNote: hasFile(d) && present.get(d.sha256) === false ? missingNoteOf(d.createdAt) : null,
     }));
+  }
+
+  /**
+   * **آپلودِ دوبارهٔ فایلِ ازدست‌رفته** روی همان ردیف — عنوان، دسته، مراجعه و مرحله سرِ جایشان می‌مانند و فقط
+   * محتوا عوض می‌شود. کارِ منشیِ «دوباره آپلود کنید» با رویدادِ `document.file_restored` بسته می‌شود.
+   *
+   * ⚠️ **فقط برای ردیفی که واقعاً بی‌فایل است** (۴۰۹ وگرنه): این مسیر محتوای یک مدرکِ سالم را بی‌صدا عوض
+   * می‌کرد — سندِ پزشکی‌ای که پزشک دیروز خوانده، امروز چیزِ دیگری باشد و هیچ ردی جز ممیزی نماند. فایلِ تازه
+   * برای مدرکِ سالم = مدرکِ تازه.
+   */
+  async reuploadDocument(
+    documentId: number,
+    file: { originalname: string; mimetype: string; buffer: Buffer; size: number },
+    user: any,
+  ) {
+    const doc = await this.prisma.document.findFirst({ where: { id: documentId, deletedAt: null } });
+    if (!doc) throw new NotFoundException('مدرک پیدا نشد');
+    await this.assertAccess(doc.patientId, user);
+    if (!hasFile(doc)) throw new BadRequestException('این مدرک فایلی روی سرور ندارد که دوباره آپلود شود');
+    if (await this.storage.exists(doc.sha256)) {
+      throw new ConflictException('فایلِ این مدرک سالم است — برای فایلِ تازه، مدرکِ جدید بسازید');
+    }
+    if (!file?.buffer?.length) throw new BadRequestException('فایلی دریافت نشد');
+    if (file.size > MAX_DOCUMENT_BYTES) {
+      throw new BadRequestException(`حجمِ فایل بیش از حدِ مجاز است (${Math.round(MAX_DOCUMENT_BYTES / 1024 / 1024)} مگابایت)`);
+    }
+    const { sha256, size } = await this.storage.save(file.buffer);
+    const row = await this.prisma.document.update({
+      where: { id: documentId },
+      data: {
+        sha256, size,
+        fileName: (file.originalname || doc.fileName || 'file').slice(0, 200),
+        mimeType: file.mimetype || 'application/octet-stream',
+      },
+    });
+    await this.events.emit({
+      type: 'document.file_restored', patientId: doc.patientId, visitId: doc.visitId,
+      refType: 'document', refId: doc.id, actorId: user?.id ?? null, payload: { by: 'reupload' },
+    });
+    await this.audit.record({
+      actorId: user?.id, action: 'document.reupload', entityType: 'document', entityId: doc.id,
+      before: { sha256: doc.sha256, size: doc.size, fileName: doc.fileName, mimeType: doc.mimeType },
+      after: { sha256, size, fileName: row.fileName, mimeType: row.mimeType },
+    });
+    return { id: row.id, fileName: row.fileName, size: row.size, missing: false };
   }
 
   /**
@@ -865,6 +935,11 @@ export class RecordService {
 
     await this.audit.record({
       actorId: user?.id, action: 'document.delete', entityType: 'document', entityId: documentId, before: doc,
+    });
+    /* کارِ «دوباره آپلود کنید»ِ همین ردیف (اگر بود) دیگر موضوع ندارد. */
+    await this.events.emit({
+      type: 'document.deleted', patientId: doc.patientId, visitId: doc.visitId,
+      refType: 'document', refId: documentId, actorId: user?.id ?? null,
     });
     return { ok: true };
   }

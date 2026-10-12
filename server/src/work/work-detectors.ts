@@ -29,7 +29,10 @@
  * - جدولِ نبوده (tenantِ migrate‌نشده) هر آشکارساز را جداگانه خاموش می‌کند،
  *   نه کلِ sweep را.
  */
+import { stat } from 'fs/promises';
+import { join } from 'path';
 import { clinicDayStart, todayRangeUtc } from '../common/clinic-day';
+import { storageRoot } from '../storage/storage-health';
 
 const DAY = 864e5;
 
@@ -234,4 +237,117 @@ export async function detectStaleWork(client: any, now: Date = new Date()): Prom
   });
 
   return { unconfirmed, reportMissing, usageUnconfirmed, formUnanswered, reportUploaded, pathwayOverdue, deliveryUnconfirmed };
+}
+
+/**
+ * گیتِ `detectLostFiles`: ذخیره‌سازی‌ای که می‌شود به «فایل نیست»ش اعتماد کرد. در production فقط وقتی ماندگاری
+ * **اثبات** شده (`ok` — دو کانتینر یا بیشتر همین پوشه را دیده‌اند)؛ `unproven` یعنی volumeای سوار است که شاید
+ * اشتباهی باشد. بیرونِ production (سندباکس، CI) هر ریشهٔ قابل‌نوشتن.
+ */
+export const storageTrusted = (h: { writable: boolean; verdict: string } | null) =>
+  !!h?.writable && (h.verdict === 'ok' || process.env.NODE_ENV !== 'production');
+
+/** کلیدِ `settings` که شمارِ آخرین سنجشِ «مدرکِ بی‌فایل» را نگه می‌دارد — پنلِ پلتفرم همین را می‌خواند. */
+export const FILES_MISSING_KEY = 'files_missing';
+
+export type LostFilesResult = { missing: number; emitted: number; restored: number };
+
+/**
+ * **مدرکِ بی‌فایل** (مالک، ۱۴۰۵/۰۷/۲۰): ردیفِ `documents` هست ولی خودِ فایل روی دیسکِ این شرکت نیست.
+ *
+ * زمینه: پیش از سوارشدنِ volumeِ ماندگار (حدودِ ۱۴۰۵/۰۷/۰۱) هر دیپلوی پوشهٔ فایل‌ها را عوض می‌کرد؛ اولین تمرینِ
+ * بازگردانی ۲۴ مدرک در هفت شرکت پیدا کرد که ردیفشان مانده و فایلشان رفته. پرونده آن‌ها را مثلِ مدرکِ سالم نشان
+ * می‌داد و «دانلود» فقط خطای «فایلِ این مدرک روی سرور نیست» می‌داد — کسی نمی‌دانست کدام‌ها باید دوباره گرفته شوند.
+ *
+ * هر مدرکِ بی‌فایل یک رویدادِ `document.file_missing` ← کارِ منشی «دوباره آپلود کنید» (کِی دوباره: پایین).
+ * کارِ بازی که مدرکش دیگر بی‌فایل نیست (دوباره آپلود شد، یا خودِ ردیف حذف شد) با `document.file_restored`
+ * بسته می‌شود — از هر مسیری که درست شده باشد.
+ *
+ * ⚠️ مسیرِ فایل **همان** `StorageService.pathFor` است (`<ریشه>/<شناسهٔ شرکت>/<دو حرفِ اول>/<sha>`) ولی بی‌آنکه
+ * به TenantContext نیاز داشته باشد — worker بیرونِ درخواست است و شناسهٔ شرکت را خودش می‌دهد.
+ *
+ * ⚠️ **فقط وقتی ذخیره‌سازی قابلِ اعتماد است صدا زده شود** (`storageTrusted(storageHealth())`؛ گیتش با صدازننده است).
+ * ریشه‌ای که اشتباه سوار شده یعنی «همهٔ فایل‌ها نیستند» — آن‌وقت این تابع برای هر مدرکِ هر شرکت یک کار می‌ساخت،
+ * در حالی که مشکل یکی است و کارتِ ذخیره‌سازیِ پنلِ پلتفرم همان را نشان می‌دهد.
+ *
+ * مدرکِ لینکی (`externalUrl`) و پاسخِ متنیِ سفارش (`contentText`) فایلی ندارند و شمرده نمی‌شوند.
+ */
+export async function detectLostFiles(
+  client: any, tenantId: string, opts: { root?: string } = {},
+): Promise<LostFilesResult> {
+  const none: LostFilesResult = { missing: 0, emitted: 0, restored: 0 };
+  /* همان قاعدهٔ `StorageService.tenantRoot` — شناسه بخشی از مسیر است. */
+  if (!/^[0-9a-f-]{36}$/i.test(tenantId)) return none;
+  const dir = join(opts.root ?? storageRoot(), tenantId);
+  try {
+    const docs: { id: number; patientId: number; visitId: number | null; sha256: string; title: string | null; fileName: string }[] =
+      await client.document.findMany({
+        where: { deletedAt: null, externalUrl: null, contentText: null, sha256: { not: '' }, patient: { deletedAt: null } },
+        select: { id: true, patientId: true, visitId: true, sha256: true, title: true, fileName: true },
+        orderBy: { id: 'asc' },
+      });
+    const present = new Map<string, boolean>();
+    for (const d of docs) {
+      if (present.has(d.sha256) || !/^[0-9a-f]{64}$/.test(d.sha256)) continue;
+      present.set(d.sha256, await stat(join(dir, d.sha256.slice(0, 2), d.sha256)).then(() => true, () => false));
+    }
+    const lost = docs.filter((d) => present.get(d.sha256) === false);
+    const lostIds = new Set(lost.map((d) => d.id));
+
+    /* چه کسی رویداد بگیرد — نه «هفته‌ای یک‌بار» مثلِ بقیهٔ آشکارسازها، بلکه از روی **خودِ کار**:
+       - کاری نیست ← رویداد.
+       - کارِ باز، یا رویدادِ پردازش‌نشده‌ای در صف ← هیچ (تکرار نمی‌سازیم).
+       - کاری که آدم کنار گذاشت («بستن بدونِ اقدام»/لغو — بیمار مدرک را ندارد) ← هیچ؛ هر هفته دوباره
+         همان را جلوی منشی نمی‌گذاریم. ردیفِ قرمزِ پرونده و شمارِ پنلِ پلتفرم حقیقت را نگه می‌دارند.
+       - کاری که با رویداد بسته شد (دوباره آپلود شد) و فایل **دوباره** نیست ← رویداد، که کار را باز کند.
+         با پنجرهٔ هفت‌روزه همین حالت تا یک هفته بی‌کار می‌ماند (در سنجه دیده شد). */
+    const ids = [...lostIds];
+    const items: { refId: number; state: string; outcome: any }[] = ids.length ? await client.workItem.findMany({
+      where: { type: 'reupload_doc', refType: 'document', refId: { in: ids } },
+      select: { refId: true, state: true, outcome: true },
+    }) : [];
+    const queued: { refId: number }[] = ids.length ? await client.domainEvent.findMany({
+      where: { type: 'document.file_missing', processedAt: null, refType: 'document', refId: { in: ids } },
+      select: { refId: true },
+    }) : [];
+    const item = new Map(items.map((w) => [w.refId, w]));
+    const waiting = new Set(queued.map((e) => e.refId));
+    const fresh = lost.filter((d) => {
+      if (waiting.has(d.id)) return false;
+      const w = item.get(d.id);
+      return !w || (w.state === 'done' && w.outcome?.closedBy === 'event');
+    }).slice(0, 200);
+    if (fresh.length) {
+      await client.domainEvent.createMany({
+        data: fresh.map((d) => ({
+          type: 'document.file_missing', patientId: d.patientId, visitId: d.visitId ?? null,
+          refType: 'document', refId: d.id, payload: { title: d.title || d.fileName },
+        })),
+      });
+    }
+    const emitted = fresh.length;
+
+    const open = await client.workItem.findMany({
+      where: { type: 'reupload_doc', refType: 'document', state: { in: ['open', 'blocked'] } },
+      select: { refId: true, patientId: true, visitId: true },
+    });
+    const healed = open.filter((w: any) => !lostIds.has(w.refId));
+    if (healed.length) {
+      await client.domainEvent.createMany({
+        data: healed.map((w: any) => ({
+          type: 'document.file_restored', patientId: w.patientId ?? null, visitId: w.visitId ?? null,
+          refType: 'document', refId: w.refId, payload: { by: 'detector' },
+        })),
+      });
+    }
+    await client.setting.upsert({
+      where: { key: FILES_MISSING_KEY },
+      create: { key: FILES_MISSING_KEY, value: String(lost.length) },
+      update: { value: String(lost.length) },
+    });
+    return { missing: lost.length, emitted, restored: healed.length };
+  } catch (e) {
+    if (missingTable(e)) return none;
+    throw e;
+  }
 }

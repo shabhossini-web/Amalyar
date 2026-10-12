@@ -624,6 +624,13 @@ export default function PlatformAdmin() {
                           </small>
                         )}
                         {tenant.profile && <small className="pa-profile" data-kind={tenant.profile.kind}>{tenant.profile.label}</small>}
+                        {/* مدرکِ بی‌فایل — فقط **شمار** (تصمیمِ مالک): نامِ بیمار دادهٔ خودِ شرکت است و فهرستش
+                            در «کارهای من»ِ منشیِ همان شرکت. عدد از آخرین سنجشِ ساعتیِ سرور می‌آید. */}
+                        {tenant.lostDocs > 0 && (
+                          <small className="pa-lost">
+                            {faNum(tenant.lostDocs)} مدرک فایلش روی سرور نیست — منشیِ همین شرکت در «کارهای من» فهرستش را دارد
+                          </small>
+                        )}
                         <small>ساخته‌شده {faDate(tenant.createdAt)}</small>
                       </div>
                       <div className="pa-row-side">
