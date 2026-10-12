@@ -10,7 +10,7 @@
 #   ۴. دیتابیسِ مرکزی (جدول tenants) در پشتیبان هست و دیتابیسِ **هر** شرکتِ فعال — با نامش (`amalyar_<شناسه>`) — برگشته
 #      و migration دارد؛ نقشِ هر شرکت با اجازهٔ ورود و رمز برگشته
 #   ۵. هر فایلی که دیتابیسِ یک شرکت به آن ارجاع می‌دهد (مدرک، اثباتِ تحویل، عکسِ سایت، سربرگ) در پوشهٔ **همان شرکت**
-#      در storage.tar.gz هست
+#      در storage.tar.gz هست — جز آن‌هایی که خودِ پشتیبان در MISSING_FILES.txt «همان لحظه روی سرور نبود» ثبت کرده (هشدار)
 # و در پایان شمارِ ردیف‌های هر شرکت و **زمانِ بازگردانی** را می‌گوید (همان «چقدر طول می‌کشد؟»ی شبِ فاجعه).
 #
 # اجرا روی میزبانِ سرور (Docker لازم است؛ یک کانتینرِ postgres:18-alpine موقت می‌سازد و در پایان پاک می‌کند):
@@ -117,7 +117,7 @@ shopt -s nullglob
 for f in "$SRC"/*; do
   b="$(basename "$f")"
   case "$b" in
-    SHA256SUMS|MANIFEST.txt|FAILED|UPLOAD_FAILED) continue;;
+    SHA256SUMS|MANIFEST.txt|FAILED|UPLOAD_FAILED|MISSING_FILES.txt) continue;;
     *.enc)
       [ -n "$BACKUP_PASSPHRASE" ] || die "پشتیبان رمزشده است؛ BACKUP_PASSPHRASE را بگذار"
       export BACKUP_PASSPHRASE
@@ -238,9 +238,18 @@ if [ -f "$W/storage.tar.gz" ]; then
     # شرکتِ قدیمی (بی‌نامِ Worker): پوشه‌ای که بیشترین ارجاعِ همین دیتابیس را دارد.
     [ -n "$folder" ] || folder="$(awk 'NR == FNR { need[$1] = 1; next } need[$2] { c[$1]++ } END { for (f in c) print c[f], f }' "$W/need.txt" "$W/have.txt" | sort -rn | head -1 | cut -d' ' -f2)"
     awk -v f="$folder" '$1 == f { print $2 }' "$W/have.txt" | sort -u > "$W/have-db.txt"
-    missing="$(comm -23 "$W/need.txt" "$W/have-db.txt" | wc -l | tr -d ' ')"
-    if [ "$missing" -eq 0 ]; then good "همهٔ $n فایلِ ارجاع‌شدهٔ $db در پوشهٔ همان شرکت هست"
-    else bad "$missing فایلِ ارجاع‌شدهٔ $db در پوشهٔ شرکتش نیست (نمونه: $(comm -23 "$W/need.txt" "$W/have-db.txt" | head -2 | cut -c1-12 | tr '\n' ' '))"; fi
+    comm -23 "$W/need.txt" "$W/have-db.txt" > "$W/miss.txt"
+    # «از قبل نبود»: پشتیبان هنگامِ گرفتن ثبت کرده که این‌ها همان لحظه روی سرور نبودند (پیش‌تر از دست رفته‌اند) — هشدار،
+    # نه شکستِ پشتیبان. فقط بقیه (در سرور بود ولی در آرشیو نیست) «ناموفق» است.
+    if [ -f "$SRC/MISSING_FILES.txt" ]; then
+      awk -v d="$db" '$1 == d { print $2 }' "$SRC/MISSING_FILES.txt" | sort -u > "$W/known.txt"
+    else : > "$W/known.txt"; fi
+    lost="$(comm -12 "$W/miss.txt" "$W/known.txt" | wc -l | tr -d ' ')"
+    missing="$(comm -23 "$W/miss.txt" "$W/known.txt" | wc -l | tr -d ' ')"
+    if [ "$missing" -eq 0 ] && [ "$lost" -eq 0 ]; then good "همهٔ $n فایلِ ارجاع‌شدهٔ $db در پوشهٔ همان شرکت هست"
+    elif [ "$missing" -eq 0 ]; then good "فایل‌های ارجاع‌شدهٔ $db برگشتند ($((n - lost)) از $n)"
+    else bad "$missing فایلِ ارجاع‌شدهٔ $db در پوشهٔ شرکتش نیست (نمونه: $(comm -23 "$W/miss.txt" "$W/known.txt" | head -2 | cut -c1-12 | tr '\n' ' '))"; fi
+    [ "$lost" -eq 0 ] || warn "$lost فایلِ ارجاع‌شدهٔ $db هنگامِ پشتیبان‌گیری هم روی سرور نبود — پیش‌تر از دست رفته و باید دوباره آپلود شود"
   done
   if [ "$NEED_TOTAL" -eq 0 ] && [ "$ARCHIVED" -gt 0 ]; then
     warn "هیچ دیتابیسی به فایلی ارجاع نمی‌دهد ولی آرشیو $ARCHIVED فایل دارد — جای ارجاع‌ها در ساختار عوض شده؟ این سنجه چیزی را ثابت نکرد"

@@ -204,16 +204,36 @@ try {
   ok(d.code === 1 && /چکیده‌ها نمی‌خوانند/.test(d.out) && /تمرین ناموفق/.test(d.out), '**دامپِ دستکاری‌شده ← تمرین ناموفق (چکیده)**', d.out);
   writeFileSync(dump, original);
 
-  // فایلِ ارجاع‌شده‌ای که در آرشیو نیست: پشتیبانِ تازه از ذخیره‌گاهِ ناقص
+  /* فایلی که **همان لحظهٔ پشتیبان‌گیری** روی سرور نبود (پیش‌تر از دست رفته — اولین تمرینِ واقعی ۲۴ مدرکِ این‌چنینی داشت):
+     پشتیبان ثبتش می‌کند و تمرین هشدار می‌دهد، نه «ناموفق» — وگرنه تمرین تا آپلودِ دوباره همیشه قرمز می‌ماند. */
   writeStorage(ST, { skip: files.acme[1].h });
   b = run(BACKUP, baseEnv);
-  ok(b.code === 0, 'پشتیبانِ دوم (ذخیره‌گاهِ ناقص) گرفته شد', b.out);
   const latest2 = readFileSync(join(BK, 'LATEST'), 'utf8').trim();
-  ok(latest2 !== latest, 'LATEST جلو رفت');
+  ok(b.code === 0 && latest2 !== latest, 'پشتیبانِ دوم (ذخیره‌گاهی که یک مدرکش از قبل نیست) گرفته شد', b.out);
+  ok(/1 فایلِ ارجاع‌شده همین الان روی سرور نیست/.test(b.out) && /amalyar_acme: 1/.test(b.out), '**پشتیبان همان لحظه می‌گوید کدام شرکت چند مدرکِ ازدست‌رفته دارد**', b.out);
+  const missingTxt = existsSync(join(BK, latest2, 'MISSING_FILES.txt')) ? readFileSync(join(BK, latest2, 'MISSING_FILES.txt'), 'utf8') : '';
+  ok(missingTxt.trim() === `amalyar_acme ${files.acme[1].h}`, 'MISSING_FILES.txt فقط «دیتابیس چکیده» دارد (بی‌دادهٔ بیمار)', missingTxt);
+  ok(readFileSync(join(BK, latest2, 'SHA256SUMS'), 'utf8').includes('MISSING_FILES.txt'), 'و در چکیده‌ها هست (دستکاری‌اش لو می‌رود)');
   d = run(DRILL, await drillEnv({ BACKUP_DIR: BK }), [latest2]);
-  ok(d.code === 1 && /1 فایلِ ارجاع‌شدهٔ amalyar_acme در پوشهٔ شرکتش نیست/.test(d.out), '**فایلِ گم‌شده‌ی ارجاع‌شده ← تمرین ناموفق** (DB و فایل‌ها هم‌خوان نیستند)', d.out);
-  ok(!/دیتابیسِ .* برنگشت/.test(d.out), 'با این‌همه دیتابیس‌ها برگشته‌اند (فقط فایل کم است)');
+  ok(d.code === 0 && /تمرین موفق با 1 هشدار/.test(d.out) && /1 فایلِ ارجاع‌شدهٔ amalyar_acme هنگامِ پشتیبان‌گیری هم روی سرور نبود/.test(d.out)
+    && /فایل‌های ارجاع‌شدهٔ amalyar_acme برگشتند \(3 از 4\)/.test(d.out), '**«از قبل نبود» هشدار است، نه شکستِ پشتیبان**', d.out);
   writeStorage(ST);
+
+  /* ولی فایلی که در سرور بود و در آرشیو نیست (یا در پوشهٔ شرکتِ دیگر است) همچنان «ناموفق» است: آرشیوِ پشتیبانِ سالمِ اول
+     دستکاری می‌شود و چکیده‌ها از نو ساخته می‌شوند تا فقط سنجهٔ فایل‌ها بتواند بگیردش. */
+  const tamper = (name, script) => {
+    const dst = join(work, name); const x = join(work, `${name}-x`);
+    sh('bash', ['-c', `set -e; cp -a "${dir}" "${dst}"; mkdir -p "${x}"; tar -xzf "${dst}/storage.tar.gz" -C "${x}"; ${script}; tar -C "${x}" -czf "${dst}/storage.tar.gz" .; cd "${dst}"; sha256sum -- $(ls | grep -v -e SHA256SUMS -e MANIFEST.txt) > SHA256SUMS`]);
+    return dst;
+  };
+  const t1 = tamper('tampered-missing', `rm "${join(work, 'tampered-missing-x')}/${acme}/${files.acme[1].h.slice(0, 2)}/${files.acme[1].h}"`);
+  d = run(DRILL, await drillEnv(), [t1]);
+  ok(d.code === 1 && /1 فایلِ ارجاع‌شدهٔ amalyar_acme در پوشهٔ شرکتش نیست/.test(d.out) && !/هنگامِ پشتیبان‌گیری هم روی سرور نبود/.test(d.out), '**فایلی که در آرشیو جا ماند ← تمرین ناموفق** (پشتیبان آن را «از قبل نبود» ثبت نکرده بود)', d.out);
+  const bh = files.beta[0].h;
+  const t2 = tamper('tampered-folder', `mkdir -p "${join(work, 'tampered-folder-x')}/${acme}/${bh.slice(0, 2)}"; mv "${join(work, 'tampered-folder-x')}/${beta}/${bh.slice(0, 2)}/${bh}" "${join(work, 'tampered-folder-x')}/${acme}/${bh.slice(0, 2)}/"`);
+  d = run(DRILL, await drillEnv(), [t2]);
+  ok(d.code === 1 && /1 فایلِ ارجاع‌شدهٔ amalyar_beta در پوشهٔ شرکتش نیست/.test(d.out), '**فایلِ بتا در پوشهٔ آکمه جای فایلِ بتا را پر نمی‌کند** (سنجهٔ تمرین، پوشه‌به‌پوشه)', d.out);
+  ok(!/دیتابیسِ .* برنگشت/.test(d.out), 'با این‌همه دیتابیس‌ها برگشته‌اند (فقط فایل کم است)');
 
   console.log('\n۴) سرورِ پُر = زنده: تمرین باید رد کند');
   if (MODE === 'local') {
@@ -383,7 +403,8 @@ try {
   d = run(DRILL, await drillEnv({ BACKUP_DIR: BK6 }), []);
   ok(d.code === 1 && /دیتابیسِ این شرکت‌های فعال برنگشت: gamma/.test(d.out), '**دیتابیسِ یتیمِ amalyar_old جای شرکتِ گم‌شدهٔ gamma را پر نمی‌کند**', d.out);
   ok(/amalyar_old به هیچ شرکتِ فعالی نمی‌خورد/.test(d.out), 'و دیتابیسِ یتیم گزارش می‌شود');
-  ok(/1 فایلِ ارجاع‌شدهٔ amalyar_beta در پوشهٔ شرکتش نیست/.test(d.out), '**فایلِ بتا در پوشهٔ آکمه جای فایلِ بتا را پر نمی‌کند**', d.out);
+  ok(/amalyar_beta: 1/.test(b.out) && /1 فایلِ ارجاع‌شدهٔ amalyar_beta هنگامِ پشتیبان‌گیری هم روی سرور نبود/.test(d.out),
+    '**پشتیبان هم پوشه‌به‌پوشه می‌سنجد:** فایلِ بتا در پوشهٔ آکمه برای بتا «از قبل نبود» ثبت شد', `${b.out}\n${d.out}`);
 } catch (e) {
   fails.push('استثنا: ' + (e?.stack ?? e));
   console.log('  ✘ استثنا: ' + (e?.stack ?? e));

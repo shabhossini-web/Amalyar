@@ -11,6 +11,7 @@
 #                      (`postgres.dump` فقط وقتی دیتابیسِ پیش‌فرض جدول دارد — در نصبِ واقعی دیتابیسِ مرکزی همان‌جاست)
 #   storage.tar.gz     پوشهٔ فایل‌ها (عکس و مدارک) — **بعد** از دیتابیس‌ها گرفته می‌شود تا هر فایلِ ارجاع‌شده در دامپ باشد
 #                      (بدونِ `.ledger`: دفترِ کانتینرها اثباتِ ماندگاریِ همان volume است و با بازگردانی نباید منتقل شود)
+#   MISSING_FILES.txt  (اگر لازم شد) فایل‌هایی که دیتابیس به آن‌ها ارجاع می‌دهد ولی همان لحظه روی سرور نبودند — «دیتابیس چکیده»
 #   SHA256SUMS         چکیدهٔ همهٔ فایل‌ها — تمرینِ بازگردانی اول همین را می‌سنجد
 #   MANIFEST.txt       خلاصهٔ قابلِ‌خواندن
 # و فایلِ LATEST در $BACKUP_DIR که نامِ آخرین پوشه را دارد. اگر چیزی شکست بخورد فایلِ FAILED کنارِ آن پوشه می‌نشیند
@@ -169,6 +170,45 @@ if [ -z "$SKIP_STORAGE" ]; then
   enc < "$TMP/storage.tar.gz" > "$OUT/storage.tar.gz$EXT"
   STORAGE_NOTE="${FILES} فایل، $(du -h "$OUT/storage.tar.gz$EXT" | cut -f1)"
   say "  ✔ فایل‌ها ($STORAGE_NOTE)"
+
+  # ── فایل‌هایی که دیتابیس به آن‌ها ارجاع می‌دهد ولی **همین الان** روی سرور نیستند ──
+  # اولین تمرینِ واقعی (۱۴۰۵/۰۷/۲۰) ۲۴ مدرک را «نیست» گفت که پیش از ماندگارشدنِ پوشهٔ فایل‌ها با یک دیپلوی پاک شده بودند.
+  # آرشیو عینِ پوشهٔ سرور است، پس تمرین به‌تنهایی نمی‌تواند «از قبل نبود» را از «در پشتیبان جا ماند» جدا کند و تا آپلودِ
+  # دوبارهٔ همهٔ آن‌ها همیشه قرمز می‌ماند — و جاماندنِ واقعیِ یک فایل زیرِ همان قرمز گم می‌شد. پس همین‌جا، با همان قاعدهٔ
+  # تمرین (شرکت ← پوشهٔ شناسه‌اش؛ چهار منبعِ ارجاع)، فهرستِ «از قبل نبود» در MISSING_FILES.txt ثبت می‌شود (فقط نامِ دیتابیس
+  # و چکیدهٔ فایل — نه دادهٔ بیمار) و تمرین آن‌ها را هشدار می‌گوید، نه ناموفق.
+  tar -tzf "$TMP/storage.tar.gz" | sed 's|^\./||' | awk -F/ 'NF >= 2 && $NF ~ /^[0-9a-f]+$/ && length($NF) == 64 {print $1, $NF}' | sort -u > "$TMP/have.txt"
+  psql_in() { local d="$1"; shift; pgx psql -U "$PG_USER" -d "$d" -X -qAt -v ON_ERROR_STOP=1 "$@" < /dev/null; }
+  has_table() { [ "$(psql_in "$1" -c "SELECT to_regclass('public.$2') IS NOT NULL")" = t ]; }
+  declare -A TENANT_OF=()
+  for db in $DBS; do
+    if has_table "$db" tenants && has_table "$db" tenant_domains; then
+      psql_in "$db" -F '|' -c "SELECT id, slug FROM tenants WHERE status = 'active'" > "$TMP/tenants.txt"
+      while IFS='|' read -r tid slug <&3; do [ -n "$tid" ] && TENANT_OF["amalyar_${slug//-/_}"]="$tid"; done 3< "$TMP/tenants.txt"
+    fi
+  done
+  : > "$TMP/MISSING_FILES.txt"
+  for db in $DBS; do
+    has_table "$db" patients || continue
+    {
+      has_table "$db" documents && psql_in "$db" -c "SELECT DISTINCT sha256 FROM documents WHERE sha256 <> '' AND deleted_at IS NULL"
+      has_table "$db" stop_proofs && psql_in "$db" -c "SELECT DISTINCT sha256 FROM stop_proofs WHERE sha256 <> ''"
+      has_table "$db" site_items && psql_in "$db" -c "SELECT image_sha FROM site_items WHERE coalesce(image_sha, '') <> '' UNION SELECT image2_sha FROM site_items WHERE coalesce(image2_sha, '') <> ''"
+      has_table "$db" settings && psql_in "$db" -c "SELECT value FROM settings WHERE key = 'letterhead_sha' AND coalesce(value, '') <> ''"
+    } | grep -E '^[0-9a-f]{64}$' | sort -u > "$TMP/need.txt" || true
+    [ -s "$TMP/need.txt" ] || continue
+    folder="${TENANT_OF[$db]:-}"
+    [ -n "$folder" ] || folder="$(awk 'NR == FNR { need[$1] = 1; next } need[$2] { c[$1]++ } END { for (f in c) print c[f], f }' "$TMP/need.txt" "$TMP/have.txt" | sort -rn | head -1 | cut -d' ' -f2)"
+    awk -v f="$folder" '$1 == f { print $2 }' "$TMP/have.txt" | sort -u > "$TMP/have-db.txt"
+    comm -23 "$TMP/need.txt" "$TMP/have-db.txt" | sed "s/^/$db /" >> "$TMP/MISSING_FILES.txt"
+  done
+  ABSENT="$(wc -l < "$TMP/MISSING_FILES.txt" | tr -d ' ')"
+  if [ "$ABSENT" -gt 0 ]; then
+    cp "$TMP/MISSING_FILES.txt" "$OUT/MISSING_FILES.txt"
+    STORAGE_NOTE="$STORAGE_NOTE؛ $ABSENT فایلِ ارجاع‌شده از قبل روی سرور نبود"
+    say "  ! $ABSENT فایلِ ارجاع‌شده همین الان روی سرور نیست (پیش از این پشتیبان از دست رفته؛ باید دوباره آپلود شود) — MISSING_FILES.txt"
+    cut -d' ' -f1 "$TMP/MISSING_FILES.txt" | sort | uniq -c | while read -r n d; do say "      $d: $n"; done
+  fi
 fi
 
 # ── چکیده و خلاصه ──
