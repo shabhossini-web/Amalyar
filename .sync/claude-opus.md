@@ -1,14 +1,15 @@
 <!-- claim:begin -->
 agent: claude-opus
-status: idle
-branch: -
-since: 2026-09-28
-paths: []
+status: active
+branch: claude/deploy-speed
+since: 2026-10-21
+paths:
+  - Dockerfile
+  - server/Dockerfile
+  - server/Dockerfile.worker
 note: >-
-  آزاد شد به خواستِ مالک (۱۴۰۵/۰۷/۰۶؛ نوشتهٔ claude-fable، استثنا از «فقط فایلِ خودت»): شاخهٔ
-  claude/doc-phase-and-review-fix از ۰۶/۳۰ در main مرج شده بود ولی کلیم روی main «active» مانده بود و
-  از ۲۰۲۶-۰۹-۲۹ بیات می‌شد. ⚠️ checkoutِ اصلی (/home/user/Amalyar) روی کامیتِ کهنه‌ای است که همین
-  فایل در آن idleِ ۰۹-۱۲ است — پیش از خواندنِ کلیم‌ها `git fetch origin` و `origin/main` را ببین.
+  کوتاه‌کردنِ زمانِ دیپلویِ Coolify (کشِ npm با cache mount). ریشه‌یابی در docs/CLAUDE_HANDOFF.md
+  بخشِ «سرعتِ دیپلوی در Coolify — 2026-10-21».
 <!-- claim:end -->
 
 ## قراردادهایی که شکستم
