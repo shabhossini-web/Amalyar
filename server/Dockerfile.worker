@@ -8,7 +8,9 @@ RUN npm config set fetch-retries 6 \
  && npm config set fetch-retry-maxtimeout 300000 \
  && npm config set fetch-timeout 600000
 COPY package.json package-lock.json ./
-RUN npm install --no-audit --no-fund
+# همان کشِ npmِ Dockerfileِ API (id یکسان) — توضیح آن‌جاست.
+RUN --mount=type=cache,id=amalyar-npm-server,target=/root/.npm,sharing=locked \
+    npm ci --prefer-offline --no-audit --no-fund
 COPY . .
 RUN npm run build
 

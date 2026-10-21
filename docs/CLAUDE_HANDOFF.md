@@ -953,3 +953,25 @@ https://<دامنه>/api/public/site/robots.txt
   نشانی و نه در ساختِ شرکت پذیرفته نمی‌شوند.
 - کوکیِ نشست و اثرِ انگشت (`rpID` = Host) به نشانی گره خورده‌اند: روی نشانیِ تازه ورودِ دوباره لازم است.
 
+## سرعتِ دیپلوی در Coolify — 2026-10-21
+
+از لاگِ دیپلوی‌ها (API کولیفای، نسخهٔ 4.1.2) معلوم شد چرا هر push حدودِ نیم ساعت طول می‌کشید:
+
+- **`npm install` بی‌کش ۴٫۵ تا ۹ دقیقه** برای API و Worker و ۲ تا ۳ دقیقه برای فرانت (شبکهٔ کندِ سرور به npmjs).
+- **کشِ لایه‌های داکر تقریباً هیچ‌وقت نمی‌خورد.** دو علت، هر دو با لاگ تأیید شد:
+  1. Coolify کانتینرِ بیلدِ **هر دیپلویِ هم‌زمان** را با `--add-host <uuid>:<ip>` به `docker build` می‌دهد و
+     این فلگ‌ها جزوِ کلیدِ کشِ هر `RUN` است. API و Worker با یک push هم‌زمان بیلد می‌شوند
+     (`concurrent_builds=2`) ← هر دو همیشه miss. هر hit با فهرستِ ثابتِ `--add-host` همراه بود.
+  2. `force_docker_cleanup=true` با `0 0 * * *` هر شب کلِ build cache را پاک می‌کرد.
+- API و فرانت Watch Path نداشتند ← هر کامیتِ فقط-مستند (`STATUS.md`، `.sync/`، `docs/`) هر دو را از نو بیلد می‌کرد.
+- فرانت تا ۱۶ دقیقه در صف می‌ماند تا یکی از دو اسلاتِ بیلد خالی شود.
+
+اصلاح در کد: `npm ci` با `RUN --mount=type=cache` (idِ `amalyar-npm-server` مشترکِ API و Worker،
+`amalyar-npm-web` برای فرانت). cache mount به `--add-host` حساس نیست، پس حتی وقتی لایه‌ها miss
+می‌شوند بسته‌ها از دیسکِ سرور می‌آیند. در فرانت `ARG/ENV VITE_*` بعد از `npm ci` رفت.
+
+اصلاحِ تنظیماتِ Coolify (جدا از کد، با تأییدِ مالک): Watch Paths برای API (`server/**`) و فرانت
+(`src/**`, `public/**`, `index.html`, `package.json`, `package-lock.json`, `vite.config.js`, `Dockerfile`,
+`nginx.conf.template`, `.dockerignore`)، و خاموش‌شدنِ `force_docker_cleanup` (دیسک ۵۹G، ۳۸٪ پر؛
+پاک‌سازی همچنان بالای ۸۰٪ اجرا می‌شود).
+
