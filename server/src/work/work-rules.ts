@@ -11,6 +11,8 @@
  * + یک سنجه در `scripts/e2e/w2-1-work-layer.mjs`.
  */
 
+import { REMINDER_KIND_LABELS } from '../patients/labels';
+
 export interface DomainEventLike {
   id?: number;
   type: string;
@@ -93,6 +95,12 @@ export const OWNER_ROLE_FA: Record<string, string> = {
 };
 
 const key = (type: string, ref: { refType: string; refId: number }) => `${type}:${ref.refType}:${ref.refId}`;
+
+/** «(مراقبتِ بعد از عمل)» برای عنوانِ کارِ پیامک — برچسبِ فارسی، نه کلیدِ خامِ `post_op_care`. */
+const kindIn = (e: DomainEventLike) => {
+  const k = e.payload?.kind;
+  return k ? ` (${REMINDER_KIND_LABELS[k] ?? k})` : '';
+};
 
 function base(e: DomainEventLike, type: string, ref: { refType: string; refId: number }): Omit<WorkUpsert, 'title'> {
   return {
@@ -314,7 +322,10 @@ export const RULES: Record<string, Rule> = {
   /* ── پیامک (N4) ── */
   'sms.failed': (e, ref) => upsert({
     ...base(e, 'resend_sms', ref),
-    title: `پیامک نرفت${e.payload?.kind ? ` (${e.payload.kind})` : ''} — بررسی و ارسالِ دوباره`,
+    /* کلمهٔ فیلترشده: «ارسالِ دوباره»ی همان متن هم رد می‌شود — کار باید بگوید متن عوض شود. */
+    title: e.payload?.filtered
+      ? `پیامک فیلتر شد${kindIn(e)} — یک کلمهٔ متن را عوض کنید`
+      : `پیامک نرفت${kindIn(e)} — بررسی و ارسالِ دوباره`,
     ownerRole: 'secretary',
     dueAt: e.at ?? new Date(),
     priority: 2,

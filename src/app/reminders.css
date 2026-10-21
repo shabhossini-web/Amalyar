@@ -63,6 +63,14 @@
 .rm-tag.s-failed { color: var(--red-text); background: rgba(248, 113, 113, .1); border-color: rgba(248, 113, 113, .3); }
 .rm-text { margin-top: 6px; font-size: 12.5px; line-height: 1.8; color: var(--text2); white-space: pre-wrap; }
 .rm-fail { margin-top: 4px; font-size: 11px; color: var(--red-text); }
+/* راهنمای «کلمهٔ فیلترشده» — کهربایی (کاری برای کاربر) زیرِ علتِ قرمز، نه یک خطای دیگر. */
+.rm-filter {
+  display: grid; gap: 4px; margin-top: 6px; padding: 8px 11px; border-radius: 10px; font-size: 12px; line-height: 1.85;
+  color: var(--amber-text); background: var(--amber-bg); border: 1px solid color-mix(in srgb, var(--amber-text) 40%, transparent);
+}
+.rm-filter p { margin: 0; }
+.rm-filter b { margin-inline-end: 6px; font-weight: 800; }
+.rm-filter small { font-size: 11px; opacity: .85; }
 
 .rm-toast {
   position: fixed; inset-inline: 0; bottom: 18px; margin-inline: auto; width: fit-content;

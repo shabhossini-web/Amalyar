@@ -188,6 +188,19 @@ export default function Reminders() {
             })()}
             {r.status === 'sent' && <p>{DELIVERY_FA[r.deliveryStatus ?? 'unknown'] ?? 'وضعیت تحویل نامشخص'}{r.providerId && <small> · شناسه پیگیری: <span dir="ltr">{r.providerId}</span></small>}</p>}
             {r.error && <p className="rm-fail">علت: {r.error}</p>}
+            {/* «کدام کلمه؟» — حدسِ سرور از پیام‌های رفتهٔ همین مطب (`filterHint`، قانونِ ۱۵) + راهِ اصلاح. */}
+            {r.filterHint && (
+              <div className="rm-filter" role="note">
+                {r.filterHint.words?.length > 0 && (
+                  <p>
+                    کلمهٔ احتمالی:{' '}
+                    {r.filterHint.words.map((w, k) => <b key={k}>«{w}»</b>)}
+                    <small> — در هیچ پیامِ رفتهٔ این مطب نبوده؛ حدس است، نه قطعی</small>
+                  </p>
+                )}
+                <p>{r.filterHint.how}</p>
+              </div>
+            )}
             {(RETRYABLE.includes(r.status) || CANCELLABLE.includes(r.status)) && (
               <div className="rm-acts">
                 {RETRYABLE.includes(r.status) && (

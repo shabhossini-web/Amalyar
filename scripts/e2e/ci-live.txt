@@ -160,3 +160,4 @@ booking-confirm-ui
 phone-paste-ui
 tenant-profile-create
 lost-documents
+sms-filter-ui

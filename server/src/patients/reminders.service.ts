@@ -14,6 +14,7 @@ import { AuditService } from '../audit/audit.service';
 import { diagnosisIds, procedureIds } from './visit-coding';
 import { toJalali } from '../common/jalali';
 import { clinicDateIso, clinicTodayIso } from '../common/clinic-day';
+import { filterSuspects, isFilteredError, passedWords } from '../sms/filter-suspects';
 
 /** ممیزیِ ارسال‌های مستقیمِ پیامک از دکمه‌ها — برای خطِ زمانیِ گزارشِ عیب‌یابی. */
 const DIRECT_SMS: Record<string, string> = {
@@ -159,6 +160,32 @@ export class RemindersService {
         text: string,
         extra: Record<string, unknown> = {},
       ) => {
+        /* ⚠️ **موعدی که به «همین حالا» فروکش کرده، پیامِ همان متن را دوباره نمی‌فرستد.** روزِ موعد جزوِ کلید است و
+           موعدِ گذشته به «امروز» فرومی‌کاهد (`dueOn`)، پس هر هم‌گام‌سازی در روزی دیگر — هر ویرایشِ عمل، ثبتِ وضعیت،
+           نوبت — کلیدِ تازه می‌ساخت: مراقبتِ بعد از عملِ ده روز پیش **دوباره** به بیمار می‌رفت، و پیامِ ردشده (کلمهٔ
+           فیلترشده) هر بار یک ردیفِ «نرفت»ِ دیگر می‌کاشت. ردیفِ موجودِ همین نوع با همین متن — رفته، در صف، نامعلوم،
+           «نرفت»، یا لغوِ دستی (کلیدش را نگه می‌دارد) — همان «یادآوریِ برنامه» است. متنِ عوض‌شده ردیفِ تازه می‌گیرد. */
+        const soon = new Date(Date.now() + 90_000);
+        if (dueAt.getTime() <= soon.getTime()) {
+          const same = await this.prisma.reminder.findFirst({
+            where: {
+              visitId, kind, text,
+              OR: [
+                { status: { in: ['sent', 'simulated', 'sending', 'uncertain', 'failed'] } },
+                /* ⚠️ در صف/لغوِ دستی فقط وقتی «همان موج» است که موعدش خودش فروکش کرده یا قبلاً تلاش شده (مکثِ ۵/۱۵/۴۵).
+                   ردیفِ در صفِ **فردا** موجِ دیگری است: «بلافاصله بعد از ثبت» (`postOpImmediate`) باید کنارش بنشیند،
+                   نه پشتِ آن گم شود (postop-flow ۴ب). */
+                { status: { in: ['pending', 'cancelled'] }, dedupeKey: { not: null }, OR: [{ dueAt: { lte: soon } }, { attempts: { gt: 0 } }] },
+              ],
+            },
+            orderBy: { id: 'desc' },
+            select: { dedupeKey: true },
+          });
+          if (same) {
+            if (same.dedupeKey) planned.add(same.dedupeKey);
+            return;
+          }
+        }
         const dedupeKey = reminderKey(kind, { visitId }, dueAt, text);
         planned.add(dedupeKey);
         await this.prisma.reminder.upsert({
@@ -329,6 +356,26 @@ export class RemindersService {
           : prune,
         data: { status: 'cancelled', dedupeKey: null },
       });
+      /* ردیفِ «نرفت»ی که همین برنامه جایش متنِ تازه کاشت — راهِ اصلاحِ کلمهٔ فیلترشده همین است: پزشک متنِ مراقبت را
+         در فرمِ عمل عوض می‌کند و متنِ تازه خودکار می‌رود. ردیفِ قدیمی «جایگزین شد» می‌شود و کارِ «ارسالِ دوباره»اش بسته
+         — وگرنه دفتر تا ابد «نرفت» نشان می‌داد و منشی متنِ کهنه را دوباره می‌فرستاد. فقط نوع‌هایی که در همین برنامه
+         کاشته شده‌اند؛ «نرفت»ِ نوعی که دیگر برنامه‌ای ندارد سابقه می‌ماند. */
+      const replanned = [...new Set([...planned].map((k) => k.split(':')[0]))];
+      if (replanned.length) {
+        const superseded = await this.prisma.reminder.findMany({
+          where: {
+            visitId, kind: { in: replanned }, status: 'failed',
+            OR: [{ dedupeKey: null }, { dedupeKey: { notIn: [...planned] } }],
+          },
+        });
+        for (const r of superseded) {
+          await this.prisma.reminder.update({
+            where: { id: r.id },
+            data: { status: 'cancelled', dedupeKey: null, error: 'با متنِ اصلاح‌شده جایگزین شد' },
+          });
+          await emitSms(this.prisma, r, 'sms.cancelled', { reason: 'superseded' });
+        }
+      }
     } catch (e) {
       this.log.error(`syncNextVisit(${visitId}) شکست خورد: ${e instanceof Error ? e.message : e}`);
       if (strict) throw e;
@@ -579,6 +626,7 @@ export class RemindersService {
       const d = clinicDateIso(r.dueAt);
       return d < today ? 'overdue' : d === today ? 'today' : 'upcoming';
     };
+    const filterHintOf = await this.filterHints(rows);
     const chatIds = rows.flatMap(r => r.chatMessageId ? [r.chatMessageId] : []);
     const chatMessages = chatIds.length ? await this.prisma.chatMessage.findMany({ where: { id: { in: chatIds } }, include: { channel: { include: { members: true } } } }) : [];
     return rows.map((r) => ({
@@ -604,9 +652,47 @@ export class RemindersService {
       phone: r.phone,
       text: r.text,
       error: r.error,
+      /** «کدام کلمه؟» برای ردِ کلمهٔ فیلترشده — حدسِ سرور + راهِ اصلاح (قانونِ ۱۵). */
+      filterHint: filterHintOf(r),
       patientName: r.patient ? `${r.patient.firstName} ${r.patient.lastName}`.trim() : null,
       visitCode: r.patient && r.visit ? `${r.patient.code}-V${r.visit.seq}` : null,
     }));
+  }
+
+  /**
+   * «متن حاوی کلمهٔ فیلترشده» — ملی‌پیامک نمی‌گوید کدام کلمه. حدس از دادهٔ همین شرکت (`filter-suspects.ts`): کلمه‌ای
+   * که در هیچ پیامِ رفتهٔ ۱۸۰ روزِ اخیر نبوده، بی‌نامِ خودِ بیمار. فقط وقتی ردیفِ فیلترشده‌ای در فهرست هست کوئری
+   * می‌زند. خروجی هرگز دلیلِ رد را عوض نمی‌کند؛ فقط کنارش می‌نشیند.
+   */
+  private async filterHints(rows: { status: string; error: string | null }[]) {
+    const none = (_r: unknown) => null;
+    const live = (r: { status: string; error: string | null }) =>
+      ['failed', 'pending', 'uncertain'].includes(r.status) && isFilteredError(r.error);
+    if (!rows.some(live)) return none;
+    const since = new Date(Date.now() - 180 * 24 * 3600_000);
+    const [sent, rejected] = await Promise.all([
+      this.prisma.reminder.findMany({
+        where: { status: 'sent', sentAt: { gte: since } }, orderBy: { id: 'desc' }, take: 3000, select: { text: true },
+      }),
+      this.prisma.reminder.findMany({
+        where: { error: { contains: 'فیلتر' }, dueAt: { gte: since } }, orderBy: { id: 'desc' }, take: 300, select: { text: true },
+      }),
+    ]);
+    const passed = passedWords(sent.map((x) => x.text));
+    const rejectedTexts = rejected.map((x) => x.text);
+    return (r: any) => {
+      if (!live(r)) return null;
+      const care = r.kind === 'post_op_care' || r.kind === 'pre_op_care';
+      return {
+        words: filterSuspects(r.text ?? '', passed, {
+          exclude: [r.patient?.firstName ?? '', r.patient?.lastName ?? '', r.recipientName ?? ''],
+          rejectedTexts,
+        }),
+        how: care
+          ? 'آن کلمه را در متنِ مراقبتِ همین عمل (فرمِ عمل) عوض و ذخیره کنید — متنِ تازه خودکار می‌رود و این ردیف کنار می‌رود.'
+          : 'آن کلمه را در متنِ همین نوع پیام (تنظیماتِ پیامک) عوض کنید؛ ارسالِ دوبارهٔ همین متن نمی‌رود.',
+      };
+    };
   }
 
   /**

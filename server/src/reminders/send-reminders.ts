@@ -65,7 +65,7 @@ export async function sendReminders(client: any, sms: any, ids?: number[]) {
       if (!result.sent && !result.stub) {
         /* `outcome` (بیرون از production): «rejected» = ملی‌پیامک نپذیرفت و دوباره امتحان
            می‌شود؛ «invalid» = شمارهٔ خراب، تکرارش بی‌فایده است. */
-        throw Object.assign(new Error(result.detail ?? 'سرویس پیامک ارسال را نپذیرفت'), { smsOutcome: result.outcome });
+        throw Object.assign(new Error(result.detail ?? 'سرویس پیامک ارسال را نپذیرفت'), { smsOutcome: result.outcome, smsFiltered: result.filtered });
       }
       accepted = result.sent;
       await client.reminder.update({ where: { id: row.id }, data: { status: result.stub ? 'simulated' : 'sent', sentAt: result.sent ? new Date() : null, providerId: result.providerId ?? null, deliveryStatus: result.sent ? 'unknown' : 'not_sent', error: result.stub ? 'حالت آزمایشی؛ پیام واقعی ارسال نشده است' : null } });
@@ -85,14 +85,20 @@ export async function sendReminders(client: any, sms: any, ids?: number[]) {
          ماند، در حالی که «ارسالِ دوباره»ی دستیِ **همان متن** بعدتر رفت. شکستِ قطعیِ دیگر
          (شمارهٔ خراب، خطای برنامه) همچنان یک‌باره `failed` است. */
       const refused = !uncertain && (outcome === 'rejected' || outcome === 'unconfigured');
+      /* ⚠️ «متن حاوی کلمهٔ فیلترشده» استثنای همین قاعده است: به **متن** گره خورده، نه به لحظه. گزارشِ میدانی
+         ۱۴۰۵/۰۷/۲۸ (dr-gorji): هر چهار تلاشِ مراقبتِ بعد از عمل با همین علت رد شد — یک ساعت صبر برای چیزی که
+         نمی‌رود، و کارِ منشی هم تا تلاشِ آخر ساخته نمی‌شد. حالا همان بارِ اول «نرفت» و علتش «متن را اصلاح کنید». */
+      const filtered = refused && (e as any)?.smsFiltered === true;
       const attempts = (row.attempts ?? 0) + 1;
       /* تلاشِ بعدی: ۵ → ۱۵ → ۴۵ دقیقه. بعد از سومی دیگر تکرار نمی‌شود،
          `failed` می‌شود و `sms.failed` صادر می‌شود تا کسی ببیندش. */
-      const retry = (uncertain || refused) && attempts < MAX_ATTEMPTS;
+      const retry = (uncertain || refused) && !filtered && attempts < MAX_ATTEMPTS;
       const nextDue = retry ? new Date(Date.now() + BACKOFF_MIN[attempts - 1] * 60000) : undefined;
       /* علت همیشه پیداست؛ شمارهٔ تلاش **اول** می‌آید تا بریدنِ ۳۰۰ نویسه آن را نبرد. */
       const error = uncertain
         ? (retry ? UNCERTAIN_TEXT : 'پس از سه تلاش نتیجهٔ ارسال مشخص نشد')
+        : filtered
+          ? `${reason} — همین متن دوباره هم نمی‌رود؛ کلمه را عوض کنید`
         : refused
           ? (retry
             ? `تلاشِ ${faNum(attempts)} از ${faNum(MAX_ATTEMPTS)} نرفت و خودکار دوباره امتحان می‌شود — ${reason}`
@@ -112,7 +118,7 @@ export async function sendReminders(client: any, sms: any, ids?: number[]) {
       /* ردی که هنوز تلاش دارد رویداد نمی‌سازد: کارِ «ارسالِ دوباره» (`sms.failed`) فقط وقتی
          به منشی می‌رسد که تلاش‌های خودکار تمام شده باشد. */
       if (!(refused && retry)) {
-        await emitSms(client, row, retry ? 'sms.uncertain' : 'sms.failed', { error: reason.slice(0, 300), attempts });
+        await emitSms(client, row, retry ? 'sms.uncertain' : 'sms.failed', { error: reason.slice(0, 300), attempts, ...(filtered ? { filtered: true } : {}) });
       }
     }
   }

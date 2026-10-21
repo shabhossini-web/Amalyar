@@ -78,11 +78,22 @@ function rejectionDetail(httpStatus: number, data: any): string {
   return `ملی‌پیامک پیام را نپذیرفت: ${text}`.slice(0, 240);
 }
 
+/**
+ * ردِ «متن حاوی کلمهٔ فیلترشده» — کدِ ۷، یا متنِ وضعیتِ ملی‌پیامک که همین را می‌گوید (پاسخِ واقعیِ dr-gorji،
+ * ۱۴۰۵/۰۷/۲۸، فقط متن داشت و کد نداشت). این رد به **متن** گره خورده، نه به لحظه: همان متن دوباره هم رد می‌شود.
+ */
+export function isFilteredRejection(data: any): boolean {
+  const code = Array.isArray(data?.recIds) && data.recIds.length ? Number(data.recIds[0]) : NaN;
+  if (code === 7) return true;
+  return [data?.status, data?.message, data?.error].some((x) => typeof x === 'string' && /فیلتر/.test(x));
+}
+
 /** خطای ۵۰۳ با پیامِ عمومی + علتِ واقعی برای کارکنان (`smsDetail`). */
-function smsUnavailable(detail: string, outcome: 'rejected' | 'unconfigured'): ServiceUnavailableException {
+function smsUnavailable(detail: string, outcome: 'rejected' | 'unconfigured', filtered = false): ServiceUnavailableException {
   const error = new ServiceUnavailableException('سرویس پیامک موقتاً در دسترس نیست');
   (error as any).smsDetail = detail;
   (error as any).smsOutcome = outcome;
+  if (filtered) (error as any).smsFiltered = true;
   return error;
 }
 
@@ -137,7 +148,7 @@ export class SmsService {
     phone: string,
     text: string,
     opts: { skipLagho?: boolean } = {},
-  ): Promise<{ sent: boolean; stub: boolean; providerId?: string; detail?: string; outcome?: 'rejected' | 'invalid' }> {
+  ): Promise<{ sent: boolean; stub: boolean; providerId?: string; detail?: string; outcome?: 'rejected' | 'invalid'; filtered?: boolean }> {
     const apiKey = process.env.MELI_API_KEY;
     const from = process.env.MELI_FROM;
     const to = this.normalize(phone);
@@ -176,10 +187,11 @@ export class SmsService {
     const ok = res.ok && Array.isArray(recIds) && Number(recIds[0]) >= 1000;
     if (!ok) {
       const detail = rejectionDetail(res.status, data);
+      const filtered = isFilteredRejection(data);
       /* علت بی‌شماره و بی‌متنِ پیام — `rejectionDetail` هر رشتهٔ رقمیِ بلند را پاک کرده است. */
       this.log.warn(`ارسال ملی‌پیامک پذیرفته نشد (HTTP ${res.status}) — ${detail}`);
-      if (process.env.NODE_ENV === 'production') throw smsUnavailable(detail, 'rejected');
-      return { sent: false, stub: false, detail, outcome: 'rejected' };
+      if (process.env.NODE_ENV === 'production') throw smsUnavailable(detail, 'rejected', filtered);
+      return { sent: false, stub: false, detail, outcome: 'rejected', ...(filtered ? { filtered } : {}) };
     }
     return { sent: true, stub: false, providerId: String(recIds[0]) };
   }
@@ -198,6 +210,7 @@ export class SmsService {
         /* `smsOutcome` می‌ماند تا فراخوان بفهمد «قطعاً نرفت» (rejected/unconfigured) یا «نامعلوم» — فقط اولی ثبتِ
            «نرفت» و کارِ «ارسالِ دوباره» می‌سازد (`OrdersService.send`). */
         (staffError as any).smsOutcome = e.smsOutcome;
+        if (e.smsFiltered) (staffError as any).smsFiltered = true;
         throw staffError;
       }
       throw e;

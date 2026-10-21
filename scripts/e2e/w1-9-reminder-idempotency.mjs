@@ -33,6 +33,7 @@ const { PrismaClient } = require('@prisma/client');
 const { RemindersService, reminderKey } = require('./dist/patients/reminders.service');
 const { SettingsService } = require('./dist/config/settings.service');
 const { sendReminders } = require('./dist/reminders/send-reminders');
+const { processDomainEvents } = require('./dist/work/work-processor');
 
 const DB = process.env.E2E_DB;
 if (!DB || !['localhost', '127.0.0.1'].includes(new URL(DB).hostname)) throw new Error('فقط محیط محلی جداگانه');
@@ -248,11 +249,82 @@ try {
     '**نباید بیفتد:** شمارهٔ بیمار یا متنِ پیام در گزارش');
   await db.auditEvent.deleteMany({ where: { id: { in: [manual.id, directSms.id] } } });
   await db.domainEvent.deleteMany({ where: { id: fakeEvent.id } });
+
+  console.log('\n۱۲) نباید بیفتد — مراقبتِ رفته با هم‌گام‌سازیِ روزی دیگر دوباره نمی‌رود');
+  /* موعدِ گذشته به «امروز» فرومی‌کاهد و روز جزوِ کلید است؛ پس هر ویرایشِ عمل پس از روزِ موعد کلیدِ تازه می‌ساخت و
+     مراقبتِ ده روز پیش **دوباره** به بیمار می‌رفت (پیدا شده هنگامِ رسیدگی به ردِ فیلترِ dr-gorji، ۱۴۰۵/۰۷/۲۸). */
+  const pid2 = (await db.patient.create({ data: { code: tag + 'b', firstName: 'سارا', lastName: 'فیلتری', phone: '09120000000' } })).id;
+  made.patients.push(pid2);
+  const past = await db.visit.create({
+    data: { patientId: pid2, seq: 1, kind: 'surgery', opStatus: 'done', opDate: new Date(Date.now() - 10 * DAY), postOpCare: 'مراقبت ب' },
+  });
+  await reminders.syncNextVisit(past.id);
+  const p0 = (await rowsOf(past.id, 'post_op_care'))[0];
+  ok(p0 && p0.status === 'pending', 'ثبتِ دیرهنگام: مراقبتِ بعد از عمل همین حالا کاشته شد');
+  const origDue = new Date(past.opDate.getTime() + DAY);
+  await db.reminder.update({ where: { id: p0.id }, data: {
+    status: 'sent', sentAt: origDue, dueAt: origDue, dedupeKey: reminderKey('post_op_care', { visitId: past.id }, origDue, p0.text),
+  } });
+  await reminders.syncNextVisit(past.id);
+  const p1 = await rowsOf(past.id, 'post_op_care');
+  ok(p1.length === 1 && p1[0].status === 'sent', `**نباید بیفتد:** همان متن ردیفِ تازه نگرفت (${p1.map((r) => r.status).join('، ')})`);
+
+  console.log('\n۱۳) «متن حاوی کلمه فیلتر شده است» — یک‌باره نرفت، با «کلمه را عوض کنید»، و حدسِ کلمه');
+  await db.reminder.create({ data: { patientId: pid2, kind: 'notice', dueAt: new Date(), phone: '09120000000',
+    text: 'مریم عزیز، از مصرفِ دارو پرهیز کنید و پانسمان را خشک نگه دارید', status: 'sent', sentAt: new Date(), dedupeKey: tag + 'passed' } });
+  const fv = await db.visit.create({
+    data: { patientId: pid2, seq: 2, kind: 'surgery', opStatus: 'done', opDate: new Date(Date.now() - 3 * DAY),
+      postOpCare: 'سارا فیلتری عزیز، از مصرفِ الکل پرهیز کنید و پانسمان را خشک نگه دارید' },
+  });
+  await reminders.syncNextVisit(fv.id);
+  const filtering = { send: async () => {
+    const e = new Error('سرویس پیامک موقتاً در دسترس نیست');
+    e.smsOutcome = 'rejected'; e.smsFiltered = true; e.smsDetail = 'ملی‌پیامک پیام را نپذیرفت: متن حاوی کلمه فیلتر شده است';
+    throw e;
+  } };
+  const f0 = (await rowsOf(fv.id, 'post_op_care'))[0];
+  await db.reminder.updateMany({ where: { id: f0.id }, data: { dueAt: new Date(Date.now() - 1000) } });
+  await sendReminders(db, filtering, [f0.id]);
+  const f1 = await db.reminder.findUnique({ where: { id: f0.id } });
+  ok(f1.status === 'failed' && f1.attempts === 1, `**باید بیفتد:** فیلتر همان بارِ اول «نرفت» شد، بی‌سه تلاشِ بی‌فایده (${f1.status}، ${f1.attempts} تلاش)`);
+  ok(/فیلتر/.test(f1.error) && /عوض کنید/.test(f1.error), 'علت می‌گوید همین متن دوباره هم نمی‌رود و کلمه باید عوض شود');
+  const fev = await db.domainEvent.findMany({ where: { type: 'sms.failed', refType: 'reminder', refId: f0.id } });
+  ok(fev.length === 1 && fev[0].payload.filtered === true, 'کارِ منشی همان بارِ اول، با نشانِ «فیلتر»');
+  await processDomainEvents(db);
+  const fw = await db.workItem.findFirst({ where: { type: 'resend_sms', refType: 'reminder', refId: f0.id } });
+  ok(fw && fw.state === 'open' && /فیلتر شد/.test(fw.title) && /مراقبت/.test(fw.title), `عنوانِ کار: ${fw?.title}`);
+  await reminders.syncNextVisit(fv.id);
+  ok((await rowsOf(fv.id, 'post_op_care')).length === 1, '**نباید بیفتد:** هم‌گام‌سازیِ دوباره با همان متن ردیفِ «نرفت»ِ دیگری نکاشت');
+  const listed = (await reminders.list(pid2)).find((r) => r.id === f0.id);
+  ok(listed.filterHint?.words?.[0] === 'الکل', `**حدسِ کلمه:** «الکل» اول آمد (${JSON.stringify(listed.filterHint?.words)})`);
+  ok(!listed.filterHint.words.some((w) => ['سارا', 'فیلتری', 'پانسمان', 'پرهیز', 'مصرف'].includes(w)),
+    '**نباید بیفتد:** نامِ بیمار یا کلمه‌ای که در پیامِ رفته بوده نامزد نشد');
+  ok(/فرمِ عمل/.test(listed.filterHint.how), 'راهِ اصلاح: متنِ مراقبت در فرمِ عمل');
+  ok((await reminders.list(pid2)).filter((r) => r.id !== f0.id).every((r) => r.filterHint === null), 'ردیف‌های دیگر راهنمای فیلتر ندارند');
+
+  console.log('\n۱۴) پزشک کلمه را عوض کرد — متنِ تازه کاشته می‌شود و «نرفت»ِ قبلی کنار می‌رود');
+  await db.visit.update({ where: { id: fv.id }, data: { postOpCare: 'سارا فیلتری عزیز، از مصرفِ نوشیدنی‌های ممنوع پرهیز کنید و پانسمان را خشک نگه دارید' } });
+  await reminders.syncNextVisit(fv.id);
+  const after14 = await rowsOf(fv.id, 'post_op_care');
+  const fresh14 = after14.find((r) => r.id !== f0.id);
+  const old14 = after14.find((r) => r.id === f0.id);
+  ok(fresh14?.status === 'pending' && fresh14.text.includes('نوشیدنی') && fresh14.dueAt.getTime() <= Date.now() + 120_000,
+    '**باید بیفتد:** متنِ اصلاح‌شده همین حالا در صف نشست');
+  ok(old14.status === 'cancelled' && old14.error === 'با متنِ اصلاح‌شده جایگزین شد' && old14.dedupeKey === null,
+    `ردیفِ قدیمی «جایگزین شد» (${old14.status}، ${old14.error})`);
+  await processDomainEvents(db);
+  ok((await db.workItem.findUnique({ where: { id: fw.id } })).state === 'done', 'کارِ «پیامک فیلتر شد» بسته شد');
+  const cfv = await db.visit.create({ data: { patientId: pid2, seq: 3, kind: 'surgery', opStatus: 'done', opDate: new Date(Date.now() - 2 * DAY) } });
+  const keep = await db.reminder.create({ data: { patientId: pid2, visitId: cfv.id, kind: 'post_op_care', dueAt: new Date(), phone: '09120000000',
+    text: 'مراقبتی که دیگر برنامه ندارد', status: 'failed', error: 'ملی‌پیامک پیام را نپذیرفت: متن حاوی کلمه فیلتر شده است', dedupeKey: tag + 'keep' } });
+  await reminders.syncNextVisit(cfv.id);
+  ok((await db.reminder.findUnique({ where: { id: keep.id } })).status === 'failed',
+    '**نباید بیفتد:** «نرفت»ِ نوعی که این بار برنامه‌ای ندارد سابقه می‌ماند، بی‌صدا لغو نمی‌شود');
 } finally {
   const vids = (await db.visit.findMany({ where: { patient: { code: { startsWith: tag } } }, select: { id: true } })).map((x) => x.id);
   await db.domainEvent.deleteMany({ where: { OR: [{ visitId: { in: vids } }, { patientId: { in: made.patients } }] } }).catch(() => {});
   await db.reminder.deleteMany({ where: { OR: [{ visitId: { in: vids } }, { patientId: { in: made.patients } }] } });
-  await db.workItem.deleteMany({ where: { visitId: { in: vids } } }).catch(() => {});
+  await db.workItem.deleteMany({ where: { OR: [{ visitId: { in: vids } }, { patientId: { in: made.patients } }] } }).catch(() => {});
   await db.intakeSubmission.deleteMany({ where: { OR: [{ patientId: { in: made.patients } }, { formId: { in: made.forms } }] } });
   await db.visit.deleteMany({ where: { id: { in: vids } } });
   await db.patient.deleteMany({ where: { code: { startsWith: tag } } });
