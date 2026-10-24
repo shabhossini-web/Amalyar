@@ -42,6 +42,9 @@ export const MELI_CODES: Record<number, string> = {
   15: 'ارسال به چند گیرنده بدونِ «لغو11» ممکن نیست',
   16: 'شمارهٔ گیرنده پیدا نشد',
   17: 'متنِ پیامک خالی است',
+  /* ⚠️ «کدِ ۱۸» با متنِ «عملیات موفق» می‌آید (dr-gorji، ۱۴۰۵/۰۸/۰۳، پس از رفعِ کلمهٔ فیلترشده): «عملیات موفق» وضعیتِ خودِ
+     فراخوانیِ API است، نه ارسال؛ کدِ ۱۸ در مستنداتِ ملی‌پیامک «شمارهٔ گیرنده نامعتبر است». شناسهٔ ارسالِ موفق ≥ ۱۵ رقم است. */
+  18: 'شمارهٔ گیرنده از دیدِ ملی‌پیامک نامعتبر است — شمارهٔ بیمار را بررسی کنید',
   35: 'شمارهٔ گیرنده در فهرستِ سیاهِ مخابرات است',
 };
 
@@ -71,7 +74,8 @@ function rejectionDetail(httpStatus: number, data: any): string {
   const said = [data?.status, data?.message, data?.error].find((x) => typeof x === 'string' && x.trim());
   const parts = [
     Number.isFinite(code) && MELI_CODES[code] ? `${MELI_CODES[code]} (کدِ ${code})` : Number.isFinite(code) ? `کدِ ${code}` : null,
-    said ? String(said).trim() : null,
+    /* «عملیات موفق» کنارِ یک کدِ خطا وضعیتِ خودِ فراخوانی است و خوانندهٔ دفتر را گمراه می‌کرد («کد ۱۸ — عملیات موفق»). */
+    said && !(Number.isFinite(code) && /موفق/.test(String(said))) ? String(said).trim() : null,
     !said && !Number.isFinite(code) ? `پاسخِ HTTP ${httpStatus}` : null,
   ].filter(Boolean) as string[];
   const text = [...new Set(parts)].join(' — ').replace(/[0-9۰-۹]{4,}/g, '…').replace(/\s+/g, ' ').trim();
@@ -190,6 +194,9 @@ export class SmsService {
       const filtered = isFilteredRejection(data);
       /* علت بی‌شماره و بی‌متنِ پیام — `rejectionDetail` هر رشتهٔ رقمیِ بلند را پاک کرده است. */
       this.log.warn(`ارسال ملی‌پیامک پذیرفته نشد (HTTP ${res.status}) — ${detail}`);
+      /* شمارهٔ گیرنده نامعتبر: تکرارش بی‌فایده است و هیچ‌چیزی رد نشده که «دوباره» لازم باشد — همان قراردادِ شمارهٔ خرابِ
+         بالا (`outcome: 'invalid'`، بی‌پرتاب)، تا دفتر یک‌باره «نرفت» بنویسد نه سه تلاشِ بی‌حاصل. */
+      if (Number(Array.isArray(recIds) ? recIds[0] : NaN) === 18) return { sent: false, stub: false, detail, outcome: 'invalid' };
       if (process.env.NODE_ENV === 'production') throw smsUnavailable(detail, 'rejected', filtered);
       return { sent: false, stub: false, detail, outcome: 'rejected', ...(filtered ? { filtered } : {}) };
     }

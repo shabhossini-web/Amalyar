@@ -211,6 +211,14 @@ jobs:
             await sendReminders(g.client, sms, [7]);
             const gw = g.writes[g.writes.length - 1] || {};
             if (gw.status !== 'failed' || gw.attempts !== 1 || !/شماره/.test(gw.error || '')) fail('شمارهٔ خراب نباید تلاشِ دوباره بگیرد: ' + JSON.stringify(gw));
+            // «کدِ ۱۸» (شمارهٔ گیرنده نامعتبر) با وضعیتِ «عملیات موفق» (dr-gorji): نه رد-و-تلاشِ دوباره، نه «موفق» در علت
+            answer(200, { recIds: [18], status: 'عملیات موفق' });
+            const r18 = await sms.send('09121234567', 'x');
+            if (r18.sent || r18.outcome !== 'invalid' || !/نامعتبر/.test(r18.detail || '') || /موفق/.test(r18.detail || '')) fail('کدِ ۱۸ باید «گیرندهٔ نامعتبر» باشد: ' + JSON.stringify(r18));
+            const k = fake('09121234567');
+            await sendReminders(k.client, sms, [7]);
+            const kw = k.writes[k.writes.length - 1] || {};
+            if (kw.status !== 'failed' || kw.attempts !== 1 || kw.dueAt || !/نامعتبر/.test(kw.error || '')) fail('کدِ ۱۸ نباید تلاشِ دوباره بگیرد: ' + JSON.stringify(kw));
             // ⑨ «متن حاوی کلمه فیلتر شده است» به متن گره خورده، نه به لحظه (dr-gorji، ۱۴۰۵/۰۷/۲۸: هر چهار تلاش رد شد):
             //    همان بارِ اول failed، بی‌تلاشِ دوباره، با «کلمه را عوض کنید»؛ کار هم «فیلتر شد» می‌گوید.
             //    پاسخِ واقعی فقط متن داشت (کد نه)؛ کدِ ۷ هم همین است.
