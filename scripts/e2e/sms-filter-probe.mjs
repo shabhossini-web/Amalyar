@@ -6,7 +6,7 @@
  *   - جایگزینیِ کلمه **هنگامِ ارسال** اعمال شود (متنِ ثبت‌شده و کلیدِ یکتا دست‌نخورده)، بی‌اعراب و بی‌نیم‌فاصله، و لینک نشکند
  *   - آزمایش فقط به موبایلِ **تأییدشدهٔ خودِ** کاربر برود — هرگز شمارهٔ بیمار؛ کلِ متن با «لغو11» و تکه بی‌آن
  *   - متنِ آزمایش هرگز از کلاینت نیاید (فقط شمارهٔ کلمه‌ها)؛ بازهٔ نامعتبر ۴۰۰
- *   - موبایلِ تأییدنشده / نبودِ موبایل ۴۰۹؛ سقفِ روزانه (۶۰) ۴۲۹؛ شمارندهٔ روزهای قبل پاک شود
+ *   - موبایلِ تأییدنشدهٔ **موقتی** (مهلتِ تأیید دارد) / نبودِ موبایل ۴۰۹؛ حسابِ عادیِ بی‌مهلت (سوپرادمینِ اصلی) مجاز سقفِ روزانه (۶۰) ۴۲۹؛ شمارندهٔ روزهای قبل پاک شود
  *   - ردِ فیلتر ← `filtered`، رسید ← `passed`، سرویسِ خاموش/قطع ← `error` با علتِ فارسی
  *   - «جایگزین کن» کلمه را در فهرستِ مطب بگذارد، «نرفتِ فیلتر»ِ حاویِ آن کلمه را دوباره بفرستد (با متنِ جایگزین)
  *  نباید بیفتد:
@@ -53,7 +53,9 @@ const phoneOf = () => '09' + String(Math.floor(Math.random() * 1e9)).padStart(9,
 const made = { accounts: [], persons: [], reminders: [] };
 const mkAccount = async (extra = {}) => {
   const person = await db.person.create({ data: { firstName: 'کاربر', lastName: tag, phone: phoneOf(), ...extra.person } });
-  const account = await db.account.create({ data: { personId: person.id, username: tag + made.accounts.length, passwordHash: 'x', level: 5, status: 'active', phoneVerifiedAt: extra.verified === false ? null : new Date() } });
+  /* provisional = مهلتِ تأیید دارد و هنوز تأیید نکرده؛ legacy = هیچ‌کدام (حسابِ عادیِ نصبِ اول، مثلِ سوپرادمینِ مطب). */
+  const state = extra.provisional ? { phoneVerifiedAt: null, verificationDueAt: new Date(Date.now() + 864e5) } : extra.legacy ? { phoneVerifiedAt: null, verificationDueAt: null } : { phoneVerifiedAt: new Date() };
+  const account = await db.account.create({ data: { personId: person.id, username: tag + made.accounts.length, passwordHash: 'x', level: extra.level ?? 5, status: 'active', ...state } });
   made.persons.push(person.id); made.accounts.push(account.id);
   return { id: account.id, phone: person.phone, level: 5 };
 };
@@ -101,8 +103,11 @@ try {
   await db.setting.deleteMany({ where: { key: { startsWith: 'sms_probe:' } } });
   const info = await svc.filterProbeInfo(me);
   ok(info.ok && info.phoneMask === `${me.phone.slice(0, 4)}***${me.phone.slice(-4)}` && info.left === PROBE_DAILY_MAX && info.perDay === 60, 'شمارهٔ ماسک‌شدهٔ خودِ کاربر + سقفِ روز');
-  const unv = await mkAccount({ verified: false });
-  ok(!(await svc.filterProbeInfo(unv)).ok && (await svc.filterProbeInfo(unv)).reason.includes('تأیید'), 'موبایلِ تأییدنشده: ok=false با علتِ فارسی');
+  const unv = await mkAccount({ provisional: true });
+  ok(!(await svc.filterProbeInfo(unv)).ok && (await svc.filterProbeInfo(unv)).reason.includes('تأیید'), 'حسابِ موقتیِ تأییدنشده: ok=false با علتِ فارسی');
+  const legacy = await mkAccount({ legacy: true, level: 6 });
+  const li = await svc.filterProbeInfo(legacy);
+  ok(li.ok && li.phoneMask && li.left === PROBE_DAILY_MAX, '**حسابِ عادیِ بی‌مهلت (سوپرادمینِ اصلی) مجاز است** — بی‌تأییدِ ثبت‌شده، بی‌مهلت');
   const nophone = await db.person.create({ data: { firstName: 'بی', lastName: tag } }); made.persons.push(nophone.id);
   const accNo = await db.account.create({ data: { personId: nophone.id, username: tag + 'np', passwordHash: 'x', level: 5, status: 'active', phoneVerifiedAt: new Date() } }); made.accounts.push(accNo.id);
   ok((await svc.filterProbeInfo({ id: accNo.id })).reason.includes('ثبت نشده'), 'بی‌موبایل: علتِ فارسی');
@@ -124,10 +129,13 @@ try {
   ok(await status(svc.filterProbe(999999, {}, me)) === 404, 'ردیفِ ناموجود ۴۰۴');
   const chat = await mkRem({ channel: 'chat', text: 'سلام', status: 'sent' });
   ok(await status(svc.filterProbe(chat.id, {}, me)) === 404, 'ردیفِ غیرِپیامکی ۴۰۴');
-  ok(await status(svc.filterProbe(r4.id, {}, unv)) === 409, 'موبایلِ تأییدنشده ۴۰۹ (پیامکی نمی‌رود)');
+  ok(await status(svc.filterProbe(r4.id, {}, unv)) === 409, 'حسابِ موقتیِ تأییدنشده ۴۰۹ (پیامکی نمی‌رود)');
   const nCalls = calls.length;
   await status(svc.filterProbe(r4.id, {}, unv));
   ok(calls.length === nCalls, 'و هیچ پیامکی نرفت');
+  calls.length = 0;
+  const legacyProbe = await svc.filterProbe(r4.id, { start: 3, end: 5 }, legacy);
+  ok(legacyProbe.outcome === 'passed' && calls[0].phone === legacy.phone, 'سوپرادمینِ اصلی: آزمایش به شمارهٔ خودش رفت');
   mode = 'stub';
   const stub = await svc.filterProbe(r4.id, { start: 0, end: 1 }, me);
   ok(stub.outcome === 'error' && stub.detail.includes('راه‌اندازی نشده'), 'سرویسِ خاموش (stub): error با علتِ فارسی، نه «passed»');

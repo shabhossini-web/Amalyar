@@ -15,6 +15,7 @@ import { diagnosisIds, procedureIds } from './visit-coding';
 import { toJalali } from '../common/jalali';
 import { clinicDateIso, clinicTodayIso } from '../common/clinic-day';
 import { filterSuspects, isFilteredError, passedWords } from '../sms/filter-suspects';
+import { isProvisional } from '../accounts/provisional';
 import {
   appliedRules, applyWordReplacements, parseWordReplacements, probeTokens, PROBE_MAX_TOKENS,
   upsertWordRule, validateWordRule, type WordRule,
@@ -983,14 +984,23 @@ export class RemindersService {
     return Math.max(0, Number(row?.value ?? 0) || 0);
   }
 
-  /** موبایلِ **تأییدشدهٔ خودِ** کاربرِ واردشده — تنها مقصدِ پیامکِ آزمایشی. */
+  /**
+   * موبایلِ **خودِ** کاربرِ واردشده — تنها مقصدِ پیامکِ آزمایشی.
+   *
+   * ⚠️ «تأییدنشده» همان تعریفِ پروژه است (`isProvisional`: مهلتِ تأیید دارد و هنوز تأیید نکرده)، نه «`phoneVerifiedAt` خالی است».
+   * نسخهٔ اول فقط `phoneVerifiedAt` را می‌خواند و سوپرادمینِ اصلیِ مطب (حسابِ نصبِ اول: بی‌مهلت، بی‌تأییدِ ثبت‌شده) را رد
+   * می‌کرد — در حالی که او حسابِ عادی است و شمارهٔ خودش را داده (قانونِ ۲۹: سوپرادمین برای کاری نباید پروفایل عوض کند).
+   * سدِ واقعی همان حسابِ موقتی است: شمارهٔ عوض‌شده (`accounts.service`) یا حسابِ ساخته‌شده توسطِ مدیر مهلتِ تأیید می‌گیرد،
+   * پس کسی نمی‌تواند شمارهٔ دلخواهی بگذارد و ابزارِ پیامک را به آن بزند.
+   */
   private async ownPhone(user: any): Promise<{ phone: string | null; reason?: string }> {
     const acc = await this.prisma.account.findUnique({
-      where: { id: Number(user?.id) }, select: { phoneVerifiedAt: true, person: { select: { phone: true } } },
+      where: { id: Number(user?.id) },
+      select: { phoneVerifiedAt: true, verificationDueAt: true, person: { select: { phone: true } } },
     });
     const phone = acc?.person?.phone ?? null;
     if (!phone) return { phone: null, reason: 'شمارهٔ موبایلِ حسابِ شما ثبت نشده — از «پروفایلِ من» ثبتش کنید' };
-    if (!acc?.phoneVerifiedAt) return { phone: null, reason: 'شمارهٔ موبایلِ شما هنوز تأیید نشده؛ پیامکِ آزمایشی فقط به شمارهٔ تأییدشدهٔ خودتان می‌رود' };
+    if (isProvisional(acc)) return { phone: null, reason: 'شمارهٔ موبایلِ شما هنوز با کدِ پیامکی تأیید نشده؛ پیامکِ آزمایشی فقط به شمارهٔ تأییدشدهٔ خودتان می‌رود' };
     return { phone };
   }
 
