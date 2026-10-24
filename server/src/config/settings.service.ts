@@ -125,6 +125,7 @@ export class SettingsService {
         max: d.max ?? null,
         maxLength: d.maxLength ?? null,
         ltr: d.ltr ?? false,
+        plain: d.plain ?? false,
       };
     };
     return {

@@ -428,20 +428,23 @@ function Knobs({ onToast, onSaved, org, brand, onGroups }) {
             {g.items.map((it) => {
               const v = valueOf(it);
               const touched = String(v) !== String(it.default);
+              /* قالبِ پیامک (دکمهٔ جای‌گیر + پیش‌نمایش) — فهرستِ جایگزینیِ کلمه‌ها «خام» است. */
+              const tpl = it.type === 'textarea' && g.key === 'sms' && !it.plain;
               return (
                 /* متنِ پیامک دکمه و پیش‌نمایش دارد — داخلِ <label> نمی‌نشیند (نامِ دسترس‌پذیرِ کادر
                    همهٔ آن‌ها را می‌خواند)؛ آن‌جا عنوان با `aria-labelledby` به کادر وصل است. */
-                <Wrap key={it.key} kind={it.type === 'textarea' && g.key === 'sms' ? 'div' : 'label'}
+                <Wrap key={it.key} kind={tpl ? 'div' : 'label'}
                   className={`pf-field st-knob${it.type === 'textarea' ? ' wide' : ''}`}>
                   <span id={`st-l-${it.key}`}>
                     {it.label}
                     {!touched && <i className="st-tag">پیش‌فرض</i>}
                     {touched && <button type="button" className="st-reset" onClick={() => reset(it)}>بازگرداندن</button>}
                   </span>
-                  {it.type === 'textarea' && g.key === 'sms' ? (
+                  {tpl ? (
                     <SmsText it={it} value={v} brand={brand} onChange={(x) => set(it.key, x)} />
                   ) : it.type === 'textarea' ? (
-                    <textarea rows={2} maxLength={it.maxLength ?? undefined} value={v}
+                    <textarea rows={it.plain ? 4 : 2} maxLength={it.maxLength ?? undefined} value={v}
+                      placeholder={it.plain ? 'مثال:\nسپری = گذرانده' : undefined}
                       onChange={(e) => set(it.key, e.target.value)} />
                   ) : it.type === 'bool' ? (
                     <select value={v ? 'true' : 'false'} onChange={(e) => set(it.key, e.target.value === 'true')}>

@@ -32,6 +32,8 @@ export interface SettingDef {
   maxLength?: number;
   /** ورودیِ لاتین (شماره، کد) — تا در RTL جابه‌جا نشود. */
   ltr?: boolean;
+  /** در گروهِ «پیامک‌ها» متنِ خام است، نه قالبِ پیامک (بدونِ دکمهٔ جای‌گیر و پیش‌نمایشِ پیامک). */
+  plain?: boolean;
   /** در صفحهٔ تنظیمات نشان داده نمی‌شود — با فرایندِ خودش (مثلاً آپلود) پر می‌شود. */
   hidden?: boolean;
   /**
@@ -231,6 +233,11 @@ export const SETTINGS: SettingDef[] = [
   {
     key: 'sms_form_send_text', label: 'متنِ پیامکِ ارسالِ فرم',
     group: 'sms', type: 'textarea', default: '{title}\n{link}', maxLength: 500,
+  },
+  {
+    key: 'sms_word_replacements', label: 'جایگزینیِ کلمه‌ها در پیامک‌ها',
+    hint: 'هر خط یک جایگزینی: «کلمه = جایگزین» (فقط یک کلمه). هنگامِ ارسالِ هر یادآوریِ پیامکی اعمال می‌شود؛ متنِ ثبت‌شده در دفتر دست‌نخورده می‌ماند. وقتی ملی‌پیامک «متن حاوی کلمهٔ فیلترشده است» می‌گوید، دفترِ یادآوری‌ها کلمه را پیدا می‌کند و همین‌جا اضافه‌اش می‌کند.',
+    group: 'sms', type: 'textarea', default: '', maxLength: 2000, plain: true,
   },
   {
     key: 'sms_intake_return_text', label: 'متنِ پیامکِ برگشتِ ثبت‌نام برای اصلاح',

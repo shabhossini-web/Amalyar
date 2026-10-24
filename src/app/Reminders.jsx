@@ -1,13 +1,17 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { api } from '../lib/api.js';
 import { useAuth } from './auth.jsx';
 import { faDate } from '../lib/jalali.js';
 import './reminders.css';
-import { Alert, Send } from '../ui/icons.jsx';
+import { Alert, Check, Search, Send } from '../ui/icons.jsx';
 import PageHeader from '../ui/PageHeader.jsx';
 import { useStagger } from '../ui/stagger.js';
 import { useStatusMap } from './config.jsx';
+import { useConfirm } from '../ui/Confirm.jsx';
+import { findFilteredSpan, wordsOf } from '../lib/filterBisect.js';
+
+const fa = (n) => Number(n).toLocaleString('fa-IR');
 
 /* ⚠️ «رسیدن به گوشی» **خانوادهٔ جداست** و در سرور همتا ندارد: وضعیتِ یادآوری
    می‌گوید ما چه کردیم، این می‌گوید اپراتور چه گزارش داد. تنها مصرف‌کننده‌اش
@@ -111,6 +115,62 @@ export default function Reminders() {
     } catch (e) { setToast(e.message); } finally { setRowBusy(0); }
   };
 
+  /**
+   * «کدام کلمه فیلتر شد؟» — جستجوی دوبخشی با پیامکِ آزمایشی به موبایلِ **خودِ کاربر** (`filterBisect.js`)، بعد
+   * «جایگزین کن و بفرست». هم‌زمان فقط یک جستجو؛ پیش از شروع می‌پرسد (پیامک واقعاً به گوشیِ خودش می‌رسد).
+   * فاز: `running` | `found` | `clean` | `error`. تکه‌ها و کلمهٔ انتخابی در همین state می‌مانند تا ردیف عوض نشود.
+   */
+  const [find, setFind] = useState(null);
+  const stopRef = useRef(false);
+  const [confirmNode, confirm] = useConfirm();
+  const startFind = async (r) => {
+    setFind({ id: r.id, phase: 'checking' });
+    let info;
+    try { info = await api('/reminders/filter-probe/info'); }
+    catch (e) { setFind({ id: r.id, phase: 'error', message: e.message }); return; }
+    if (!info.ok) { setFind({ id: r.id, phase: 'error', message: info.reason }); return; }
+    if (info.left < 1) { setFind({ id: r.id, phase: 'error', message: `سقفِ آزمایشِ امروز (${fa(info.perDay)} پیامک) تمام شده؛ فردا دوباره امتحان کنید` }); return; }
+    setFind(null);
+    const yes = await confirm({
+      title: 'پیدا کردنِ کلمهٔ فیلترشده',
+      body: `حدود ${fa(10)} پیامکِ آزمایشی فقط به شمارهٔ خودتان (\u2066${String(info.phoneMask).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d])}\u2069) فرستاده می‌شود؛ هر تکه‌ای که فیلتر نشود واقعاً به گوشیِ شما می‌رسد و به بیمار هیچ چیزی نمی‌رود. امروز ${fa(info.left)} آزمایشِ دیگر مانده است (سقف ${fa(info.perDay)} در روز).`,
+      ok: 'شروع کن', cancel: 'انصراف',
+    });
+    if (!yes) return;
+    stopRef.current = false;
+    setFind({ id: r.id, phase: 'running', step: 0, left: info.left });
+    const post = (body) => api(`/reminders/${r.id}/filter-probe`, { method: 'POST', body });
+    try {
+      const first = await post({});
+      if (first.outcome === 'error') { setFind({ id: r.id, phase: 'error', message: first.detail }); return; }
+      if (first.outcome === 'passed') { setFind({ id: r.id, phase: 'clean' }); return; }
+      const tokens = first.tokens;
+      const span = await findFilteredSpan(tokens.length, async (a, b) => {
+        if (stopRef.current) throw new Error('جستجو متوقف شد');
+        if (a === undefined) return true;
+        const res = await post({ start: a, end: b });
+        if (res.outcome === 'error') throw new Error(res.detail);
+        return res.outcome === 'filtered';
+      }, { onStep: (step) => setFind((f) => (f && f.id === r.id ? { ...f, step } : f)) });
+      if (span.status === 'clean') { setFind({ id: r.id, phase: 'clean' }); return; }
+      const text = tokens.slice(span.start, span.end).join(' ');
+      const words = wordsOf(text);
+      setFind({ id: r.id, phase: 'found', text, words, picked: words[0] ?? '', to: '', steps: span.steps });
+    } catch (e) { setFind({ id: r.id, phase: 'error', message: e.message }); }
+  };
+  const replaceFound = async () => {
+    if (!find || find.phase !== 'found' || !find.picked || !find.to.trim() || find.busy) return;
+    setFind({ ...find, busy: true });
+    try {
+      const res = await api('/reminders/replace-word', { method: 'POST', body: { from: find.picked, to: find.to.trim() } });
+      setToast(res.requeued
+        ? `«${res.rule.from}» عوض شد؛ ${fa(res.sent)} پیام رفت${res.failed ? ` و ${fa(res.failed)} پیام هنوز نرفته (علتش زیرِ همان ردیف)` : ''}`
+        : `«${res.rule.from}» در فهرستِ جایگزینی گذاشته شد؛ پیام‌های بعدی با کلمهٔ تازه می‌روند`);
+      setFind(null);
+      await load();
+    } catch (e) { setFind({ ...find, busy: false, message: e.message }); }
+  };
+
   const shown = (rows ?? []).filter((r) => inTab(r, tab));
   const count = (k) => (rows ?? []).filter((r) => inTab(r, k)).length;
   const [openText, setOpenText] = useState(() => new Set());
@@ -186,11 +246,18 @@ export default function Reminders() {
                 </>
               );
             })()}
+            {r.rewrites?.length > 0 && (
+              <p className="rm-rewrite">
+                هنگامِ ارسال عوض می‌شود: {r.rewrites.map((w, k) => <span key={k}>«{w.from}» ← «{w.to}»</span>)}
+              </p>
+            )}
             {r.status === 'sent' && <p>{DELIVERY_FA[r.deliveryStatus ?? 'unknown'] ?? 'وضعیت تحویل نامشخص'}{r.providerId && <small> · شناسه پیگیری: <span dir="ltr">{r.providerId}</span></small>}</p>}
             {r.error && <p className="rm-fail">علت: {r.error}</p>}
             {/* «کدام کلمه؟» — حدسِ سرور از پیام‌های رفتهٔ همین مطب (`filterHint`، قانونِ ۱۵) + راهِ اصلاح. */}
             {r.filterHint && (
               <div className="rm-filter" role="note">
+                {/* پیداشدنِ کلمهٔ قطعی، حدس و راهِ اصلاحِ کلی را بی‌معنا می‌کند — فقط کلمهٔ قطعی می‌ماند. */}
+                {find?.id !== r.id || find.phase !== 'found' ? <>
                 {r.filterHint.words?.length > 0 && (
                   <p>
                     کلمهٔ احتمالی:{' '}
@@ -199,6 +266,76 @@ export default function Reminders() {
                   </p>
                 )}
                 <p>{r.filterHint.how}</p>
+                </> : null}
+                {(() => {
+                  const f = find?.id === r.id ? find : null;
+                  const label = r.patientName || r.recipientName || 'این پیام';
+                  return (
+                    <div className="rm-find" aria-label={`پیدا کردنِ کلمهٔ فیلترشدهٔ پیامِ ${label}`}>
+                      {(!f || f.phase === 'checking' || f.phase === 'error' || f.phase === 'clean') && (
+                        <button type="button" className="rm-act rm-find-go" disabled={f?.phase === 'checking' || !!find?.busy || (find?.phase === 'running')}
+                                onClick={() => startFind(r)}>
+                          <Search width="14" height="14" aria-hidden="true" /> {f?.phase === 'checking' ? 'در حال بررسی…' : 'پیدا کردنِ دقیقِ کلمه (با پیامکِ آزمایشی)'}
+                        </button>
+                      )}
+                      {f?.phase === 'running' && (
+                        <div className="rm-find-run" role="status" aria-live="polite">
+                          <p>
+                            در حال آزمایش… مرحلهٔ {fa(f.step)} (حدود {fa(10)} مرحله). پیامک‌هایی که به گوشیِ خودتان می‌رسد را نادیده بگیرید.
+                          </p>
+                          <div className="rm-find-bar" aria-hidden="true"><i style={{ width: `${Math.min(100, f.step * 10)}%` }} /></div>
+                          <button type="button" className="rm-act rm-act-off" onClick={() => { stopRef.current = true; }}>توقف</button>
+                        </div>
+                      )}
+                      {f?.phase === 'clean' && (
+                        <p className="rm-find-msg" role="status">کلِ متن بدونِ مشکل به گوشیِ شما رسید — پس مشکل از متن نیست و شاید گذرا بوده. «ارسالِ دوباره» را بزنید.</p>
+                      )}
+                      {f?.phase === 'error' && <p className="rm-find-msg err" role="alert">{f.message}</p>}
+                      {f?.phase === 'found' && (
+                        <div className="rm-find-res">
+                          {f.words.length === 0 ? (
+                            <p className="rm-find-msg" role="status">
+                              تکهٔ فیلترشده <b dir="auto">«{f.text}»</b> کلمه نیست (شاید لینک یا عدد است). آن را در خودِ متن عوض کنید.
+                            </p>
+                          ) : (
+                            <>
+                              <p role="status">
+                                <b>کلمهٔ فیلترشده (قطعی):</b>{' '}
+                                {f.words.length === 1
+                                  ? <b className="rm-find-word">«{f.words[0]}»</b>
+                                  : <>تکهٔ <b dir="auto">«{f.text}»</b> — کدام کلمه را عوض کنیم؟</>}
+                                <small> · با {fa(f.steps)} پیامکِ آزمایشی پیدا شد</small>
+                              </p>
+                              {f.words.length > 1 && (
+                                <div className="rm-chips" role="radiogroup" aria-label="کلمه‌ای که عوض می‌شود">
+                                  {f.words.map((w) => (
+                                    <button key={w} type="button" role="radio" aria-checked={f.picked === w}
+                                            className={f.picked === w ? 'on' : ''} onClick={() => setFind({ ...f, picked: w })}>{w}</button>
+                                  ))}
+                                </div>
+                              )}
+                              <label className="rm-find-field">
+                                <span>جایگزین برای «{f.picked}»</span>
+                                <input value={f.to} maxLength={40} placeholder="کلمهٔ هم‌معنی را بنویسید" autoComplete="off"
+                                       onChange={(e) => setFind({ ...f, to: e.target.value })}
+                                       onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); replaceFound(); } }} />
+                              </label>
+                              <small>در همهٔ پیام‌های این مطب جایگزین می‌شود (فهرستش در تنظیماتِ پیامک قابلِ ویرایش و حذف است) و پیام‌های نرفتهٔ دارای این کلمه همین حالا دوباره می‌روند.</small>
+                              {f.message && <p className="rm-find-msg err" role="alert">{f.message}</p>}
+                              <div className="rm-acts">
+                                <button type="button" className="rm-act rm-act-go" disabled={!f.to.trim() || f.busy} onClick={replaceFound}>
+                                  <Check width="14" height="14" aria-hidden="true" /> {f.busy ? 'در حال ارسال…' : 'جایگزین کن و بفرست'}
+                                </button>
+                                <button type="button" className="rm-act rm-act-off" disabled={f.busy} onClick={() => setFind(null)}>بستن</button>
+                              </div>
+                            </>
+                          )}
+                          {f.words.length === 0 && <button type="button" className="rm-act rm-act-off" onClick={() => setFind(null)}>بستن</button>}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             )}
             {(RETRYABLE.includes(r.status) || CANCELLABLE.includes(r.status)) && (
@@ -236,6 +373,7 @@ export default function Reminders() {
         ))}
       </div>
 
+      {confirmNode}
       {/* توست برای صفحه‌خوان هم اعلام می‌شود (company-10). */}
       <div className={`rm-toast${toast ? ' on' : ''}`} role="status" aria-live="polite">{toast}</div>
     </div>

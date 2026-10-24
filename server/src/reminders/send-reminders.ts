@@ -1,3 +1,5 @@
+import { applyWordReplacements, parseWordReplacements, type WordRule } from '../sms/word-replacements';
+
 /** One sender for the manual action and tenant worker. Never treat a stub or a claim as delivery. */
 /* W2.2: outboxِ رویداد (CONTRACTS §۲) — sms.failed ← کارِ «ارسالِ دوباره»؛ sms.sent آن را می‌بندد. هرگز ارسال را نمی‌شکند. */
 export async function emitSms(client: any, row: any, type: string, payload: Record<string, unknown>) {
@@ -54,6 +56,12 @@ export async function sendReminders(client: any, sms: any, ids?: number[]) {
     data: { status: 'pending' },
   });
   const due = await client.reminder.findMany({ where: { channel: 'sms', status: 'pending', dueAt: { lte: new Date() }, ...(ids ? { id: { in: ids } } : {}) }, orderBy: { dueAt: 'asc' }, take: ids ? 500 : 25 });
+  /* «جایگزینیِ کلمه» (تنظیمات ← پیامک‌ها): یک‌بار برای کلِ این دور خوانده می‌شود و **هنگامِ ارسال** اعمال می‌شود؛
+     متنِ ثبت‌شده در دفتر و کلیدِ یکتای یادآوری دست نمی‌خورد. خطای خواندن ارسال را نمی‌شکند. */
+  let rules: WordRule[] = [];
+  if (due.length) {
+    try { rules = parseWordReplacements((await client.setting?.findUnique({ where: { key: 'sms_word_replacements' } }))?.value); } catch { rules = []; }
+  }
   let sent = 0, failed = 0, skipped = 0;
   for (const row of due) {
     const claim = await client.reminder.updateMany({ where: { id: row.id, status: 'pending' }, data: { status: 'sending', attemptedAt: new Date(), error: null } });
@@ -61,7 +69,7 @@ export async function sendReminders(client: any, sms: any, ids?: number[]) {
     let accepted = false;
     try {
       if (!row.phone) throw new Error('شماره‌ای ثبت نشده');
-      const result = await sms.send(row.phone, row.text);
+      const result = await sms.send(row.phone, applyWordReplacements(row.text, rules));
       if (!result.sent && !result.stub) {
         /* `outcome` (بیرون از production): «rejected» = ملی‌پیامک نپذیرفت و دوباره امتحان
            می‌شود؛ «invalid» = شمارهٔ خراب، تکرارش بی‌فایده است. */

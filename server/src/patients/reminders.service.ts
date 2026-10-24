@@ -1,5 +1,5 @@
 import { ORDER_KIND_LABELS, REMINDER_KIND_LABELS, REMINDER_LABELS } from './labels';
-import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, HttpException, HttpStatus, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { cancelSms, type CancelKind } from '../common/cancel-reasons';
@@ -15,6 +15,13 @@ import { diagnosisIds, procedureIds } from './visit-coding';
 import { toJalali } from '../common/jalali';
 import { clinicDateIso, clinicTodayIso } from '../common/clinic-day';
 import { filterSuspects, isFilteredError, passedWords } from '../sms/filter-suspects';
+import {
+  appliedRules, applyWordReplacements, parseWordReplacements, probeTokens, PROBE_MAX_TOKENS,
+  upsertWordRule, validateWordRule, type WordRule,
+} from '../sms/word-replacements';
+
+/** سقفِ پیامکِ آزمایشیِ «کدام کلمه فیلتر شد؟» برای هر کاربر در روز — جلوی حلقه و سوءاستفاده. یک جستجو ≤ ۱۶ تا می‌خواهد. */
+export const PROBE_DAILY_MAX = 60;
 
 /** ممیزیِ ارسال‌های مستقیمِ پیامک از دکمه‌ها — برای خطِ زمانیِ گزارشِ عیب‌یابی. */
 const DIRECT_SMS: Record<string, string> = {
@@ -626,7 +633,8 @@ export class RemindersService {
       const d = clinicDateIso(r.dueAt);
       return d < today ? 'overdue' : d === today ? 'today' : 'upcoming';
     };
-    const filterHintOf = await this.filterHints(rows);
+    const rules = await this.wordRules();
+    const filterHintOf = await this.filterHints(rows, rules);
     const chatIds = rows.flatMap(r => r.chatMessageId ? [r.chatMessageId] : []);
     const chatMessages = chatIds.length ? await this.prisma.chatMessage.findMany({ where: { id: { in: chatIds } }, include: { channel: { include: { members: true } } } }) : [];
     return rows.map((r) => ({
@@ -654,6 +662,8 @@ export class RemindersService {
       error: r.error,
       /** «کدام کلمه؟» برای ردِ کلمهٔ فیلترشده — حدسِ سرور + راهِ اصلاح (قانونِ ۱۵). */
       filterHint: filterHintOf(r),
+      /** جایگزینی‌هایی که هنگامِ ارسال روی این متن اعمال می‌شوند (فقط پیامی که هنوز نرفته). */
+      rewrites: ['pending', 'failed', 'uncertain'].includes(r.status) && r.channel === 'sms' ? appliedRules(r.text ?? '', rules) : [],
       patientName: r.patient ? `${r.patient.firstName} ${r.patient.lastName}`.trim() : null,
       visitCode: r.patient && r.visit ? `${r.patient.code}-V${r.visit.seq}` : null,
     }));
@@ -664,7 +674,7 @@ export class RemindersService {
    * که در هیچ پیامِ رفتهٔ ۱۸۰ روزِ اخیر نبوده، بی‌نامِ خودِ بیمار. فقط وقتی ردیفِ فیلترشده‌ای در فهرست هست کوئری
    * می‌زند. خروجی هرگز دلیلِ رد را عوض نمی‌کند؛ فقط کنارش می‌نشیند.
    */
-  private async filterHints(rows: { status: string; error: string | null }[]) {
+  private async filterHints(rows: { status: string; error: string | null }[], rules: WordRule[] = []) {
     const none = (_r: unknown) => null;
     const live = (r: { status: string; error: string | null }) =>
       ['failed', 'pending', 'uncertain'].includes(r.status) && isFilteredError(r.error);
@@ -684,13 +694,13 @@ export class RemindersService {
       if (!live(r)) return null;
       const care = r.kind === 'post_op_care' || r.kind === 'pre_op_care';
       return {
-        words: filterSuspects(r.text ?? '', passed, {
+        words: filterSuspects(applyWordReplacements(r.text ?? '', rules), passed, {
           exclude: [r.patient?.firstName ?? '', r.patient?.lastName ?? '', r.recipientName ?? ''],
           rejectedTexts,
         }),
         how: care
-          ? 'آن کلمه را در متنِ مراقبتِ همین عمل (فرمِ عمل) عوض و ذخیره کنید — متنِ تازه خودکار می‌رود و این ردیف کنار می‌رود.'
-          : 'آن کلمه را در متنِ همین نوع پیام (تنظیماتِ پیامک) عوض کنید؛ ارسالِ دوبارهٔ همین متن نمی‌رود.',
+          ? 'کلمه را همین‌جا پیدا و جایگزین کنید (برای همهٔ پیام‌های مطب)، یا در متنِ مراقبتِ همین عمل (فرمِ عمل) عوضش کنید.'
+          : 'کلمه را همین‌جا پیدا و جایگزین کنید (برای همهٔ پیام‌های مطب)، یا در متنِ همین نوع پیام (تنظیماتِ پیامک) عوضش کنید؛ ارسالِ دوبارهٔ همین متن نمی‌رود.',
       };
     };
   }
@@ -955,5 +965,125 @@ export class RemindersService {
     await this.audit?.record({ actorId: user?.id ?? null, action: 'reminder.cancel',
       entityType: 'reminder', entityId: id, before: { status: row.status }, after: { status: 'cancelled', reason: reason ?? null } });
     return fresh;
+  }
+
+  // ── «کدام کلمه فیلتر شد؟» — جستجوی دوبخشیِ بی‌حدس، با پیامکِ آزمایشی به موبایلِ خودِ کاربر ─────────────────
+
+  /** فهرستِ جایگزینیِ کلمه‌ها (تنظیمات ← پیامک‌ها). خطا ارسال را نمی‌شکند. */
+  private async wordRules(): Promise<WordRule[]> {
+    try {
+      return parseWordReplacements((await this.prisma.setting.findUnique({ where: { key: 'sms_word_replacements' } }))?.value);
+    } catch { return []; }
+  }
+
+  private probeKey = (accountId: number, day: string) => `sms_probe:${accountId}:${day}`;
+
+  private async probesUsed(accountId: number): Promise<number> {
+    const row = await this.prisma.setting.findUnique({ where: { key: this.probeKey(accountId, clinicTodayIso()) } }).catch(() => null);
+    return Math.max(0, Number(row?.value ?? 0) || 0);
+  }
+
+  /** موبایلِ **تأییدشدهٔ خودِ** کاربرِ واردشده — تنها مقصدِ پیامکِ آزمایشی. */
+  private async ownPhone(user: any): Promise<{ phone: string | null; reason?: string }> {
+    const acc = await this.prisma.account.findUnique({
+      where: { id: Number(user?.id) }, select: { phoneVerifiedAt: true, person: { select: { phone: true } } },
+    });
+    const phone = acc?.person?.phone ?? null;
+    if (!phone) return { phone: null, reason: 'شمارهٔ موبایلِ حسابِ شما ثبت نشده — از «پروفایلِ من» ثبتش کنید' };
+    if (!acc?.phoneVerifiedAt) return { phone: null, reason: 'شمارهٔ موبایلِ شما هنوز تأیید نشده؛ پیامکِ آزمایشی فقط به شمارهٔ تأییدشدهٔ خودتان می‌رود' };
+    return { phone };
+  }
+
+  /** پیش از شروع: به کدام شماره می‌رود و امروز چند آزمایش مانده — رابط همین را در پرسشِ تأیید نشان می‌دهد. */
+  async filterProbeInfo(user: any) {
+    const [me, used] = await Promise.all([this.ownPhone(user), this.probesUsed(Number(user?.id))]);
+    const d = me.phone ? toEnDigits(me.phone).replace(/\D/g, '') : '';
+    return {
+      ok: !!me.phone,
+      phoneMask: d.length >= 8 ? `${d.slice(0, 4)}***${d.slice(-4)}` : null,
+      reason: me.reason ?? null,
+      left: Math.max(0, PROBE_DAILY_MAX - used),
+      perDay: PROBE_DAILY_MAX,
+    };
+  }
+
+  /**
+   * یک پیامکِ آزمایشی: **کلِ** متنِ ردیف (همان‌طور که واقعاً می‌رود، با «لغو11»)، یا تکه‌ای پشت‌سرهم از آن
+   * (`start`..`end`، شمارهٔ کلمه‌ها). فقط و فقط به موبایلِ خودِ کاربر؛ هیچ‌چیز به بیمار نمی‌رود.
+   *
+   * ⚠️ تکه‌ای که فیلتر **نشود** واقعاً پیامک می‌شود (به گوشیِ خودِ کاربر). متنِ تکه هرگز از کلاینت نمی‌آید —
+   * فقط شمارهٔ کلمه‌ها؛ تکه از متنِ ذخیره‌شدهٔ همان ردیف ساخته می‌شود، پس این endpoint پیامک‌فرستِ آزاد نیست.
+   * رابط جستجو را هدایت می‌کند (دوبخشی)؛ سقفِ سخت همین‌جاست: ۶۰ آزمایش در روز برای هر کاربر.
+   */
+  async filterProbe(id: number, dto: { start?: unknown; end?: unknown }, user: any) {
+    const row = await this.prisma.reminder.findUnique({ where: { id } });
+    if (!row || row.channel !== 'sms') throw new NotFoundException('این پیامک پیدا نشد');
+    const rules = await this.wordRules();
+    const text = applyWordReplacements(row.text ?? '', rules);
+    const tokens = probeTokens(text);
+    if (!tokens.length) throw new BadRequestException('متنِ این پیام خالی است');
+    if (tokens.length > PROBE_MAX_TOKENS) throw new BadRequestException('متنِ این پیام برای جستجوی خودکار خیلی بلند است؛ کلمه را دستی پیدا کنید');
+    const whole = dto?.start === undefined && dto?.end === undefined;
+    let start = 0; let end = tokens.length;
+    if (!whole) {
+      start = Number(dto.start); end = Number(dto.end);
+      if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end > tokens.length || start >= end) {
+        throw new BadRequestException('بازهٔ کلمه‌ها نامعتبر است');
+      }
+    }
+    const me = await this.ownPhone(user);
+    if (!me.phone) throw new ConflictException(me.reason);
+    const used = await this.probesUsed(Number(user?.id));
+    if (used >= PROBE_DAILY_MAX) {
+      throw new HttpException(`سقفِ آزمایشِ امروز (${PROBE_DAILY_MAX} پیامک) تمام شد؛ فردا دوباره امتحان کنید`, HttpStatus.TOO_MANY_REQUESTS);
+    }
+    const key = this.probeKey(Number(user?.id), clinicTodayIso());
+    await this.prisma.setting.upsert({ where: { key }, create: { key, value: String(used + 1) }, update: { value: String(used + 1) } });
+    /* روزهای قبل پاک می‌شوند — شمارنده یک ردیف برای هر کاربر است، نه یک ردیف برای هر روز. */
+    await this.prisma.setting.deleteMany({ where: { key: { startsWith: `sms_probe:${Number(user?.id)}:`, not: key } } }).catch(() => undefined);
+    const left = Math.max(0, PROBE_DAILY_MAX - used - 1);
+    const piece = whole ? text : tokens.slice(start, end).join(' ');
+    try {
+      const res = await this.sms.send(me.phone, piece, { skipLagho: !whole });
+      if (res.sent) return { outcome: 'passed' as const, left, ...(whole ? { tokens } : {}) };
+      if (res.filtered) return { outcome: 'filtered' as const, left, ...(whole ? { tokens } : {}) };
+      if (res.stub) return { outcome: 'error' as const, left, detail: 'سرویس پیامک روی این سرور راه‌اندازی نشده؛ آزمایش ممکن نیست' };
+      return { outcome: 'error' as const, left, detail: res.detail ?? 'سرویس پیامک ارسال را نپذیرفت' };
+    } catch (e: any) {
+      if (e?.smsFiltered) return { outcome: 'filtered' as const, left, ...(whole ? { tokens } : {}) };
+      /* علتِ واقعی برای کارمند (اعتبار تمام شده، کلید نیست)؛ قطعِ شبکه «نامعلوم» است و جستجو را متوقف می‌کند. */
+      return { outcome: 'error' as const, left, detail: String(e?.smsDetail ?? 'ارتباط با سرویس پیامک برقرار نشد؛ دوباره امتحان کنید') };
+    }
+  }
+
+  /**
+   * «این کلمه را با آن عوض کن» — به فهرستِ جایگزینیِ **کلِ مطب** اضافه می‌شود (`sms_word_replacements`)، و
+   * پیام‌هایی که همین حالا به‌خاطرِ کلمهٔ فیلترشده نرفته‌اند و این کلمه را دارند دوباره در صف می‌نشینند و می‌روند.
+   * پیام‌های بعدیِ همهٔ بیماران هم هنگامِ ارسال همین جایگزینی را می‌گیرند (`sendReminders`).
+   */
+  async replaceWord(dto: { from?: unknown; to?: unknown }, user: any) {
+    const bad = validateWordRule(dto?.from, dto?.to);
+    if (bad) throw new BadRequestException(bad);
+    const from = String(dto.from).trim(); const to = String(dto.to).trim();
+    const raw = (await this.prisma.setting.findUnique({ where: { key: 'sms_word_replacements' } }).catch(() => null))?.value ?? '';
+    let next: { value: string; replaced: boolean };
+    try { next = upsertWordRule(raw, from, to); } catch (e) { throw new ConflictException(e instanceof Error ? e.message : 'ذخیره نشد'); }
+    await this.settings.update({ sms_word_replacements: next.value }, user);
+    const rules = parseWordReplacements(next.value);
+    const stuck = await this.prisma.reminder.findMany({
+      where: { channel: 'sms', status: 'failed', error: { contains: 'فیلتر' } }, orderBy: { id: 'desc' }, take: 300,
+    });
+    const ids = stuck.filter((r) => applyWordReplacements(r.text ?? '', rules) !== (r.text ?? '')).map((r) => r.id);
+    let res = { due: 0, sent: 0, failed: 0, skipped: 0 };
+    if (ids.length) {
+      await this.prisma.reminder.updateMany({
+        where: { id: { in: ids }, status: 'failed' },
+        data: { status: 'pending', attempts: 0, dueAt: new Date(), error: null, sentAt: null },
+      });
+      res = await sendReminders(this.prisma, this.sms, ids);
+    }
+    await this.audit?.record({ actorId: user?.id ?? null, action: 'reminder.replace_word', entityType: 'setting', entityId: 0,
+      before: null, after: { from, to, updated: next.replaced, requeued: ids.length, sent: res.sent, failed: res.failed } });
+    return { rule: { from, to }, updated: next.replaced, requeued: ids.length, sent: res.sent, failed: res.failed };
   }
 }

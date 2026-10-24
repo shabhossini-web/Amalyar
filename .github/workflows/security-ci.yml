@@ -265,6 +265,11 @@ jobs:
       - name: Verify order send reaches staff with the real SMS reason and records failures
         run: node scripts/e2e/orders-send-unit.mjs
 
+      # «کدام کلمه فیلتر شد؟» — جستجوی دوبخشیِ سمتِ رابط (پیدا کردنِ دقیقِ کلمه در هر جای متن، ≤ ۱۶ آزمایش، توقف روی خطا).
+      # سمتِ سرور و رابطش در سوییت‌های زندهٔ `sms-filter-probe` و `sms-filter-ui` سنجیده می‌شوند.
+      - name: Verify the filtered-word bisect search
+        run: node scripts/e2e/filter-bisect-unit.mjs
+
       - name: Verify generated control client
         working-directory: server
         run: test -f src/generated/control/index.js

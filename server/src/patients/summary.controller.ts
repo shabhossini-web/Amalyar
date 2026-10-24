@@ -118,6 +118,29 @@ export class SummaryController {
     return this.reminders.retry(id, user);
   }
 
+  /**
+   * «کدام کلمه فیلتر شد؟» — پیامِ آزمایشی فقط به موبایلِ **تأییدشدهٔ خودِ کاربر** (هرگز بیمار). `info` پیش از
+   * شروع می‌گوید به کدام شماره و چند آزمایش مانده؛ `filter-probe` یک آزمایش می‌فرستد؛ `replace-word` کلمه را در
+   * فهرستِ جایگزینیِ مطب می‌گذارد و پیام‌های گیرکرده را دوباره می‌فرستد.
+   */
+  @RequirePermissions('patients.write')
+  @Get('reminders/filter-probe/info')
+  probeInfo(@CurrentUser() user: any) {
+    return this.reminders.filterProbeInfo(user);
+  }
+
+  @RequirePermissions('patients.write')
+  @Post('reminders/replace-word')
+  replaceWord(@Body() dto: any, @CurrentUser() user: any) {
+    return this.reminders.replaceWord(dto ?? {}, user);
+  }
+
+  @RequirePermissions('patients.write')
+  @Post('reminders/:id/filter-probe')
+  filterProbe(@Param('id', ParseIntPipe) id: number, @Body() dto: any, @CurrentUser() user: any) {
+    return this.reminders.filterProbe(id, dto ?? {}, user);
+  }
+
   @RequirePermissions('patients.write')
   @Post('reminders/:id/cancel')
   cancelOne(@Param('id', ParseIntPipe) id: number, @Body() dto: any, @CurrentUser() user: any) {
