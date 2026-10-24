@@ -236,6 +236,8 @@ jobs:
             const passed = passedWords(['دکتر امین\nمریم عزیز، داروها را مرتب مصرف کنید https://x.amalyar.com/f/abc لغو11', 'لطفاً پانسمان را خشک نگه دارید']);
             const sus = filterSuspects('دکتر امین\nزهرا عزیز، از مصرفِ الکل و دخانیات پرهیز کنید؛ داروها را مرتب مصرف کنید', passed, { exclude: ['زهرا'], rejectedTexts: ['الکل ممنوع', 'از الکل پرهیز'] });
             if (sus[0] !== 'الکل' || sus.includes('زهرا') || sus.includes('داروها') || sus.includes('مصرف')) fail('حدسِ کلمهٔ فیلتر: ' + JSON.stringify(sus));
+            const pun = filterSuspects('معمولی، عزیز؛ تحمل؟ (استحمام)', new Set());
+            if (pun.length !== 4 || pun.some((w) => /[،؛؟()]/.test(w))) fail('نشانهٔ نگارشی به کلمه چسبیده: ' + JSON.stringify(pun));
             console.log('sms reason ok');
           })().catch((x) => fail(String((x && x.stack) || x)));
           "
