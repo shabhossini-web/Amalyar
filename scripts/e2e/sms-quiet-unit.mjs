@@ -6,8 +6,11 @@
  */
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+/* CIِ گیت‌هاب `CLINIC_TZ=UTC` دارد؛ این سنجه به‌عمد به وقتِ تهران می‌سنجد، پس پیش از import (ثابتِ `CLINIC_TZ` هنگامِ بارگذاری خوانده می‌شود). */
+process.env.CLINIC_TZ = 'Asia/Tehran';
 const require = createRequire(new URL('../../server/package.json', import.meta.url));
 const { inQuiet, parseQuiet, clinicHour, QUIET_DEFAULT } = require('./dist/sms/quiet-hours');
+const { SETTING_BY_KEY } = require('./dist/config/settings-registry');
 let count = 0;
 const ok = (v, l) => { assert.ok(v, l); console.log('PASS ' + ++count + ' ' + l); };
 
@@ -16,6 +19,9 @@ const at = (tehran) => { const [h, m = 0] = tehran.split(':').map(Number); retur
 ok(clinicHour(new Date('2026-10-24T22:30:00Z')) === 2 && clinicHour(new Date('2026-10-24T08:30:00Z')) === 12, 'clinicHour: ۲۲:۳۰Z = ۰۲ و ۰۸:۳۰Z = ۱۲ تهران');
 ok(clinicHour(new Date('2026-10-24T20:29:00Z')) === 23 && clinicHour(new Date('2026-10-24T20:30:00Z')) === 0, 'مرزِ نیمه‌شبِ تهران (۲۰:۳۰Z)');
 
+const reg = (k) => SETTING_BY_KEY.get(k)?.default;
+ok(reg('sms_quiet_on') === QUIET_DEFAULT.on && reg('sms_quiet_from') === QUIET_DEFAULT.from && reg('sms_quiet_to') === QUIET_DEFAULT.to,
+  'پیش‌فرضِ رجیستری (لفظی) = QUIET_DEFAULT — دو کپی از هم نمی‌افتند');
 const D = { on: QUIET_DEFAULT.on, from: QUIET_DEFAULT.from, to: QUIET_DEFAULT.to };
 ok(D.on === true && D.from === 21 && D.to === 8, 'پیش‌فرض: روشن، ۲۱ تا ۸ (تصمیمِ مالک)');
 for (const h of ['21:00', '22:30', '23:59', '00:00', '02:00', '07:59']) ok(inQuiet(D, at(h)), `${h} تهران: ساعتِ سکوت`);

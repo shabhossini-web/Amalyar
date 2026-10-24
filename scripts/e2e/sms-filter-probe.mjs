@@ -65,9 +65,10 @@ const mkRem = async (data) => {
 };
 const FILTER_ERR = 'ملی‌پیامک پیام را نپذیرفت: متن حاوی کلمه فیلتر شده است — همین متن دوباره هم نمی‌رود؛ کلمه را عوض کنید';
 const SET = 'sms_word_replacements';
-/* ساعتِ سکوتِ پیش‌فرض ۲۱ تا ۸ تهران است؛ آزمون نباید به ساعتِ اجرا بسته باشد. ۰۸:۳۰Z = ۱۲:۰۰ تهران، ۲۲:۳۰Z = ۰۲:۰۰ تهران. */
-const DAYTIME = new Date('2026-10-24T08:30:00Z');
-const NIGHT = new Date('2026-10-24T22:30:00Z');
+/* ساعتِ سکوتِ پیش‌فرض ۲۱ تا ۸ به وقتِ `CLINIC_TZ` است — در CIِ گیت‌هاب UTC و در سندباکس تهران. این دو لحظه در **هر دو** منطقه درست‌اند:
+   ۱۱:۰۰Z = ۱۱ UTC و ۱۴:۳۰ تهران (روز)؛ ۲۳:۳۰Z = ۲۳ UTC و ۰۳:۰۰ تهران (شب). */
+const DAYTIME = new Date('2026-10-24T11:00:00Z');
+const NIGHT = new Date('2026-10-24T23:30:00Z');
 const setVal = async (v) => { if (v === null) await db.setting.deleteMany({ where: { key: SET } }); else await db.setting.upsert({ where: { key: SET }, create: { key: SET, value: v }, update: { value: v } }); };
 
 /* ملی‌پیامکِ ساختگی: هر متنی که BAD دارد فیلتر می‌شود؛ همهٔ تماس‌ها ثبت می‌شوند. */
@@ -212,16 +213,17 @@ try {
   const night = await svc.replaceWord({ from: 'ورزش', to: 'حرکت' }, me, NIGHT);
   ok(night.requeued === 1 && night.sent === 0 && night.held === 8 && calls.length === 0, '**شب:** ردیف دوباره در صف نشست ولی پیامکی نرفت (held=۸)');
   ok((await db.reminder.findUnique({ where: { id: n1.id } })).status === 'pending', 'ردیف «در صف» است، نه «نرفته»');
-  await sendReminders(db, sms, undefined, { respectQuiet: true, now: NIGHT });
+  /* با `ids`: سوییت‌های هم‌شاردِ دیگر ممکن است ردیفِ سررسیده در همین دیتابیس بگذارند و sweepِ بی‌ids آن‌ها را هم بفرستد. */
+  await sendReminders(db, sms, [n1.id], { respectQuiet: true, now: NIGHT });
   ok(calls.length === 0 && (await db.reminder.findUnique({ where: { id: n1.id } })).status === 'pending', 'workerِ خودکار هم در شب نمی‌فرستد');
   /* موعدِ ردیف «همین حالا»ی واقعی است؛ ساعتِ آزمونِ ما ۲۲:۳۰Z — پس موعد را پیش از آن می‌گذاریم تا «سررسیده» حساب شود. */
   await db.reminder.update({ where: { id: n1.id }, data: { dueAt: new Date(NIGHT.getTime() - 60000) } });
   const held = (await svc.list(undefined, NIGHT)).find((r) => r.id === n1.id);
   ok(held.held && held.held.until === 8, 'دفتر می‌گوید «تا ساعتِ ۸ در صف است» (مشتقِ سرور)');
   ok(!(await svc.list(undefined, DAYTIME)).find((r) => r.id === n1.id).held, 'روز: یادداشتِ سکوت نیست');
-  await sendReminders(db, sms, undefined, { respectQuiet: true, now: DAYTIME });
+  await sendReminders(db, sms, [n1.id], { respectQuiet: true, now: DAYTIME });
   const sentRow = await db.reminder.findUnique({ where: { id: n1.id } });
-  ok(sentRow.status === 'sent' && calls.length === 1 && calls[0].text === 'حرکت سنگین نکنید', 'روز: همان ردیف با متنِ جایگزین‌شده رفت');
+  ok(sentRow.status === 'sent' && calls.length === 1 && calls[0].text === 'حرکت سنگین نکنید', 'روز: همان ردیف با متنِ جایگزین‌شده رفت ' + JSON.stringify({ status: sentRow.status, error: sentRow.error, calls: calls.map((c) => c.text) }));
   ok(sentRow.text === 'ورزشِ سنگین نکنید', 'متنِ ثبت‌شده دست‌نخورده ماند');
   ok(await status(svc.replaceWord({ from: 'سنگین', to: 'زیاد' }, me, NIGHT)) === 200, 'شب: جایگزینیِ بی‌ردیفِ نرفته هم خطا نمی‌دهد');
   const ev = await db.domainEvent.findFirst({ where: { type: 'sms.sent', refType: 'reminder', refId: n1.id } });
