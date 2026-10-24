@@ -39,6 +39,13 @@ const ROWS = [
     filterHint: { words: [], how: HOW } },
   { id: 3, kind: 'notice', kindFa: 'اطلاع‌رسانی', status: 'failed', statusFa: 'ارسالِ ناموفق', channel: 'sms', text: 'پیامِ دیگری که نرفت',
     phone: '09120000003', dueAt: '2026-10-19T06:30:00.000Z', patientName: 'لیلا یوسفی', error: 'شمارهٔ موبایلِ گیرنده معتبر نیست', filterHint: null },
+  { id: 5, kind: 'post_op_care', kindFa: 'مراقبتِ بعد از عمل', status: 'pending', statusFa: 'در صف', channel: 'sms', text: 'متنِ مراقبتِ در صف',
+    phone: '09120000005', dueAt: '2026-10-20T06:30:00.000Z', patientName: 'مینا صالحی', visitCode: 'AM-0011-V1', filterHint: null,
+    held: { until: 8 }, rewrites: [{ from: 'رژیم', to: 'برنامه غذایی' }] },
+  { id: 6, kind: 'post_op_care', kindFa: 'مراقبتِ بعد از عمل', status: 'sent', statusFa: 'ارسال ثبت شد', channel: 'sms', text: 'رژیم غذایی کم‌چرب را رعایت کنید.',
+    phone: '09120000006', dueAt: '2026-10-24T22:40:00.000Z', sentAt: '2026-10-24T22:41:00.000Z', deliveryStatus: 'unknown', providerId: '5222477812321427000',
+    patientName: 'رضا اکبری', visitCode: 'AM-0010-V1', filterHint: null, held: null,
+    rewrites: [{ from: 'رژیم', to: 'برنامه' }], sentText: 'برنامه غذایی کم‌چرب را رعایت کنید.' },
   { id: 4, kind: 'next_visit', kindFa: 'یادآوریِ ویزیت', status: 'sent', statusFa: 'ارسال‌شده', channel: 'sms', text: 'پیامِ رفته',
     phone: '09120000004', dueAt: '2026-10-18T06:30:00.000Z', sentAt: '2026-10-18T06:31:00.000Z', deliveryStatus: 'delivered',
     patientName: 'حسن کریمی', filterHint: null },
@@ -68,6 +75,19 @@ try {
     ok(await page.evaluate(() => document.documentElement.dataset.theme) === theme, `${tag}: تمِ ${theme}`);
     const hints = page.locator('.rm-filter');
     ok(await hints.count() === 2, `${tag}: فقط دو ردیفِ فیلترشده راهنما دارند`);
+    const held = page.locator('.rm-held');
+    ok(await held.count() === 1, `${tag}: فقط ردیفِ مانده در ساعتِ سکوت یادداشت دارد`);
+    const heldText = await held.innerText();
+    ok(heldText.includes('ساعتِ سکوتِ پیامک') && heldText.includes('تا ساعتِ ۸ صبح') && heldText.includes('ارسالِ سررسیده‌ها'), `${tag}: «تا ساعتِ ۸ صبح در صف» و راهِ فرستادنِ دستی`);
+    ok((await page.locator('.rm-rewrite').first().innerText()).includes('«رژیم» ← «برنامه غذایی»'), `${tag}: جایگزینیِ هنگامِ ارسال دیده می‌شود`);
+    const sentNote = page.locator('.rm-row.st-sent .rm-rewrite');
+    ok((await sentNote.innerText()).includes('در پیامِ فرستاده‌شده عوض شد') && (await sentNote.innerText()).includes('«رژیم» ← «برنامه»'), `${tag}: ردیفِ رفته می‌گوید چه کلمه‌ای در پیامِ فرستاده‌شده عوض شد`);
+    await page.locator('.rm-sent-text summary').click();
+    ok((await page.locator('.rm-sent-text p').innerText()).includes('برنامه غذایی کم‌چرب'), `${tag}: متنی که واقعاً رفت قابلِ دیدن است`);
+    if (SHOTS) {
+      await page.locator('.rm-row.st-sent').first().screenshot({ path: `${SHOTS}/sms-sent-${tag}.png` });
+      await page.locator('.rm-held').first().locator('xpath=ancestor::article').screenshot({ path: `${SHOTS}/sms-held-${tag}.png` });
+    }
     const first = await hints.nth(0).innerText();
     ok(first.includes('«الکل»') && first.includes('«دخانیات»') && first.includes('فرمِ عمل') && first.includes('حدس است'),
       `${tag}: کلمه‌های احتمالی و راهِ اصلاح`);

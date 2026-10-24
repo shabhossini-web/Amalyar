@@ -16,6 +16,7 @@ import { toJalali } from '../common/jalali';
 import { clinicDateIso, clinicTodayIso } from '../common/clinic-day';
 import { filterSuspects, isFilteredError, passedWords } from '../sms/filter-suspects';
 import { isProvisional } from '../accounts/provisional';
+import { inQuiet, parseQuiet, QUIET_KEYS } from '../sms/quiet-hours';
 import {
   appliedRules, applyWordReplacements, parseWordReplacements, probeTokens, PROBE_MAX_TOKENS,
   upsertWordRule, validateWordRule, type WordRule,
@@ -617,7 +618,7 @@ export class RemindersService {
    * هم — چون پاپ‌آپِ خطِ زمانِ پرونده باید بگوید «چرا نرفت»؛ بدونِ آن، فهرستِ
    * سراسریِ مدیر است که لغوشده‌ها را نشان نمی‌دهد.
    */
-  async list(patientId?: number) {
+  async list(patientId?: number, now: Date = new Date()) {
     const include = {
       patient: { select: { code: true, firstName: true, lastName: true } },
       visit: { select: { seq: true } },
@@ -634,7 +635,38 @@ export class RemindersService {
       const d = clinicDateIso(r.dueAt);
       return d < today ? 'overdue' : d === today ? 'today' : 'upcoming';
     };
-    const rules = await this.wordRules();
+    const { rules, updatedAt: rulesAt } = await this.wordRulesMeta();
+    /* «چه چیزی واقعاً رفت»: جایگزینی هنگامِ ارسال اعمال می‌شود و متنِ ردیف دست‌نخورده می‌ماند، پس ردیفِ رفته باید بگوید چه کلمه‌ای
+       عوض شد وگرنه مالک «رژیم» را در دفتر می‌بیند و فکر می‌کند همان رفته (گزارشِ ۱۴۰۵/۰۸/۰۳). منبعِ دقیق: رویدادِ `sms.sent` که
+       `replaced` دارد؛ برای رویدادهای پیش از این تغییر: اگر فهرست از لحظهٔ ارسال تا حالا عوض نشده، همان فهرستِ فعلی دقیق است. */
+    const sentIds = rows.filter((r) => r.status === 'sent' && r.channel === 'sms').map((r) => r.id);
+    const replacedBy = new Map<number, WordRule[]>();
+    if (sentIds.length) {
+      try {
+        const evs = await this.prisma.domainEvent.findMany({
+          where: { type: 'sms.sent', refType: 'reminder', refId: { in: sentIds } }, orderBy: { id: 'asc' }, select: { refId: true, payload: true },
+        });
+        for (const e of evs) {
+          const rep = (e.payload as any)?.replaced;
+          if (e.refId != null && Array.isArray(rep)) replacedBy.set(e.refId, rep.filter((x: any) => x && typeof x.from === 'string' && typeof x.to === 'string'));
+        }
+      } catch { /* جدولِ رویداد هنوز migrate نشده — دفتر بی‌این ادعا نشان داده می‌شود */ }
+    }
+    const rewritesOf = (r: any): WordRule[] => {
+      if (r.channel !== 'sms') return [];
+      if (['pending', 'failed', 'uncertain'].includes(r.status)) return appliedRules(r.text ?? '', rules);
+      if (r.status !== 'sent') return [];
+      const known = replacedBy.get(r.id);
+      if (known) return known;
+      return rulesAt && r.sentAt && r.sentAt.getTime() >= rulesAt.getTime() ? appliedRules(r.text ?? '', rules) : [];
+    };
+    /* ساعتِ سکوت (تنظیمات ← پیامک‌ها): ردیفِ سررسیده‌ای که الان به‌خاطرِ آن نمی‌رود «تا ساعتِ X در صف است» می‌گوید — مشتقِ سرور
+       (قانونِ ۱۵)؛ بدونِ این، پیامِ «امروز»ِ مانده در شب شبیهِ پیامِ گیرکرده دیده می‌شد. خطا صفحه را نمی‌اندازد. */
+    let hold: { until: number } | null = null;
+    try {
+      const q = parseQuiet(await this.prisma.setting.findMany({ where: { key: { in: [...QUIET_KEYS] } } }));
+      if (inQuiet(q, now)) hold = { until: q.to };
+    } catch { hold = null; }
     const filterHintOf = await this.filterHints(rows, rules);
     const chatIds = rows.flatMap(r => r.chatMessageId ? [r.chatMessageId] : []);
     const chatMessages = chatIds.length ? await this.prisma.chatMessage.findMany({ where: { id: { in: chatIds } }, include: { channel: { include: { members: true } } } }) : [];
@@ -664,7 +696,11 @@ export class RemindersService {
       /** «کدام کلمه؟» برای ردِ کلمهٔ فیلترشده — حدسِ سرور + راهِ اصلاح (قانونِ ۱۵). */
       filterHint: filterHintOf(r),
       /** جایگزینی‌هایی که هنگامِ ارسال روی این متن اعمال می‌شوند (فقط پیامی که هنوز نرفته). */
-      rewrites: ['pending', 'failed', 'uncertain'].includes(r.status) && r.channel === 'sms' ? appliedRules(r.text ?? '', rules) : [],
+      /** ساعتِ سکوت: همین حالا نمی‌رود و تا `until` (ساعتِ ۰..۲۳) در صف می‌ماند؛ وگرنه `null`. ابلاغِ کارشناسان مسدود نیست. */
+      held: hold && r.status === 'pending' && r.channel === 'sms' && r.kind !== 'dispatch' && r.dueAt.getTime() <= now.getTime() ? hold : null,
+      rewrites: rewritesOf(r),
+      /** متنِ واقعاً فرستاده‌شده — فقط وقتی جایگزینی داشته (وگرنه همان `text` است). */
+      sentText: r.status === 'sent' && rewritesOf(r).length ? applyWordReplacements(r.text ?? '', rewritesOf(r)) : null,
       patientName: r.patient ? `${r.patient.firstName} ${r.patient.lastName}`.trim() : null,
       visitCode: r.patient && r.visit ? `${r.patient.code}-V${r.visit.seq}` : null,
     }));
@@ -977,6 +1013,14 @@ export class RemindersService {
     } catch { return []; }
   }
 
+  /** همان `wordRules` + زمانِ آخرین تغییرِ فهرست (برای دقیق‌بودنِ «چه چیزی رفت» در رویدادهای قدیمی). */
+  private async wordRulesMeta(): Promise<{ rules: WordRule[]; updatedAt: Date | null }> {
+    try {
+      const row = await this.prisma.setting.findUnique({ where: { key: 'sms_word_replacements' }, select: { value: true, updatedAt: true } });
+      return { rules: parseWordReplacements(row?.value), updatedAt: row?.updatedAt ?? null };
+    } catch { return { rules: [], updatedAt: null }; }
+  }
+
   private probeKey = (accountId: number, day: string) => `sms_probe:${accountId}:${day}`;
 
   private async probesUsed(accountId: number): Promise<number> {
@@ -1071,7 +1115,7 @@ export class RemindersService {
    * پیام‌هایی که همین حالا به‌خاطرِ کلمهٔ فیلترشده نرفته‌اند و این کلمه را دارند دوباره در صف می‌نشینند و می‌روند.
    * پیام‌های بعدیِ همهٔ بیماران هم هنگامِ ارسال همین جایگزینی را می‌گیرند (`sendReminders`).
    */
-  async replaceWord(dto: { from?: unknown; to?: unknown }, user: any) {
+  async replaceWord(dto: { from?: unknown; to?: unknown }, user: any, now: Date = new Date()) {
     const bad = validateWordRule(dto?.from, dto?.to);
     if (bad) throw new BadRequestException(bad);
     const from = String(dto.from).trim(); const to = String(dto.to).trim();
@@ -1085,15 +1129,22 @@ export class RemindersService {
     });
     const ids = stuck.filter((r) => applyWordReplacements(r.text ?? '', rules) !== (r.text ?? '')).map((r) => r.id);
     let res = { due: 0, sent: 0, failed: 0, skipped: 0 };
+    /* ⚠️ «جایگزین کن و بفرست» یک دکمهٔ «همین حالا بفرست» نیست: با آن در ساعتِ ۲ بامداد ده‌ها پیامِ مراقبت به بیماران رفت
+       (۱۴۰۵/۰۸/۰۳). در ساعتِ سکوت ردیف‌ها فقط دوباره در صف می‌نشینند و workerِ خودکار بعد از پایانِ بازه می‌فرستدشان. */
+    let hold: { until: number } | null = null;
+    try {
+      const q = parseQuiet(await this.prisma.setting.findMany({ where: { key: { in: [...QUIET_KEYS] } } }));
+      if (inQuiet(q, now)) hold = { until: q.to };
+    } catch { hold = null; }
     if (ids.length) {
       await this.prisma.reminder.updateMany({
         where: { id: { in: ids }, status: 'failed' },
         data: { status: 'pending', attempts: 0, dueAt: new Date(), error: null, sentAt: null },
       });
-      res = await sendReminders(this.prisma, this.sms, ids);
+      if (!hold) res = await sendReminders(this.prisma, this.sms, ids);
     }
     await this.audit?.record({ actorId: user?.id ?? null, action: 'reminder.replace_word', entityType: 'setting', entityId: 0,
-      before: null, after: { from, to, updated: next.replaced, requeued: ids.length, sent: res.sent, failed: res.failed } });
-    return { rule: { from, to }, updated: next.replaced, requeued: ids.length, sent: res.sent, failed: res.failed };
+      before: null, after: { from, to, updated: next.replaced, requeued: ids.length, sent: res.sent, failed: res.failed, held: !!hold } });
+    return { rule: { from, to }, updated: next.replaced, requeued: ids.length, sent: res.sent, failed: res.failed, held: hold ? hold.until : null };
   }
 }

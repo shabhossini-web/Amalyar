@@ -278,6 +278,10 @@ jobs:
       - name: Verify the filtered-word bisect search
         run: node scripts/e2e/filter-bisect-unit.mjs
 
+      # «ساعتِ سکوتِ پیامک» (۲۱ تا ۸ تهران، تصمیمِ مالک ۱۴۰۵/۰۸/۰۳) — ساعت به وقتِ کلینیک، نه UTCِ سرور؛ سمتِ دیتابیسِ آن در `sms-filter-probe`.
+      - name: Verify the SMS quiet hours window
+        run: node scripts/e2e/sms-quiet-unit.mjs
+
       - name: Verify generated control client
         working-directory: server
         run: test -f src/generated/control/index.js

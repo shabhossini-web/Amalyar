@@ -105,7 +105,7 @@ export class RemindersWorkerService implements OnModuleInit, OnModuleDestroy {
     try {
       await expireProvisional(client);
       if (opts.sendSms) {
-        const result = await sendReminders(client, this.sms);
+        const result = await sendReminders(client, this.sms, undefined, { respectQuiet: true });
         if (result.due) this.log.log(`${slug}: ${result.sent}/${result.due} یادآوری فرستاده شد`);
       }
       /* لایهٔ کار (W2.1): رویدادهای پردازش‌نشده ← کار. همان sweep، همان client. */

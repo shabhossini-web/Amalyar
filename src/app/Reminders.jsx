@@ -163,9 +163,11 @@ export default function Reminders() {
     setFind({ ...find, busy: true });
     try {
       const res = await api('/reminders/replace-word', { method: 'POST', body: { from: find.picked, to: find.to.trim() } });
-      setToast(res.requeued
-        ? `«${res.rule.from}» عوض شد؛ ${fa(res.sent)} پیام رفت${res.failed ? ` و ${fa(res.failed)} پیام هنوز نرفته (علتش زیرِ همان ردیف)` : ''}`
-        : `«${res.rule.from}» در فهرستِ جایگزینی گذاشته شد؛ پیام‌های بعدی با کلمهٔ تازه می‌روند`);
+      setToast(res.held != null
+        ? `«${res.rule.from}» عوض شد؛ ${fa(res.requeued)} پیام تا ساعتِ ${fa(res.held)}${res.held < 12 ? ' صبح' : ''} در صف می‌ماند (ساعتِ سکوت) و بعدش خودکار می‌رود`
+        : res.requeued
+          ? `«${res.rule.from}» عوض شد؛ ${fa(res.sent)} پیام رفت${res.failed ? ` و ${fa(res.failed)} پیام هنوز نرفته (علتش زیرِ همان ردیف)` : ''}`
+          : `«${res.rule.from}» در فهرستِ جایگزینی گذاشته شد؛ پیام‌های بعدی با کلمهٔ تازه می‌روند`);
       setFind(null);
       await load();
     } catch (e) { setFind({ ...find, busy: false, message: e.message }); }
@@ -246,10 +248,23 @@ export default function Reminders() {
                 </>
               );
             })()}
+            {r.held && (
+              <p className="rm-held" role="note">
+                ساعتِ سکوتِ پیامک است؛ این پیام تا ساعتِ {fa(r.held.until)}{r.held.until < 12 ? ' صبح' : ''} در صف می‌ماند و بعدش خودکار می‌رود.
+                {(user?.level ?? 0) >= 6 && <small> «ارسالِ سررسیده‌ها» همین حالا می‌فرستد.</small>}
+              </p>
+            )}
             {r.rewrites?.length > 0 && (
               <p className="rm-rewrite">
-                هنگامِ ارسال عوض می‌شود: {r.rewrites.map((w, k) => <span key={k}>«{w.from}» ← «{w.to}»</span>)}
+                {r.status === 'sent' ? 'در پیامِ فرستاده‌شده عوض شد' : 'هنگامِ ارسال عوض می‌شود'}:{' '}
+                {r.rewrites.map((w, k) => <span key={k}>«{w.from}» ← «{w.to}»</span>)}
               </p>
+            )}
+            {r.sentText && (
+              <details className="rm-sent-text">
+                <summary>متنی که واقعاً رفت</summary>
+                <p>{r.sentText}</p>
+              </details>
             )}
             {r.status === 'sent' && <p>{DELIVERY_FA[r.deliveryStatus ?? 'unknown'] ?? 'وضعیت تحویل نامشخص'}{r.providerId && <small> · شناسه پیگیری: <span dir="ltr">{r.providerId}</span></small>}</p>}
             {r.error && <p className="rm-fail">علت: {r.error}</p>}
@@ -320,7 +335,7 @@ export default function Reminders() {
                                        onChange={(e) => setFind({ ...f, to: e.target.value })}
                                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); replaceFound(); } }} />
                               </label>
-                              <small>در همهٔ پیام‌های این مطب جایگزین می‌شود (فهرستش در تنظیماتِ پیامک قابلِ ویرایش و حذف است) و پیام‌های نرفتهٔ دارای این کلمه همین حالا دوباره می‌روند.</small>
+                              <small>در همهٔ پیام‌های این مطب جایگزین می‌شود (فهرستش در تنظیماتِ پیامک قابلِ ویرایش و حذف است) و پیام‌های نرفتهٔ دارای این کلمه دوباره می‌روند (در ساعتِ سکوت، بعد از پایانِ آن).</small>
                               {f.message && <p className="rm-find-msg err" role="alert">{f.message}</p>}
                               <div className="rm-acts">
                                 <button type="button" className="rm-act rm-act-go" disabled={!f.to.trim() || f.busy} onClick={replaceFound}>

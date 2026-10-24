@@ -1,4 +1,5 @@
-import { applyWordReplacements, parseWordReplacements, type WordRule } from '../sms/word-replacements';
+import { appliedRules, applyWordReplacements, parseWordReplacements, type WordRule } from '../sms/word-replacements';
+import { inQuiet, parseQuiet, QUIET_KEYS } from '../sms/quiet-hours';
 
 /** One sender for the manual action and tenant worker. Never treat a stub or a claim as delivery. */
 /* W2.2: outboxِ رویداد (CONTRACTS §۲) — sms.failed ← کارِ «ارسالِ دوباره»؛ sms.sent آن را می‌بندد. هرگز ارسال را نمی‌شکند. */
@@ -45,7 +46,12 @@ const MAX_ATTEMPTS = BACKOFF_MIN.length + 1;   // ارسالِ اول + سه ت�
 const faNum = (n: number) => String(n).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[+d]);
 const UNCERTAIN_TEXT = 'نتیجه ارسال مشخص نشد؛ پیش از ارسال مجدد در سرویس پیامک بررسی شود';
 
-export async function sendReminders(client: any, sms: any, ids?: number[]) {
+/**
+ * @param opts.respectQuiet فقط workerِ خودکار `true` می‌دهد: در «ساعتِ سکوت» (تنظیمات ← پیامک‌ها) هیچ ردیفی جز ابلاغِ برنامهٔ روزِ
+ *   کارشناسان (`dispatch`) برداشته نمی‌شود و بقیه `pending` می‌مانند تا اولین sweepِ بعد از پایانِ بازه. دکمه‌های دستی
+ *   (`sweep()`، `retry()`) این پرچم را نمی‌دهند — کارمند عمداً می‌خواهد (تصمیمِ مالک ۱۴۰۵/۰۸/۰۳). `opts.now` فقط برای آزمون.
+ */
+export async function sendReminders(client: any, sms: any, ids?: number[], opts: { respectQuiet?: boolean; now?: Date } = {}) {
   await client.reminder.updateMany({ where: { status: 'sending', attemptedAt: { lt: new Date(Date.now() - 10 * 60000) } }, data: { status: 'uncertain', error: UNCERTAIN_TEXT } });
   /* W1.9/§۸ — `uncertain` تا امروز وضعیتِ **نهایی** بود: این تابع فقط
      `pending` را برمی‌دارد، پس پیامی که نتیجه‌اش نامعلوم مانده بود هیچ‌وقت
@@ -55,7 +61,15 @@ export async function sendReminders(client: any, sms: any, ids?: number[]) {
     where: { status: 'uncertain', attempts: { lt: MAX_ATTEMPTS }, dueAt: { lte: new Date() } },
     data: { status: 'pending' },
   });
-  const due = await client.reminder.findMany({ where: { channel: 'sms', status: 'pending', dueAt: { lte: new Date() }, ...(ids ? { id: { in: ids } } : {}) }, orderBy: { dueAt: 'asc' }, take: ids ? 500 : 25 });
+  /* ساعتِ سکوت: خطای خواندنِ تنظیم ارسال را نمی‌شکند و بسته‌شدنِ همهٔ پیام‌ها هم نمی‌شود («نتوانستم بخوانم» ≠ «ساعتِ سکوت است»). */
+  let quiet = false;
+  if (opts.respectQuiet) {
+    try {
+      const rows = await client.setting?.findMany({ where: { key: { in: [...QUIET_KEYS] } } });
+      quiet = Array.isArray(rows) && inQuiet(parseQuiet(rows), opts.now ?? new Date());
+    } catch { quiet = false; }
+  }
+  const due = await client.reminder.findMany({ where: { channel: 'sms', status: 'pending', dueAt: { lte: new Date() }, ...(quiet ? { kind: 'dispatch' } : {}), ...(ids ? { id: { in: ids } } : {}) }, orderBy: { dueAt: 'asc' }, take: ids ? 500 : 25 });
   /* «جایگزینیِ کلمه» (تنظیمات ← پیامک‌ها): یک‌بار برای کلِ این دور خوانده می‌شود و **هنگامِ ارسال** اعمال می‌شود؛
      متنِ ثبت‌شده در دفتر و کلیدِ یکتای یادآوری دست نمی‌خورد. خطای خواندن ارسال را نمی‌شکند. */
   let rules: WordRule[] = [];
@@ -78,7 +92,9 @@ export async function sendReminders(client: any, sms: any, ids?: number[]) {
       accepted = result.sent;
       await client.reminder.update({ where: { id: row.id }, data: { status: result.stub ? 'simulated' : 'sent', sentAt: result.sent ? new Date() : null, providerId: result.providerId ?? null, deliveryStatus: result.sent ? 'unknown' : 'not_sent', error: result.stub ? 'حالت آزمایشی؛ پیام واقعی ارسال نشده است' : null } });
       if (result.sent) sent++; else skipped++;
-      if (result.sent) await emitSms(client, row, 'sms.sent', { providerId: result.providerId ?? null });
+      /* `replaced` = جایگزینی‌هایی که هنگامِ ارسال روی این متن اعمال شد. متنِ ثبت‌شده در ردیف دست‌نخورده می‌ماند (کلیدِ یکتا)، پس
+         دفتر «چه چیزی واقعاً رفت» را فقط از همین‌جا می‌داند. آرایهٔ خالی = «عوض نشد»؛ نبودنِ کلید = رویدادِ پیش از این تغییر. */
+      if (result.sent) await emitSms(client, row, 'sms.sent', { providerId: result.providerId ?? null, replaced: appliedRules(row.text, rules) });
       await promoteOrderLink(client, row);
     } catch (e) {
       failed++;

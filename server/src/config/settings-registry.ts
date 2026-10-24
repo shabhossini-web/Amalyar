@@ -17,6 +17,8 @@
  * `features` را بازچینی می‌کند — پس سرویس و صفحهٔ خودش را دارد.
  */
 
+import { QUIET_DEFAULT } from '../sms/quiet-hours';
+
 export type SettingType = 'text' | 'textarea' | 'number' | 'bool' | 'color';
 
 export interface SettingDef {
@@ -233,6 +235,21 @@ export const SETTINGS: SettingDef[] = [
   {
     key: 'sms_form_send_text', label: 'متنِ پیامکِ ارسالِ فرم',
     group: 'sms', type: 'textarea', default: '{title}\n{link}', maxLength: 500,
+  },
+  {
+    key: 'sms_quiet_on', label: 'ساعتِ سکوتِ پیامک',
+    hint: 'در بازهٔ زیر، یادآوری‌های خودکار برای بیماران نمی‌روند و تا پایانِ بازه در صف می‌مانند (ساعتِ ایران). دکمه‌های «ارسالِ دوباره» و «ارسالِ سررسیده‌ها»، کدِ تأییدِ ورود و ابلاغِ برنامهٔ روزِ کارشناسان مسدود نمی‌شوند.',
+    group: 'sms', type: 'bool', default: QUIET_DEFAULT.on,
+  },
+  {
+    key: 'sms_quiet_from', label: 'شروعِ ساعتِ سکوت',
+    hint: 'ساعتِ ۰ تا ۲۳؛ مثلاً ۲۱ یعنی از ساعتِ ۹ شب.',
+    group: 'sms', type: 'number', default: QUIET_DEFAULT.from, min: 0, max: 23,
+  },
+  {
+    key: 'sms_quiet_to', label: 'پایانِ ساعتِ سکوت',
+    hint: 'ساعتِ ۰ تا ۲۳؛ مثلاً ۸ یعنی پیام‌های مانده از ساعتِ ۸ صبح می‌روند. شروع و پایان برابر باشند یعنی بازه‌ای نیست.',
+    group: 'sms', type: 'number', default: QUIET_DEFAULT.to, min: 0, max: 23,
   },
   {
     key: 'sms_word_replacements', label: 'جایگزینیِ کلمه‌ها در پیامک‌ها',

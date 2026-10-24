@@ -65,6 +65,9 @@ const mkRem = async (data) => {
 };
 const FILTER_ERR = 'ملی‌پیامک پیام را نپذیرفت: متن حاوی کلمه فیلتر شده است — همین متن دوباره هم نمی‌رود؛ کلمه را عوض کنید';
 const SET = 'sms_word_replacements';
+/* ساعتِ سکوتِ پیش‌فرض ۲۱ تا ۸ تهران است؛ آزمون نباید به ساعتِ اجرا بسته باشد. ۰۸:۳۰Z = ۱۲:۰۰ تهران، ۲۲:۳۰Z = ۰۲:۰۰ تهران. */
+const DAYTIME = new Date('2026-10-24T08:30:00Z');
+const NIGHT = new Date('2026-10-24T22:30:00Z');
 const setVal = async (v) => { if (v === null) await db.setting.deleteMany({ where: { key: SET } }); else await db.setting.upsert({ where: { key: SET }, create: { key: SET, value: v }, update: { value: v } }); };
 
 /* ملی‌پیامکِ ساختگی: هر متنی که BAD دارد فیلتر می‌شود؛ همهٔ تماس‌ها ثبت می‌شوند. */
@@ -176,21 +179,21 @@ try {
   const otherErr = await mkRem({ text: 'سپری ولی علتِ دیگر', error: 'شمارهٔ موبایلِ گیرنده معتبر نیست', dedupeKey: tag + 'w4' });
   const queued = await mkRem({ status: 'pending', dueAt: new Date(Date.now() + 3600e3), text: 'در صف سپری', dedupeKey: tag + 'w5' });
   for (const [from, to] of [['دو کلمه', 'x'], ['سپری', ''], ['سپری', 'سپری'], ['سپری', 'الف=ب']]) {
-    ok(await status(svc.replaceWord({ from, to }, me)) === 400, `ورودیِ نامعتبر ۴۰۰ (${from} ← ${to || 'خالی'})`);
+    ok(await status(svc.replaceWord({ from, to }, me, DAYTIME)) === 400, `ورودیِ نامعتبر ۴۰۰ (${from} ← ${to || 'خالی'})`);
   }
   ok(!(await db.setting.findUnique({ where: { key: SET } })), 'فهرست دست‌نخورده ماند');
   calls.length = 0;
-  const res = await svc.replaceWord({ from: 'سپری', to: 'گذرانده' }, me);
+  const res = await svc.replaceWord({ from: 'سپری', to: 'گذرانده' }, me, DAYTIME);
   ok(res.rule.from === 'سپری' && res.requeued === 2 && res.sent === 0 && res.failed === 2, 'دو «نرفتِ فیلتر»ِ حاویِ کلمه دوباره در صف نشست (BAD هنوز در متن است، پس باز رد شد)');
   ok((await db.setting.findUnique({ where: { key: SET } })).value === 'سپری = گذرانده', 'کلمه در فهرستِ مطب نشست');
   ok(calls.length === 2 && calls.every((c) => c.text.includes('گذرانده') && !c.text.includes('سپری')), 'متنِ رفته جایگزین‌شده بود');
   const st = async (r) => (await db.reminder.findUnique({ where: { id: r.id } })).status;
   ok(await st(other) === 'failed' && await st(otherErr) === 'failed' && await st(queued) === 'pending', '**نباید بیفتد:** بی‌آن کلمه، علتِ دیگر و در صف دست نخوردند');
   /* کلمهٔ دومی (BAD) هم عوض شود → حالا واقعاً می‌رود */
-  const res2 = await svc.replaceWord({ from: 'BAD', to: 'گذرانده' }, me);
+  const res2 = await svc.replaceWord({ from: 'BAD', to: 'گذرانده' }, me, DAYTIME);
   ok(res2.requeued === 4 && res2.sent === 4, `کلمهٔ دوم: هر چهار ردیفِ «نرفت»ِ حاویِ آن (${res2.requeued}) رفتند — از جمله ردیفِ آزمایشِ بخشِ ۴`);
   ok(await st(w1) === 'sent' && await st(w2) === 'sent' && await st(other) === 'sent' && await st(otherErr) === 'failed', 'ردیف‌ها «رفته»؛ علتِ دیگر هنوز «نرفته»');
-  const res3 = await svc.replaceWord({ from: 'سپری', to: 'گذراندن' }, me);
+  const res3 = await svc.replaceWord({ from: 'سپری', to: 'گذراندن' }, me, DAYTIME);
   const lines = (await db.setting.findUnique({ where: { key: SET } })).value.split('\n');
   ok(res3.updated === true && lines.length === 2 && lines.includes('سپری = گذراندن') && !lines.includes('سپری = گذرانده'), 'جایگزینیِ دوباره برای همان کلمه، خطِ تکراری نمی‌سازد');
   ok(audits.some((a) => a.action === 'reminder.replace_word' && a.after.from === 'سپری'), 'ممیزی ثبت شد (کلمه، نه متنِ بیمار)');
@@ -199,9 +202,48 @@ try {
   const rows = await svc.list();
   const q = rows.find((r) => r.id === queued.id);
   ok(q.rewrites.length === 1 && q.rewrites[0].from === 'سپری' && q.rewrites[0].to === 'گذراندن', 'ردیفِ در صف می‌گوید هنگامِ ارسال چه عوض می‌شود');
-  ok(rows.find((r) => r.id === w1.id).rewrites.length === 0, 'ردیفِ رفته ادعایی نمی‌کند');
+  const w1r = rows.find((r) => r.id === w1.id);
+  ok(w1r.rewrites.some((w) => w.from === 'سپری' && w.to === 'گذرانده') && !w1r.rewrites.some((w) => w.to === 'گذراندن') && w1r.sentText === 'الف گذرانده گذرانده ب',
+    '**ردیفِ رفته همان جایگزینیِ لحظهٔ ارسال را نشان می‌دهد** (نه فهرستِ فعلی که بعداً عوض شد) و متنِ واقعاً رفته را می‌دهد');
+  console.log('\n۸) ساعتِ سکوت: «جایگزین کن و بفرست» در شب نمی‌فرستد، و دفترِ ردیفِ رفته می‌گوید چه عوض شد');
+  await setVal(null);
+  const n1 = await mkRem({ text: 'ورزشِ سنگین نکنید', error: FILTER_ERR, dedupeKey: tag + 'n1' });
+  calls.length = 0;
+  const night = await svc.replaceWord({ from: 'ورزش', to: 'حرکت' }, me, NIGHT);
+  ok(night.requeued === 1 && night.sent === 0 && night.held === 8 && calls.length === 0, '**شب:** ردیف دوباره در صف نشست ولی پیامکی نرفت (held=۸)');
+  ok((await db.reminder.findUnique({ where: { id: n1.id } })).status === 'pending', 'ردیف «در صف» است، نه «نرفته»');
+  await sendReminders(db, sms, undefined, { respectQuiet: true, now: NIGHT });
+  ok(calls.length === 0 && (await db.reminder.findUnique({ where: { id: n1.id } })).status === 'pending', 'workerِ خودکار هم در شب نمی‌فرستد');
+  /* موعدِ ردیف «همین حالا»ی واقعی است؛ ساعتِ آزمونِ ما ۲۲:۳۰Z — پس موعد را پیش از آن می‌گذاریم تا «سررسیده» حساب شود. */
+  await db.reminder.update({ where: { id: n1.id }, data: { dueAt: new Date(NIGHT.getTime() - 60000) } });
+  const held = (await svc.list(undefined, NIGHT)).find((r) => r.id === n1.id);
+  ok(held.held && held.held.until === 8, 'دفتر می‌گوید «تا ساعتِ ۸ در صف است» (مشتقِ سرور)');
+  ok(!(await svc.list(undefined, DAYTIME)).find((r) => r.id === n1.id).held, 'روز: یادداشتِ سکوت نیست');
+  await sendReminders(db, sms, undefined, { respectQuiet: true, now: DAYTIME });
+  const sentRow = await db.reminder.findUnique({ where: { id: n1.id } });
+  ok(sentRow.status === 'sent' && calls.length === 1 && calls[0].text === 'حرکت سنگین نکنید', 'روز: همان ردیف با متنِ جایگزین‌شده رفت');
+  ok(sentRow.text === 'ورزشِ سنگین نکنید', 'متنِ ثبت‌شده دست‌نخورده ماند');
+  ok(await status(svc.replaceWord({ from: 'سنگین', to: 'زیاد' }, me, NIGHT)) === 200, 'شب: جایگزینیِ بی‌ردیفِ نرفته هم خطا نمی‌دهد');
+  const ev = await db.domainEvent.findFirst({ where: { type: 'sms.sent', refType: 'reminder', refId: n1.id } });
+  ok(Array.isArray(ev?.payload?.replaced) && ev.payload.replaced[0]?.from === 'ورزش', 'رویدادِ sms.sent جایگزینیِ واقعی را نگه داشت');
+  const lr = (await svc.list(undefined, DAYTIME)).find((r) => r.id === n1.id);
+  ok(lr.rewrites.length >= 1 && lr.rewrites.some((w) => w.from === 'ورزش') && lr.sentText && lr.sentText.startsWith('حرکت '), '**ردیفِ رفته می‌گوید چه عوض شد و متنِ واقعاً فرستاده‌شده را می‌دهد**');
+  /* رویدادِ پیش از این تغییر (بی‌`replaced`): اگر فهرست از لحظهٔ ارسال تا حالا عوض نشده، فهرستِ فعلی دقیق است؛ وگرنه ادعایی نمی‌کند. */
+  const ruleAt = (await db.setting.findUnique({ where: { key: SET } })).updatedAt;
+  const old1 = await mkRem({ status: 'sent', text: 'ورزش بعد از عمل', sentAt: new Date(ruleAt.getTime() + 5000), dedupeKey: tag + 'o1' });
+  const old2 = await mkRem({ status: 'sent', text: 'ورزش بعد از عمل', sentAt: new Date(ruleAt.getTime() - 3600e3), dedupeKey: tag + 'o2' });
+  const listed = await svc.list(undefined, DAYTIME);
+  ok(listed.find((r) => r.id === old1.id).rewrites.length === 1 && listed.find((r) => r.id === old2.id).rewrites.length === 0,
+    'رویدادِ قدیمی: بعد از آخرین تغییرِ فهرست = دقیق؛ پیش از آن = بی‌ادعا');
+  console.log('\n۹) بدونِ ساعتِ سکوت و با تنظیمِ سفارشی');
+  await db.setting.upsert({ where: { key: 'sms_quiet_on' }, create: { key: 'sms_quiet_on', value: 'false' }, update: { value: 'false' } });
+  const n2 = await mkRem({ status: 'pending', text: 'متنِ شبانه', dedupeKey: tag + 'n2' });
+  calls.length = 0;
+  await sendReminders(db, sms, [n2.id], { respectQuiet: true, now: NIGHT });
+  ok(calls.length === 1, 'خاموش‌کردنِ ساعتِ سکوت: در شب هم می‌رود');
+  await db.setting.deleteMany({ where: { key: { startsWith: 'sms_quiet_' } } });
 } finally {
-  await db.setting.deleteMany({ where: { OR: [{ key: SET }, { key: { startsWith: 'sms_probe:' } }] } }).catch(() => {});
+  await db.setting.deleteMany({ where: { OR: [{ key: SET }, { key: { startsWith: 'sms_probe:' } }, { key: { startsWith: 'sms_quiet_' } }] } }).catch(() => {});
   await db.domainEvent.deleteMany({ where: { refType: 'reminder', refId: { in: made.reminders } } }).catch(() => {});
   await db.reminder.deleteMany({ where: { id: { in: made.reminders } } });
   await db.account.deleteMany({ where: { id: { in: made.accounts } } });
