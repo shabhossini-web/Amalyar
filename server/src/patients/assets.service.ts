@@ -39,8 +39,34 @@ const dayKey = (d: Date) => d.toISOString().slice(0, 10);
  * و تعهدِ فردا نامرئی می‌شود.
  */
 function lotsOf(t: any): number[] {
+  if (t.__lot) return [t.__lot];
   if (t.status === 'planned') return ((t.plannedLines as any[] | null) ?? []).map((l) => Number(l.lotId));
   return (t.movements ?? []).map((m: any) => m.lotId);
+}
+
+/**
+ * دستگاهِ ثبت‌شده روی **پروندهٔ بیمار** (`Visit.deviceLotId`، فرمِ خدمت / پنلِ کارشناس) هم تعهد است — شکلِ
+ * یک «حوالهٔ مجازی» تا همان `windowOf`/`overlaps` تصمیم بگیرد. تا ۱۴۰۵/۰۸/۰۴ انبار فقط حواله‌ها را می‌دید و
+ * دستگاهِ انتخاب‌شده در فرم همان روز «آزاد» می‌ماند (تصمیمِ مالک: «مشخصاتِ پرونده واحد است»).
+ * ⚠️ اگر حواله‌ای برای همان مراجعه همان دستگاه را می‌برد، تعهدِ مجازی ساخته نمی‌شود (دوبار شمرده نشود).
+ */
+async function visitCommitments(prisma: any, lotIds: number[], since: Date | null, transfers: any[], exceptVisitId?: number) {
+  if (!lotIds.length) return [];
+  const visits = await prisma.visit.findMany({
+    where: {
+      deviceLotId: { in: lotIds }, opDate: since ? { gte: since } : { not: null }, opStatus: { not: 'cancelled' }, patient: { deletedAt: null },
+      ...(exceptVisitId ? { id: { not: exceptVisitId } } : {}),
+    },
+    select: { id: true, seq: true, deviceLotId: true, opDate: true, opStartTime: true, opEndTime: true, cargoDueTime: true, hospitalName: true,
+      hospital: { select: { id: true, name: true } }, patient: { select: { code: true } } },
+  });
+  return visits
+    .filter((v: any) => !transfers.some((t) => t.visitId === v.id && lotsOf(t).includes(v.deviceLotId)))
+    .map((v: any) => ({
+      id: null, code: null, status: 'visit', __lot: v.deviceLotId, visitId: v.id, plannedFor: v.opDate, sentAt: v.opDate,
+      windowFrom: null, windowTo: null, releasedAt: null, toLocation: v.hospital?.name ?? v.hospitalName ?? '',
+      hospital: v.hospital, visit: v, movements: [], plannedLines: null,
+    }));
 }
 
 /**
@@ -118,7 +144,8 @@ export class AssetsService {
     }
 
     const commitments = new Map<number, any[]>();
-    for (const t of transfers) {
+    const dayStart = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate()) - 24 * 3600_000);
+    for (const t of [...transfers, ...(await visitCommitments(this.prisma, ids, dayStart, transfers))]) {
       for (const lotId of new Set(lotsOf(t))) {
         const arr = commitments.get(lotId) ?? [];
         arr.push(t);
@@ -176,6 +203,8 @@ export class AssetsService {
           return {
             transferId: t.id,
             code: t.code,
+            /* تعهدِ «پرونده» (دستگاهِ ثبت‌شده روی بیمار) حواله ندارد. */
+            fromVisit: t.status === 'visit',
             on: AssetsService.committedOn(t),
             from: w[0],
             to: w[1],
@@ -197,7 +226,7 @@ export class AssetsService {
    * می‌شود هم در تقویم نشان داده می‌شود. اگر UI جدا برای خودش حساب می‌کرد،
    * اولین اختلاف بینِ هشدارِ صفحه و رفتارِ سرور پیدا می‌شد.
    */
-  async conflicts(lotIds: number[], want: [Date, Date], exceptTransferId?: number) {
+  async conflicts(lotIds: number[], want: [Date, Date], exceptTransferId?: number, exceptVisitId?: number) {
     if (!lotIds.length) return [];
     // فقط داراییِ برگشتی تعارض دارد: از یک لاتِ مصرفیِ ۱۰۰تایی می‌شود همزمان
     // به دو بیمارستان داد.
@@ -222,7 +251,8 @@ export class AssetsService {
     });
 
     const out: any[] = [];
-    for (const t of rows) {
+    const lotIdList = [...byId.keys()];
+    for (const t of [...rows, ...(await visitCommitments(this.prisma, lotIdList, null, rows, exceptVisitId))]) {
       for (const lotId of new Set(lotsOf(t))) {
         const lot = byId.get(lotId);
         if (!lot) continue;
@@ -233,7 +263,9 @@ export class AssetsService {
           lotId,
           serialNo: lot.serialNo,
           itemName: [lot.item.name, lot.item.size].filter(Boolean).join(' '),
-          transferCode: t.code,
+          transferCode: t.code ?? (t.visit ? `پروندهٔ ${t.visit.patient.code}-V${t.visit.seq}` : null),
+          fromVisit: t.status === 'visit',
+          hospitalId: t.hospital?.id ?? t.hospitalId ?? null,
           hospital: t.hospital?.name ?? t.toLocation,
           visitCode: t.visit ? `${t.visit.patient.code}-V${t.visit.seq}` : null,
           from: have[0],

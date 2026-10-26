@@ -1638,10 +1638,13 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         </>
       )}
     </div>) };
-  if (fd.isOn('opStartTime')) builtinNodes.opStartTime = { el: timeNode('opStartTime', 'ساعتِ شروع') };
+  /* شرکتی: ساعت‌های شروع/پایان یعنی همان خدمت («شروعِ نورومانیتورینگ») — همان نامِ پنلِ کارشناس (تصمیمِ مالک
+     ۱۴۰۵/۰۸/۰۴: یک جفت ساعت، ورودِ اولین و خروجِ آخرین عضوِ تیم). */
+  const workName = isService ? (serviceCatalog.find((x) => x.key === f.service)?.label ?? 'خدمت') : null;
+  if (fd.isOn('opStartTime')) builtinNodes.opStartTime = { el: timeNode('opStartTime', workName ? `شروعِ ${workName}` : 'ساعتِ شروع') };
   if (fd.isOn('opEndTime')) builtinNodes.opEndTime = { el: (
     <>
-      {timeNode('opEndTime', 'ساعتِ پایان')}
+      {timeNode('opEndTime', workName ? `پایانِ ${workName}` : 'ساعتِ پایان')}
       {/* مدت زیرِ ساعتِ پایان می‌نشیند تا کاربر حسابِ ذهنی نکند — هر جای فرم که
           ساعت‌ها رفته باشند، این هم با آن‌ها می‌رود. */}
       {formDuration != null && (

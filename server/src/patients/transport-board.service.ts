@@ -325,16 +325,13 @@ export class TransportBoardService {
     }
     if (moves.length && !staffId) throw new BadRequestException('برای جابجایی بین بیمارستان‌ها راننده را مشخص کنید');
 
-    // ۱) حواله — با تاریخِ همان روز و وصل به اولین عملِ همان بیمارستان.
-    const anchor = lines.length ? await this.prisma.visit.findFirst({
-      where: { opDate: { gte: from, lt: new Date(from.getTime() + DAY) }, opStatus: { not: 'cancelled' }, hospitalId: hospital.id, patient: { deletedAt: null } },
-      orderBy: [{ opStartTime: 'asc' }, { id: 'asc' }], select: { id: true },
-    }) : null;
+    // ۱) حواله — مالِ «بیمارستان + روز»، نه اولین بیمار (تصمیمِ مالک ۱۴۰۵/۰۸/۰۴؛ `shared-transfers`):
+    //    هر کارشناسِ آن بیمارستان در آن روز می‌بیندش و مصرفیِ هر بیمار روی پرونده‌اش از همین ست کم می‌شود.
     const transferIds: number[] = [];
     if (home.length) {
       const t: any = await this.inventory.sendTransfer({
         hospitalId: hospital.id, toLocation: hospital.name, plannedFor: from.toISOString(), planOnly: true,
-        ...(anchor ? { visitId: anchor.id } : {}), lines: home.map((l) => ({ lotId: Number(l.lotId), quantity: Number(l.quantity) })), force: dto.force === true,
+        lines: home.map((l) => ({ lotId: Number(l.lotId), quantity: Number(l.quantity) })), force: dto.force === true,
       }, user);
       transferIds.push(t.id);
     }
@@ -342,7 +339,7 @@ export class TransportBoardService {
     for (const m of moves) {
       const t: any = await this.inventory.sendTransfer({
         hospitalId: hospital.id, toLocation: hospital.name, fromLocation: m.src.location, plannedFor: from.toISOString(), planOnly: true,
-        ...(anchor ? { visitId: anchor.id } : {}), lines: [{ lotId: Number(m.line.lotId), quantity: Number(m.line.quantity) }], force: true,
+        lines: [{ lotId: Number(m.line.lotId), quantity: Number(m.line.quantity) }], force: true,
         notes: `جابجایی از ${m.src.hospitalName} (${m.src.code})`,
       }, user);
       transferIds.push(t.id);

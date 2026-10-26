@@ -6,7 +6,8 @@ import { CreateVisitDto, UpdateVisitDto } from './dto/visit.dto';
 import { randomUUID } from 'crypto';
 import { jobRoleLabel, fieldRoles } from '../common/job-roles';
 import { CANCEL_REASONS } from '../common/cancel-reasons';
-import { syncVisitDuty } from './hospital-duties.service';
+import { syncCrew } from './crew-sync';
+import { followVisitMove } from './shared-transfers';
 import { serviceTitleOf, visitTitleOf } from './visit-title';
 import { LEVEL } from '../common/levels';
 import { ownVisitWhere, scopedPatientWhere, scopedVisitWhere as scopedVisitWhereOf } from '../common/own-scope';
@@ -1701,10 +1702,9 @@ export class PatientsService {
          شده که آن روز در برنامهٔ آن بیمارستان نیست، همین‌جا در برنامه می‌نشیند
          (تصمیمِ مالک ۱۴۰۵/۰۶/۲۶). داخلِ همین تراکنش، تا انتساب و ردیفِ حضورش
          هرگز از هم جدا نیفتند. */
-      const arrive = await syncVisitDuty(tx, visit);
-      if (arrive !== visit.techArriveTime) {
-        visit = await tx.visit.update({ where: { id: visit.id }, data: { techArriveTime: arrive }, include: INCLUDE_PATIENT });
-      }
+      /* کارشناسِ فرم روی تیمِ پرونده می‌نشیند و حضور/مسئولِ فعلی از تیم مشتق می‌شود (`crew-sync`). */
+      await syncCrew(tx, visit.id, { tech: { source: 'form' }, times: 'op' });
+      visit = await tx.visit.findUniqueOrThrow({ where: { id: visit.id }, include: INCLUDE_PATIENT });
       await syncLinkDocuments(tx, { patientId, visitId: visit.id, fields: formFields as any, values: extraIn ?? {}, actorId: userId ?? null });
       /**
        * مبلغِ توافقی → **قلمِ خدمت**، نه ستونی روی مراجعه.
@@ -1833,7 +1833,12 @@ export class PatientsService {
     if (!Object.keys(patch).length) throw new BadRequestException('ساعتی برای ثبت نیامده است');
 
     const before = await this.prisma.visit.findUnique({ where: { id }, include: INCLUDE_PATIENT });
-    const updated = await this.prisma.visit.update({ where: { id }, data: patch, include: INCLUDE_PATIENT });
+    /* ساعتِ شروع/پایان = ورود/خروجِ تیم — هم‌زمان روی تیمِ پرونده (`crew-sync`). */
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.visit.update({ where: { id }, data: patch });
+      await syncCrew(tx, id, { times: 'op' });
+      return tx.visit.findUniqueOrThrow({ where: { id }, include: INCLUDE_PATIENT });
+    });
     const result = enrich(updated, await this.forms.kindMap());
     await this.audit.record({
       actorId: user?.id, action: 'visit.times', entityType: 'visit', entityId: id,
@@ -2005,15 +2010,15 @@ export class PatientsService {
          ⚠️ نتیجه **همیشه** نوشته می‌شود، حتی `null`: برداشتنِ کارشناس باید
          ساعتِ حضورش را هم ببرد، وگرنه ساعتِ یتیم روی کارت می‌ماند. همین کار
          رکوردهای واگرای قدیمی را هم با اولین ذخیره درست می‌کند. */
-      const pick = <T,>(patched: T | undefined, current: T): T => (patched === undefined ? current : patched);
-      visitPatch.techArriveTime = await syncVisitDuty(tx, {
-        id,
-        techId: pick(visitPatch.techId, v.techId),
-        hospitalId: pick(visitPatch.hospitalId, v.hospitalId),
-        opDate: pick(visitPatch.opDate, v.opDate),
-        opStartTime: pick(visitPatch.opStartTime, v.opStartTime),
+      /* حضور، مسئولِ فعلی و ساعت‌های تیم از تیمِ پرونده مشتق می‌شوند (`crew-sync`) — با مقادیرِ نهاییِ همین ویرایش. */
+      await tx.visit.update({ where: { id }, data: visitPatch });
+      await syncCrew(tx, id, {
+        ...(visitPatch.techId !== undefined ? { tech: { source: 'form' as const } } : {}),
+        ...(visitPatch.opStartTime !== undefined || visitPatch.opEndTime !== undefined ? { times: 'op' as const } : {}),
       });
-      return tx.visit.update({ where: { id }, data: visitPatch, include: INCLUDE_VISIT_FULL });
+      /* تاریخ یا بیمارستان عوض شد → حملِ هنوز نرفتهٔ همین مراجعه هم جابه‌جا می‌شود. */
+      if (visitPatch.opDate !== undefined || visitPatch.hospitalId !== undefined) await followVisitMove(tx, id);
+      return tx.visit.findUniqueOrThrow({ where: { id }, include: INCLUDE_VISIT_FULL });
     });
     const kinds = await this.forms.kindMap();
     const result = enrich(updated, kinds, VISIT_FULL_NOTE_KINDS);
@@ -2140,8 +2145,10 @@ export class PatientsService {
     const updated = await this.prisma.$transaction(async (tx) => {
       /* ساعتِ حضور مشتقِ برنامهٔ چینشِ **همان روز** است (`syncVisitDuty`)؛ روزِ تازه، حضورِ تازه —
          و بی‌تاریخ، بی‌حضور. همان قاعدهٔ `updateVisit`. */
-      const techArriveTime = await syncVisitDuty(tx, { id, techId: v.techId, hospitalId: v.hospitalId, opDate: next, opStartTime: v.opStartTime });
-      return tx.visit.update({ where: { id }, data: { opDate: next, techArriveTime }, include: INCLUDE_PATIENT });
+      await tx.visit.update({ where: { id }, data: { opDate: next } });
+      await syncCrew(tx, id);
+      await followVisitMove(tx, id);
+      return tx.visit.findUniqueOrThrow({ where: { id }, include: INCLUDE_PATIENT });
     });
     await this.audit.record({
       actorId: user?.id, action: 'visit.postpone', entityType: 'visit', entityId: id,

@@ -3174,6 +3174,10 @@ model VisitCrew {
   fromTime  String?  @map("from_time")
   toTime    String?  @map("to_time")
   sort      Int      @default(0)
+  /// از کجا به تیم آمد — `form` (فرمِ خدمت)، `dispatch` (چینش)، `claim` (پذیرشِ کارشناس)، `handover` (تحویل)، `legacy`.
+  source    String   @default("form")
+  /// در تحویل: کارشناسی که پرونده را تحویل داد (عضوِ قبلیِ همین تیم).
+  handedFromId Int?  @map("handed_from_id")
   createdAt DateTime @default(now()) @map("created_at")
 
   @@unique([visitId, accountId])

@@ -48,3 +48,7 @@
   .sv-crew-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
   .sv-crew-who { grid-column: 1 / -1; }
 }
+.sv-mini { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sv-tag { font-style: normal; font-size: 10.5px; font-weight: 700; padding: 1px 7px; border-radius: 999px;
+  color: var(--text2); background: rgba(var(--veil-rgb), .05); border: 1px solid rgba(var(--veil-rgb), .12); }
+.sv-tag.on { color: var(--green-text); border-color: rgba(52, 211, 153, .4); }

@@ -37,7 +37,7 @@ export default function ServicePanel({ visitId, patientName, visitCode, crew, on
     try {
       const v = await api(`/visits/${visitId}/service`);
       setView(v);
-      if (!crewDirty && Array.isArray(v?.crew)) onCrew(v.crew.map((c) => ({ accountId: c.accountId, name: c.name, fromTime: c.fromTime ?? '', toTime: c.toTime ?? '' })), true);
+      if (!crewDirty && Array.isArray(v?.crew)) onCrew(v.crew.map((c) => ({ accountId: c.accountId, name: c.name, fromTime: c.fromTime ?? '', toTime: c.toTime ?? '', current: !!c.current, sourceFa: c.sourceFa ?? '' })), true);
     } catch (e) { onToast?.(e.message); }
   }, [visitId]); // eslint-disable-line react-hooks/exhaustive-deps
   const loadDevices = useCallback(() => {
@@ -90,12 +90,17 @@ export default function ServicePanel({ visitId, patientName, visitCode, crew, on
       <section className="sv-card" aria-label="جراح، عمل و بیمارستان">{head}</section>
 
       <section className="sv-card" data-sv="crew">
-        <header className="sv-head"><Users width="16" height="16" aria-hidden="true" /><b>تیمِ کارشناسی</b><small>اولی کارشناسِ اصلی است (چینش و پنلِ کارشناسی)</small></header>
+        <header className="sv-head"><Users width="16" height="16" aria-hidden="true" /><b>تیمِ کارشناسی</b><small>همان تیمی که چینش و پنلِ کارشناس می‌بینند؛ ورودِ اولی و خروجِ آخری = شروع و پایانِ خدمت</small></header>
         {crew.length === 0 && <p className="sv-empty">هنوز کارشناسی ثبت نشده.</p>}
         {crew.map((c, i) => (
           <div key={i} className="sv-crew-row" data-crew-row={i}>
             <div className="sv-crew-who">
-              <span className="sv-mini">{i === 0 ? 'کارشناسِ اصلی' : `کارشناسِ ${faNum(i + 1)}`}</span>
+              <span className="sv-mini">
+                {`کارشناسِ ${faNum(i + 1)}`}
+                {/* «از کجا آمد» و «مسئولِ فعلی» از سرور — همان برچسبِ پنلِ کارشناس (`crewView`). */}
+                {!crewDirty && c.current && !c.toTime && <em className="sv-tag on">مسئولِ فعلی</em>}
+                {!crewDirty && c.sourceFa && <em className="sv-tag">{c.sourceFa}</em>}
+              </span>
               <Pick label="کارشناس" value={c.accountId} disabled={off}
                 options={techs.filter((t) => t.id === c.accountId || !used.has(t.id))}
                 onChange={(id) => setRow(i, { accountId: id })} clearable={false} />

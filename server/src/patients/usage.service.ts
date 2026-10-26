@@ -1,3 +1,4 @@
+import { withSharedTransfers } from './shared-transfers';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -53,6 +54,19 @@ export const usageKey = (source: UsageSource, anchor: number | null | undefined,
 
 const labelOf = (item: { name: string; size?: string | null }) => [item.name, item.size].filter(Boolean).join(' ');
 
+/* حوالهٔ خودِ مراجعه و ستِ عمومیِ همان بیمارستان و روز — یک شکل (`shared-transfers`). */
+const USAGE_TRANSFER_SELECT = {
+  id: true, code: true, status: true, toLocation: true, techReceivedAt: true, techReceiptIssue: true,
+  stop: { select: { kind: true, doneAt: true } },
+  movements: {
+    where: { kind: 'transfer', quantity: { gt: 0 } },
+    select: {
+      lotId: true, quantity: true, location: true,
+      lot: { select: { id: true, serialNo: true, lotNo: true, item: { select: { id: true, name: true, size: true, unit: true, assetKind: true, usageMode: true } } } },
+    },
+  },
+} as const;
+
 @Injectable()
 export class VisitUsageService {
   constructor(
@@ -65,33 +79,27 @@ export class VisitUsageService {
 
   /** همان دامنهٔ پنلِ کارشناسی: عملِ خودِ کارشناس؛ سوپرادمین همه (قانونِ ۲۹). */
   private scope(user: any) {
-    return isUnrestricted(user) ? { patient: { deletedAt: null } } : { techId: user?.id ?? -1 };
+    /* عضوِ تیمِ پرونده (نه فقط مسئولِ فعلی) هم مصرفی ثبت می‌کند — همان دامنهٔ پنل (`crew-sync`). */
+    return isUnrestricted(user) ? { patient: { deletedAt: null } }
+      : { OR: [{ techId: user?.id ?? -1 }, { crew: { some: { accountId: user?.id ?? -1 } } }] };
   }
 
   private async visitOrThrow(visitId: number, user: any) {
     const v = await this.prisma.visit.findFirst({
       where: { id: visitId, ...this.scope(user) },
       select: {
-        id: true, seq: true, opStatus: true,
+        id: true, seq: true, opStatus: true, hospitalId: true, opDate: true,
         patient: { select: { code: true, firstName: true, lastName: true } },
         stockTransfers: {
           orderBy: { id: 'asc' },
-          select: {
-            id: true, code: true, status: true, toLocation: true, techReceivedAt: true, techReceiptIssue: true,
-            stop: { select: { kind: true, doneAt: true } },
-            movements: {
-              where: { kind: 'transfer', quantity: { gt: 0 } },
-              select: {
-                lotId: true, quantity: true, location: true,
-                lot: { select: { id: true, serialNo: true, lotNo: true, item: { select: { id: true, name: true, size: true, unit: true, assetKind: true, usageMode: true } } } },
-              },
-            },
-          },
+          select: USAGE_TRANSFER_SELECT,
         },
         usages: { select: { key: true, quantity: true, mode: true, updatedAt: true } },
       },
     });
     if (!v) throw new NotFoundException(isUnrestricted(user) ? 'مراجعه یافت نشد' : 'این عمل در کارهای شما نیست');
+    /* ستِ عمومیِ همان بیمارستان و روز هم منبعِ مصرفِ همین بیمار است. */
+    await withSharedTransfers(this.prisma, [v], { select: USAGE_TRANSFER_SELECT, orderBy: { id: 'asc' } });
     return v;
   }
 

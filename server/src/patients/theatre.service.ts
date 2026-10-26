@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { syncCrew } from './crew-sync';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
@@ -555,6 +556,8 @@ export class TheatreService {
       data: which === 'start' ? { opStartTime: at, opTimesUpdatedAt: new Date() } : { opEndTime: at, opTimesUpdatedAt: new Date() },
     });
     const stamped = r.count === 1;
+    /* شروع/پایانِ عمل = ورودِ اولین / خروجِ آخرین عضوِ تیم (`crew-sync`). */
+    if (stamped) await this.prisma.$transaction((tx) => syncCrew(tx, visitId, { times: 'op' }));
     if (stamped) {
       await this.audit.record({
         actorId: user?.id, action: `visit.${which}`, entityType: 'visit', entityId: visitId,
@@ -612,6 +615,7 @@ export class TheatreService {
       data: { ...patch, opTimesUpdatedAt: new Date() },
     });
     if (r.count !== 1) throw new ConflictException(TIMES_CONFLICT);
+    await this.prisma.$transaction((tx) => syncCrew(tx, visitId, { times: 'op' }));
     await this.audit.record({
       actorId: user?.id, action: 'visit.times', entityType: 'visit', entityId: visitId,
       before: { opStartTime: v.opStartTime, opEndTime: v.opEndTime }, after: patch,

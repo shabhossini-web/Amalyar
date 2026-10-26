@@ -9,7 +9,10 @@ import { HospitalDutiesService } from './hospital-duties.service';
 import { RoutesService } from './routes.service';
 import { deliveryState, handoverOf, receiptOf } from './handover';
 import { OTHER_PX, procedureLabel } from './visit-coding';
-import { SERVICES, isServiceKey } from '../config/tenant-profile';
+import { ServiceCrewService, crewView } from './service-crew.service';
+import { currentMember } from './crew-sync';
+import { transportDevices } from './device-link';
+import { withSharedTransfers } from './shared-transfers';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -29,9 +32,8 @@ function dayBounds(at: Date): [Date, Date] {
 const fullName = (p?: { firstName: string; lastName: string } | null) =>
   (p ? [p.firstName, p.lastName].filter(Boolean).join(' ') : null);
 
-/** نامِ سندِ گزارش — «گزارشِ نورومانیتورینگ» یا «گزارشِ خدمت»، هرگز «گزارشِ عمل» (`uploadReport`). */
-export const reportTitle = (service?: string | null) =>
-  (isServiceKey(service) ? `گزارشِ ${SERVICES[service].label}` : 'گزارشِ خدمت');
+import { reportTitle, workLabel } from './report-title';
+export { reportTitle };
 
 /**
  * دامنهٔ دفترِ کار — **یک تعریف** برای خواندن و نوشتن.
@@ -65,7 +67,12 @@ const VISIT_SELECT = {
   procedureType: { select: { name: true } },
   // بستهٔ ۷ج: فقط نامِ عمل‌های همزمان، برای برچسب — هیچ فیلدِ دیگری.
   otherProcedures: OTHER_PX,
-  documents: { where: { category: 'report' }, select: { id: true, createdAt: true } },
+  /* گزارشِ حذف‌شده «ثبت شده» نیست — همان فیلترِ فرمِ خدمت. */
+  documents: { where: { category: 'report', deletedAt: null }, select: { id: true, createdAt: true } },
+  /* تیم و دستگاهِ پرونده — همان داده‌ای که فرمِ خدمت و چینش می‌خوانند (`crew-sync`). */
+  hospitalId: true,
+  crew: { orderBy: { sort: 'asc' }, select: { accountId: true, fromTime: true, toTime: true, sort: true, source: true, handedFromId: true, account: { select: { status: true, person: { select: { firstName: true, lastName: true } } } } } },
+  deviceLot: { select: { id: true, serialNo: true, lotNo: true, item: { select: { name: true, size: true } } } },
   // بستهٔ ج: مصرفیِ ثبت‌شدهٔ همین عمل — فقط برای خلاصهٔ روی کارت.
   usages: { where: { quantity: { gt: 0 } }, select: { mode: true, quantity: true, updatedAt: true, item: { select: { name: true, size: true, unit: true } } } },
   stockTransfers: {
@@ -122,6 +129,7 @@ export class TechService {
     private record: RecordService,
     private duties: HospitalDutiesService,
     private events: EventsService,
+    private crew: ServiceCrewService,
     /* اختیاری: بی‌آن حوالهٔ برنامه‌ریزی‌شده بی‌نامِ کالا می‌ماند (رفتارِ پیش از ۱۴۰۵/۰۷/۰۹). */
     private routes?: RoutesService,
   ) {}
@@ -147,6 +155,8 @@ export class TechService {
       orderBy: [{ opDate: scope === 'past' ? 'desc' : 'asc' }, { opStartTime: 'asc' }, { id: 'asc' }],
       select: VISIT_SELECT,
     });
+    /* ستِ عمومیِ «بیمارستان + روز» روی کارتِ همهٔ بیمارانِ همان‌جا (`shared-transfers`). */
+    await withSharedTransfers(this.prisma, rows, { select: VISIT_SELECT.stockTransfers.select, where: VISIT_SELECT.stockTransfers.where });
     await this.routes?.withPlannedLots(rows.flatMap((v: any) => v.stockTransfers));
     /* برنامهٔ حضور: کارشناس فقط ردیفِ خودش، سوپرادمین ردیفِ همه — هر کدام با
        نامِ صاحبش، تا «پذیرش» به نامِ همان کارشناس بنشیند نه به نامِ ناظر. */
@@ -165,7 +175,7 @@ export class TechService {
       /* «امروز»ِ مطب — رابط «شروع شد» و «عملِ آینده» را با همین می‌سنجد، نه با ساعتِ گوشی. */
       today: clinicDateIso(),
       team,
-      visits: rows.map((v) => this.shape(v, team)),
+      visits: rows.map((v) => this.shape(v, team, user?.id ?? null, user?.level ?? 0)),
       hospitals: duties.map(d => ({
         id: d.id, hospitalId: d.hospitalId, name: d.hospital.name, date: d.date, arriveTime: d.arriveTime,
         // نمای سرپرستی: «حضورِ کیست» — کلیدِ فیلتر و نامِ روی کارت.
@@ -209,7 +219,7 @@ export class TechService {
   }
 
   /** تنها شکلی که پنلِ کارشناسی می‌شناسد — هیچ عددِ مالی‌ای در آن نیست. */
-  private shape(v: any, team = false) {
+  private shape(v: any, team = false, viewerId: number | null = null, viewerLevel = 0) {
     const person = v.surgeon?.person;
     return {
       id: v.id,
@@ -234,8 +244,15 @@ export class TechService {
       /* برچسبِ همهٔ عمل‌های جلسه (اصلی اول) — کارشناس باید بداند برای چه عمل‌هایی می‌رود. */
       procedure: procedureLabel(v),
       reportAt: v.documents[0]?.createdAt ?? null,
+      /* تیمِ این بیمار — زنجیرهٔ پذیرش و تحویل؛ `mine` = مسئولِ فعلی خودِ همین کاربر است. */
+      crew: crewView(v.crew).map((c) => ({ ...c, mine: c.accountId === viewerId })),
+      canHandover: (() => { const cur = currentMember(v.crew as any[]); return !!cur && !cur.toTime && (team || cur.accountId === viewerId || viewerLevel >= 3); })(),
+      device: v.deviceLot ? { lotId: v.deviceLot.id, name: [v.deviceLot.item.name, v.deviceLot.item.size].filter(Boolean).join(' '), serialNo: v.deviceLot.serialNo ?? v.deviceLot.lotNo ?? null } : null,
       /* نامِ گزارشِ همین خدمت از سرور (قانونِ ۱۵) — «گزارشِ نورومانیتورینگ»، نه «گزارشِ عمل». */
       reportLabel: reportTitle(v.service),
+      /* «شروعِ نورومانیتورینگ» / «شروعِ عمل» — ساعت‌های شروع/پایان در شرکتی یعنی همان خدمت. */
+      workLabel: workLabel(v.service),
+      isService: workLabel(v.service) !== 'عمل',
       /* بستهٔ ج: خلاصهٔ مصرفیِ ثبت‌شده + «می‌شود شروع کرد؟» — تا ستی منتظرِ تأییدِ کارشناس است، نه
          (ستی که نگرفته‌ای مصرف ندارد). متن را رابط می‌سازد، عدد و حالت از این‌جا (قانونِ ۱۵). */
       usage: {
@@ -245,6 +262,8 @@ export class TechService {
       },
       transfers: v.stockTransfers.map((t: any) => ({
         id: t.id,
+        /* ستِ عمومیِ بیمارستان در این روز — مالِ همهٔ بیمارانِ همان‌جا، نه فقط این یکی. */
+        shared: !!t.shared,
         code: t.code,
         status: t.status,
         toLocation: t.toLocation,
@@ -356,7 +375,36 @@ export class TechService {
   private async one(id: number, user: any) {
     const v = await this.prisma.visit.findFirst({ where: { id, ...visitScope(user) }, select: VISIT_SELECT });
     if (!v) throw this.notInScope(user);
+    await withSharedTransfers(this.prisma, [v], { select: VISIT_SELECT.stockTransfers.select, where: VISIT_SELECT.stockTransfers.where });
     await this.routes?.withPlannedLots(v.stockTransfers);
-    return this.shape(v, isUnrestricted(user));
+    return this.shape(v, isUnrestricted(user), user?.id ?? null, user?.level ?? 0);
+  }
+
+  /** «تحویل به کارشناسِ بعدی» — منطق در `ServiceCrewService.handover` (همان تیمِ فرمِ خدمت). */
+  async handover(id: number, dto: { toAccountId: number; at?: string | null }, user: any) {
+    await this.ownVisit(id, user);
+    await this.crew.handover(id, dto, user);
+    return this.one(id, user);
+  }
+
+  async handoverCandidates(id: number, user: any) {
+    await this.ownVisit(id, user);
+    return this.crew.handoverCandidates(id);
+  }
+
+  /** دستگاه‌های انبار برای روزِ همین عمل + آنچه حمل به همین بیمارستان برده (پیشنهاد). */
+  async devices(id: number, user: any) {
+    await this.ownVisit(id, user);
+    const v = await this.prisma.visit.findUnique({ where: { id }, select: { id: true, hospitalId: true, opDate: true } });
+    const [options, sent] = await Promise.all([this.crew.deviceOptions(id), transportDevices(this.prisma, v!)]);
+    const sentIds = new Set(sent.map((d) => d.lotId));
+    return options.map((o: any) => ({ ...o, fromTransport: sentIds.has(o.lotId) }))
+      .sort((a: any, b: any) => Number(b.fromTransport) - Number(a.fromTransport));
+  }
+
+  async setDevice(id: number, lotId: number | null, user: any) {
+    await this.ownVisit(id, user);
+    await this.crew.setDevice(id, lotId, user);
+    return this.one(id, user);
   }
 }

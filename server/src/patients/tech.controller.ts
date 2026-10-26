@@ -1,5 +1,5 @@
 import {
-  Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Query,
+  Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Put, Query,
   UploadedFile, UseGuards, UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -54,6 +54,25 @@ class TechStatusDto {
   cancelNote?: string;
 }
 
+/** تحویل به کارشناسِ بعدی — ساعت اختیاری (نیامدن = همین حالا به وقتِ مطب). */
+class HandoverDto {
+  @Type(() => Number)
+  @IsInt({ message: 'کارشناسِ بعدی را انتخاب کنید' })
+  @Min(1, { message: 'کارشناسِ بعدی را انتخاب کنید' })
+  toAccountId!: number;
+
+  @IsOptional() @IsString({ message: 'ساعتِ تحویل نامعتبر است' }) @MaxLength(8)
+  at?: string;
+}
+
+/** دستگاهِ پرونده — `null` یعنی برداشتن. */
+class TechDeviceDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'دستگاه نامعتبر است' })
+  lotId?: number | null;
+}
+
 /**
  * پنلِ کارشناسی — دفترِ کارِ خودِ کارشناس.
  *
@@ -97,5 +116,30 @@ export class TechController {
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_DOCUMENT_BYTES } }))
   report(@Param('id', ParseIntPipe) id: number, @UploadedFile() file: any, @CurrentUser() user: any) {
     return this.tech.uploadReport(id, file, user);
+  }
+
+  /* تیم و دستگاهِ پرونده از پنل — همان داده‌ای که فرمِ خدمت و چینش می‌خوانند (تصمیمِ مالک ۱۴۰۵/۰۸/۰۴). */
+  @RequirePermissions('visits.times')
+  @Post('visits/:id/handover')
+  handover(@Param('id', ParseIntPipe) id: number, @Body() dto: HandoverDto, @CurrentUser() user: any) {
+    return this.tech.handover(id, dto, user);
+  }
+
+  @RequirePermissions('patients.read')
+  @Get('visits/:id/handover-candidates')
+  handoverCandidates(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
+    return this.tech.handoverCandidates(id, user);
+  }
+
+  @RequirePermissions('patients.read')
+  @Get('visits/:id/devices')
+  devices(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) {
+    return this.tech.devices(id, user);
+  }
+
+  @RequirePermissions('visits.times')
+  @Put('visits/:id/device')
+  device(@Param('id', ParseIntPipe) id: number, @Body() dto: TechDeviceDto, @CurrentUser() user: any) {
+    return this.tech.setDevice(id, dto?.lotId ?? null, user);
   }
 }

@@ -1,4 +1,6 @@
 import { BadRequestException, Inject, Injectable, NotFoundException, forwardRef } from '@nestjs/common';
+import { autoDevice } from './device-link';
+const dayStart = (d: Date) => new Date(`${d.toISOString().slice(0, 10)}T00:00:00.000Z`);
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { EventsService } from '../work/events.service';
@@ -569,7 +571,9 @@ export class InventoryService {
     // است و پس‌گرفتنش ردیفِ ابطال می‌خواهد. هشدار قابلِ عبور است ولی باید
     // **صریح** باشد (`force`)، وگرنه همان صبحِ عمل معلوم می‌شود.
     if (!dto.force) {
-      const clash = await this.assets.conflicts(lines.map((l) => Number(l.lotId)), want);
+      /* دستگاهی که روی پروندهٔ همین مراجعه یا بیمارِ همان بیمارستان نشسته تعارض نیست — همان‌جا می‌رود. */
+      const clash = (await this.assets.conflicts(lines.map((l) => Number(l.lotId)), want, undefined, dto.visitId ? Number(dto.visitId) : undefined))
+        .filter((c: any) => !(c.fromVisit && dto.hospitalId && c.hospitalId === Number(dto.hospitalId)));
       if (clash.length) {
         const first = clash[0];
         throw new BadRequestException(
@@ -780,6 +784,13 @@ export class InventoryService {
         where: { id },
         data: { techReceivedAt: new Date(), techReceivedById: user?.id ?? null, techReceiptIssue: issue, techReceiptNote: note },
       });
+      /* دستگاهِ همین حواله → دستگاهِ پرونده(های) آن بیمارستان در آن روز، اگر هنوز ندارند (`device-link`). */
+      const targets = t.visitId ? [{ id: t.visitId }] : (t.hospitalId && t.plannedFor ? await tx.visit.findMany({
+        where: { hospitalId: t.hospitalId, deviceLotId: null, opStatus: { not: 'cancelled' }, patient: { deletedAt: null },
+          opDate: { gte: dayStart(t.plannedFor), lt: new Date(dayStart(t.plannedFor).getTime() + 86400000) } },
+        select: { id: true },
+      }) : []);
+      for (const v of targets) await autoDevice(tx, v.id);
     });
     await this.audit.record({
       actorId: user?.id, action: 'stock.transfer.tech_receipt', entityType: 'stock_transfer', entityId: id,
@@ -993,7 +1004,11 @@ export class InventoryService {
     // خودم صادر کرده‌ام. بدونِ دومی، انباردارِ سطحِ ۳ حواله را می‌ساخت و همان لحظه
     // «حواله یافت نشد» می‌گرفت — چون حوالهٔ بی‌مراجعه به هیچ مراجعه‌ای منتسب نیست.
     const own: Record<string, any>[] = [{ visit: ownVisitWhere(user) }];
-    if (Number.isInteger(user?.id)) own.push({ createdById: user.id });
+    if (Number.isInteger(user?.id)) {
+      own.push({ createdById: user.id });
+      /* ستِ عمومیِ «بیمارستان + روز» (`shared-transfers`): کارشناسی که این روزها در آن بیمارستان حضور دارد. */
+      own.push({ visitId: null, hospital: { duties: { some: { techId: user.id, date: { gte: new Date(Date.now() - 7 * 864e5) } } } } });
+    }
     return { OR: own };
   }
 

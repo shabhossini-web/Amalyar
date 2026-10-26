@@ -5,6 +5,7 @@ import { normalizeTime } from './patients.service';
 import { faDateStr } from './summary.service';
 import { RemindersService } from './reminders.service';
 import { clinicTodayIso } from '../common/clinic-day';
+import { syncCrew } from './crew-sync';
 
 export function scheduleDate(raw: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) throw new BadRequestException('تاریخ برنامه نامعتبر است');
@@ -59,13 +60,13 @@ export class HospitalDutiesService {
   async day(raw: string) {
     const date = scheduleDate(raw);
     const [visits, duties] = await Promise.all([
-      this.prisma.visit.findMany({ where: { opDate: range(date), opStatus: { not: 'cancelled' }, patient: { deletedAt: null } }, include: { patient: { select: { code: true, firstName: true, lastName: true } }, hospital: { select: { id: true, name: true } }, tech: { select: { id: true, person: { select: { firstName: true, lastName: true } } } } }, orderBy: [{ opStartTime: 'asc' }, { id: 'asc' }] }),
+      this.prisma.visit.findMany({ where: { opDate: range(date), opStatus: { not: 'cancelled' }, patient: { deletedAt: null } }, include: { patient: { select: { code: true, firstName: true, lastName: true } }, hospital: { select: { id: true, name: true } }, tech: { select: { id: true, person: { select: { firstName: true, lastName: true } } } }, crew: { orderBy: [{ sort: 'asc' }, { id: 'asc' }], select: { accountId: true, fromTime: true, toTime: true, account: { select: { person: { select: { firstName: true, lastName: true } } } } } } }, orderBy: [{ opStartTime: 'asc' }, { id: 'asc' }] }),
       this.prisma.hospitalDuty.findMany({ where: { date }, include: { hospital: { select: { id: true, name: true } }, tech: { select: { id: true, status: true, person: { select: { firstName: true, lastName: true, phone: true } } } } }, orderBy: [{ arriveTime: 'asc' }, { id: 'asc' }] }),
     ]);
     const groups = new Map<number, any>();
     const group = (hospital: any) => { const id = hospital?.id ?? 0; if (!groups.has(id)) groups.set(id, { hospitalId: id || null, name: hospital?.name ?? 'بیمارستان تعیین نشده', duties: [], visits: [] }); return groups.get(id); };
     for (const duty of duties) group(duty.hospital).duties.push({ id: duty.id, techId: duty.techId, name: fullName(duty.tech.person), arriveTime: duty.arriveTime, active: duty.tech.status === 'active' });
-    for (const v of visits) group(v.hospital).visits.push({ id: v.id, code: `${v.patient.code}-V${v.seq}`, name: fullName(v.patient), hospitalText: v.hospitalName, requiredItems: v.requiredItems, instructions: v.surgeonInstructions, techId: v.techId, techName: v.tech ? fullName(v.tech.person) : null, opStartTime: v.opStartTime, opStatus: v.opStatus });
+    for (const v of visits) group(v.hospital).visits.push({ id: v.id, code: `${v.patient.code}-V${v.seq}`, name: fullName(v.patient), hospitalText: v.hospitalName, requiredItems: v.requiredItems, instructions: v.surgeonInstructions, techId: v.techId, techName: v.tech ? fullName(v.tech.person) : null, crew: v.crew.map((c: any) => ({ accountId: c.accountId, name: fullName(c.account.person), fromTime: c.fromTime, toTime: c.toTime })), opStartTime: v.opStartTime, opStatus: v.opStatus });
     return { date: raw, hospitals: [...groups.values()].sort((a, b) => a.name.localeCompare(b.name, 'fa')) };
   }
 
@@ -87,7 +88,7 @@ export class HospitalDutiesService {
       await tx.$queryRaw`SELECT id FROM hospital_duties WHERE id = ${id} FOR UPDATE`;
       const duty = await tx.hospitalDuty.findUnique({ where: { id } });
       if (!duty) throw new NotFoundException('حضور پیدا نشد');
-      if (await tx.visit.count({ where: { hospitalId: duty.hospitalId, opDate: range(duty.date), techId: duty.techId } })) throw new BadRequestException('ابتدا بیماران این کارشناس را آزاد یا به کارشناس دیگر منتقل کنید');
+      if (await tx.visit.count({ where: { hospitalId: duty.hospitalId, opDate: range(duty.date), OR: [{ techId: duty.techId }, { crew: { some: { accountId: duty.techId } } }] } })) throw new BadRequestException('ابتدا بیماران این کارشناس را آزاد یا به کارشناس دیگر منتقل کنید');
       await tx.hospitalDuty.delete({ where: { id } });
       await tx.auditEvent.create({ data: { actorId: user.id, action: 'dispatch.duty.remove', entityType: 'hospital_duty', entityId: String(id) } });
       return { ok: true };
@@ -116,6 +117,8 @@ export class HospitalDutiesService {
       }
       const result = await tx.visit.updateMany({ where: { id, techId: before.techId, hospitalId: before.hospitalId, opDate: before.opDate, patient: { deletedAt: null }, ...(claim ? { opStatus: 'pending' } : {}) }, data: { techId, techArriveTime: arriveTime } });
       if (!result.count) throw new ConflictException('مراجعه هم‌زمان تغییر کرد؛ دوباره بارگذاری کنید');
+      /* چینش و پذیرش روی **تیمِ پرونده** می‌نشینند — همان چیزی که فرمِ خدمت و پنلِ کارشناس می‌خوانند. */
+      await syncCrew(tx, id, { tech: { source: claim ? 'claim' : 'dispatch' } });
       await tx.auditEvent.create({ data: { actorId: user.id, action: claim ? 'dispatch.visit.claim' : 'dispatch.visit.assign', entityType: 'visit', entityId: String(id), beforeJson: { techId: before.techId }, afterJson: { techId } } });
       return { ok: true };
     });
@@ -124,7 +127,7 @@ export class HospitalDutiesService {
   async preview(raw: string) {
     const board = await this.day(raw), programs = new Map<number, { techId: number; name: string; text: string }>();
     for (const hospital of board.hospitals) for (const duty of hospital.duties.filter((d: any) => d.active)) {
-      const mine = hospital.visits.filter((v: any) => v.techId === duty.techId), open = hospital.visits.filter((v: any) => !v.techId && v.opStatus === 'pending');
+      const mine = hospital.visits.filter((v: any) => v.techId === duty.techId || v.crew.some((c: any) => c.accountId === duty.techId)), open = hospital.visits.filter((v: any) => !v.techId && v.opStatus === 'pending');
       if (!programs.has(duty.techId)) programs.set(duty.techId, { techId: duty.techId, name: duty.name, text: `${duty.name}\nبرنامه ${faDateStr(scheduleDate(raw))}` });
       const lines = (rows: any[]) => rows.map(v => `${v.name}${v.opStartTime ? ` — ساعت عمل ${v.opStartTime}` : ''}`).join('\n') || 'ندارد';
       programs.get(duty.techId)!.text += `\n\n${hospital.name} — حضور ${duty.arriveTime}\nبیماران قطعی شما:\n${lines(mine)}\nبیماران احتمالی (هنوز بدون کارشناس):\n${lines(open)}`;

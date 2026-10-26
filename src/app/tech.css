@@ -318,3 +318,44 @@
 .tk-sheet-title { display: grid; gap: 1px; }
 .tk-sheet-title small { font-size: 11px; font-weight: 400; color: var(--text3); }
 .tk-sheet-title bdi { white-space: nowrap; }
+
+/* ── بخش‌های کارتِ پرونده: ساعت‌های کار، تیم، دستگاه (۱۴۰۵/۰۸/۰۴ — «مشخصاتِ پرونده واحد است») ── */
+.tk-sec { display: grid; gap: 7px; padding-top: 9px; border-top: 1px dashed rgba(var(--veil-rgb), .12); }
+.tk-sec-l { font-size: 11.5px; font-weight: 800; color: var(--text3); }
+.tk-mon-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.tk-mon-t {
+  display: grid; justify-items: center; gap: 1px; padding: 8px 6px; border-radius: 12px; cursor: pointer;
+  font: inherit; color: var(--text2); background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .1);
+}
+.tk-mon-t small { font-size: 11px; }
+.tk-mon-t b { font-size: 16px; font-weight: 800; color: var(--text1); font-variant-numeric: tabular-nums; }
+.tk-mon-t:hover { border-color: rgba(var(--brand-2-rgb), .5); }
+.tk-mon .tk-stamp { width: 100%; }
+.tk-chain { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
+.tk-chain li {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 10px; border-radius: 11px;
+  font-size: 12.5px; background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .1);
+}
+.tk-chain li > span { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; min-width: 0; }
+.tk-chain li b { font-weight: 700; color: var(--text1); }
+.tk-chain li i { font-style: normal; font-size: 11.5px; color: var(--text2); font-variant-numeric: tabular-nums; }
+.tk-chain li em { font-style: normal; font-size: 11px; font-weight: 700; color: var(--text2); white-space: nowrap; }
+.tk-chain li.on { border-color: rgba(52, 211, 153, .45); }
+.tk-chain li.on em { color: var(--green-text); }
+.tk-handover { flex: 0 0 auto; justify-self: start; min-width: 0; padding: 9px 14px; }
+.tk-dev-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 13px; color: var(--text1); }
+.tk-dev-row small { color: var(--text3); font-size: 12px; }
+.tk-dev-row .tk-mini { flex: 0 0 auto; padding: 7px 14px; }
+.tk-pick { display: grid; gap: 6px; }
+.tk-pick-i {
+  display: grid; gap: 2px; text-align: start; padding: 10px 12px; border-radius: 12px; cursor: pointer;
+  font: inherit; color: var(--text1); background: rgba(var(--veil-rgb), .03); border: 1px solid rgba(var(--veil-rgb), .12);
+}
+.tk-pick-i b { font-size: 13.5px; font-weight: 700; }
+.tk-pick-i small { font-size: 11.5px; color: var(--text2); }
+.tk-pick-i small.here { color: var(--green-text); }
+.tk-pick-i.on { border-color: rgba(var(--brand-2-rgb), .7); background: rgba(var(--brand-rgb), .12); }
+.tk-pick-i:disabled { opacity: .6; cursor: wait; }
+.tk-mon-t:focus-visible, .tk-pick-i:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+@media (max-width: 620px) { .tk-mon-t, .tk-pick-i, .tk-handover { min-height: 44px; } }
+@media (prefers-reduced-motion: reduce) { .tk-mon-t, .tk-pick-i { transition: none; } }

@@ -74,33 +74,6 @@ function Owner({ role, name }) {
 }
 
 /**
- * ساعتِ سرِ کارت — company-22.
- *
- * تا بازبینیِ UX نبودنِ ساعت یک قرصِ بنفشِ پررنگ با «—» بود: درشت‌ترین جزءِ کارت، و شبیهِ
- * دکمهٔ «منها / جمع‌کردن». حالا نبودنش یک «ساعت؟»ِ کم‌رنگ است و هر دو حالت لمس‌خورند و
- * «ثبتِ ساعت» را باز می‌کنند — ساعتِ ثبت‌شده همان‌جا اصلاح می‌شود. پایان، اگر هست، زیرِ شروع.
- */
-function TimeChip({ visit, onOpen }) {
-  const { opStartTime: start, opEndTime: end } = visit;
-  if (!start && !end) {
-    /* عملِ لغوشده ساعت لازم ندارد — «ساعت؟» آن‌جا دعوت به کارِ بی‌معناست. */
-    if (visit.status === 'cancelled') return null;
-    return (
-      <button type="button" className="tk-time empty" onClick={onOpen} aria-label="ساعت؟ — افزودنِ ساعتِ عمل">
-        ساعت؟
-      </button>
-    );
-  }
-  const said = [start ? faTime(start) : null, end ? `تا ${faTime(end)}` : null].filter(Boolean).join(' ');
-  return (
-    <button type="button" className="tk-time" onClick={onOpen} aria-label={`${said} — اصلاحِ ساعتِ عمل`}>
-      {start ? <span dir="ltr">{faTime(start)}</span> : null}
-      {end ? <small>تا <span dir="ltr">{faTime(end)}</span></small> : null}
-    </button>
-  );
-}
-
-/**
  * «شروع شد / پایان یافت» با یک لمس (company-15) — همان دو دکمهٔ میزِ اتاقِ عمل.
  *
  * فقط روی عملِ **امروزِ** در انتظار: ساعتِ «الان» برای عملِ فردا یا دیروز معنا ندارد. فقط
@@ -114,8 +87,78 @@ function StampButton({ visit, today, busy, onStamp }) {
   return (
     <button type="button" className="tk-save tk-stamp" disabled={busy !== null} onClick={() => onStamp(visit, key)}>
       <Clock width="16" height="16" aria-hidden="true" />
-      {busy === visit.id ? 'در حال ثبت…' : key === 'opStartTime' ? 'شروع شد' : 'پایان یافت'}
+      {busy === visit.id ? 'در حال ثبت…' : `${key === 'opStartTime' ? 'شروعِ' : 'پایانِ'} ${visit.workLabel || 'عمل'} — الان`}
     </button>
+  );
+}
+
+/**
+ * **ساعت‌های همین کار** — شروع و پایانِ نورومانیتورینگ (شرکتی) یا عمل (تصمیمِ مالک ۱۴۰۵/۰۸/۰۴: «یک جفت»).
+ * همان دو ستونِ پرونده که فرمِ خدمت و «بیماران» نشان می‌دهند؛ ورودِ اولین و خروجِ آخرین عضوِ تیم با آن یکی است.
+ * لمسِ هر کاشی «ثبتِ ساعت» را باز می‌کند و دکمهٔ «… — الان» فقط کارِ بعدی را دارد.
+ */
+function WorkTimes({ visit, today, busy, onStamp, onOpen }) {
+  const { opStartTime: start, opEndTime: end } = visit;
+  if (visit.status === 'cancelled' && !start && !end) return null;
+  const label = visit.workLabel || 'عمل';
+  return (
+    <div className="tk-sec tk-mon">
+      <span className="tk-sec-l">{label}</span>
+      <div className="tk-mon-tiles">
+        <button type="button" className="tk-mon-t" onClick={onOpen} aria-label={`شروعِ ${label}: ${start ? faTime(start) : 'ثبت نشده'} — اصلاح`}>
+          <small>شروع</small><b dir="ltr">{start ? faTime(start) : '—'}</b>
+        </button>
+        <button type="button" className="tk-mon-t" onClick={onOpen} aria-label={`پایانِ ${label}: ${end ? faTime(end) : 'ثبت نشده'} — اصلاح`}>
+          <small>پایان</small><b dir="ltr">{end ? faTime(end) : '—'}</b>
+        </button>
+      </div>
+      <StampButton visit={visit} today={today} busy={busy} onStamp={onStamp} />
+    </div>
+  );
+}
+
+/**
+ * **تیمِ این بیمار** — زنجیرهٔ پذیرش و تحویل، همان فهرستی که فرمِ خدمت و چینش می‌خوانند (`crew-sync`).
+ * «مسئولِ فعلی» را سرور تعیین می‌کند؛ دکمهٔ تحویل فقط برای خودِ مسئول (یا ناظر) و عملِ در انتظار.
+ */
+function CrewBlock({ visit, onHandover }) {
+  const crew = visit.crew ?? [];
+  if (!crew.length) return null;
+  return (
+    <div className="tk-sec tk-crew">
+      <span className="tk-sec-l">تیمِ این بیمار</span>
+      <ul className="tk-chain">
+        {crew.map((c, i) => {
+          const live = c.current && !c.toTime;
+          const span = c.fromTime || c.toTime ? `${c.fromTime ? faTime(c.fromTime) : '…'} تا ${c.toTime ? faTime(c.toTime) : '…'}` : '';
+          const tag = live ? 'مسئولِ فعلی' : c.toTime && i < crew.length - 1 ? 'تحویل داد' : c.sourceFa;
+          return (
+            <li key={c.accountId} className={live ? 'on' : undefined}>
+              <span><b>{c.name}{c.mine ? ' (شما)' : ''}</b>{span && <i>{span}</i>}</span>
+              {tag && <em>{tag}</em>}
+            </li>
+          );
+        })}
+      </ul>
+      {visit.canHandover && visit.status === 'pending' && (
+        <button type="button" className="tk-ghost tk-handover" onClick={onHandover}>تحویل به کارشناسِ بعدی</button>
+      )}
+    </div>
+  );
+}
+
+/** دستگاهِ پرونده — همان `deviceLotId`ِ فرمِ خدمت؛ حملِ تک‌دستگاه خودکار پرش می‌کند و این‌جا عوض می‌شود. */
+function DeviceBlock({ visit, onPick }) {
+  if (!visit.isService) return null;
+  const d = visit.device;
+  return (
+    <div className="tk-sec tk-dev">
+      <span className="tk-sec-l">دستگاه</span>
+      <div className="tk-dev-row">
+        <span>{d ? <>{d.name}{d.serialNo && <> · سریال <bdi dir="ltr">{d.serialNo}</bdi></>}</> : <small>هنوز ثبت نشده</small>}</span>
+        {visit.status !== 'cancelled' && <button type="button" className="tk-ghost tk-mini" onClick={onPick}>{d ? 'تغییر' : 'انتخاب'}</button>}
+      </div>
+    </div>
   );
 }
 
@@ -146,6 +189,8 @@ export default function Tech() {
   const [receiving, setReceiving] = useState(null); // شناسهٔ حواله‌ای که «تحویل گرفتم»ش در راه است
   const [timesFor, setTimesFor] = useState(null); // visit
   const [statusFor, setStatusFor] = useState(null); // visit
+  const [handoverFor, setHandoverFor] = useState(null); // visit — شیتِ «تحویل به کارشناسِ بعدی»
+  const [deviceFor, setDeviceFor] = useState(null); // visit — انتخابِ دستگاهِ پرونده
   const [claiming, setClaiming] = useState(null);
   const [stamping, setStamping] = useState(null); // شناسهٔ عملی که «شروع شد / پایان یافت»ش در راه است
   const row = useStagger();
@@ -219,7 +264,7 @@ export default function Tech() {
     setStamping(v.id);
     try {
       await api(`/tech/visits/${v.id}/times`, { method: 'PATCH', body: { [key]: at } });
-      setToast(`${key === 'opStartTime' ? 'شروعِ عمل' : 'پایانِ عمل'} ثبت شد: ${faTime(at)} · اصلاح با «ثبتِ ساعت»`);
+      setToast(`${key === 'opStartTime' ? 'شروعِ' : 'پایانِ'} ${v.workLabel || 'عمل'} ثبت شد: ${faTime(at)} · اصلاح با «ثبتِ ساعت»`);
     } catch (e) { setToast(e.message); }
     finally { await load(scope); setStamping(null); }
   };
@@ -277,7 +322,6 @@ export default function Tech() {
         {visits.map((v, i) => (
           <motion.article key={v.id} {...row(i)} className={`tk-card st-${v.status}`}>
             <header>
-              <TimeChip visit={v} onOpen={() => setTimesFor(v)} />
               <div className="tk-title">
                 <b>{v.patientName}</b>
                 {/* تاریخ اول و کد جدا از جهتِ متن (قانونِ ۹، company-05): کدِ لاتینِ بی‌جداساز
@@ -298,6 +342,10 @@ export default function Tech() {
               {v.techArriveTime && <span><Clock width="14" height="14" /> حضور {time(v.techArriveTime)}</span>}
             </div>
 
+            <WorkTimes visit={v} today={today} busy={stamping} onStamp={stamp} onOpen={() => setTimesFor(v)} />
+            <CrewBlock visit={v} onHandover={() => setHandoverFor(v)} />
+            <DeviceBlock visit={v} onPick={() => setDeviceFor(v)} />
+
             {v.transfers.length > 0 && (
               <div className="tk-sets">
                 {v.transfers.map((t) => (
@@ -317,7 +365,6 @@ export default function Tech() {
             <footer className="tk-acts">
               {/* مالک (۱۴۰۵/۰۷/۰۵): «کارشناس باید وضعیتِ عمل را تعیین کند — انجام شد، موکول شد یا کلاً
                   لغو شد». فقط برای عملِ در انتظار؛ برگرداندنِ وضعیتِ ثبت‌شده کارِ مدیر است. */}
-              <StampButton visit={v} today={today} busy={stamping} onStamp={stamp} />
               {v.status === 'pending' && (
                 <button type="button" className="tk-ghost tk-status-btn" onClick={() => setStatusFor(v)}>وضعیتِ عمل</button>
               )}
@@ -363,6 +410,23 @@ export default function Tech() {
             visit={timesFor}
             onClose={() => setTimesFor(null)}
             onSaved={(m) => { setTimesFor(null); setToast(m); load(scope); }}
+          />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {handoverFor && (
+          <HandoverSheet
+            visit={handoverFor}
+            onClose={() => setHandoverFor(null)}
+            onSaved={(m) => { setHandoverFor(null); setToast(m); load(scope); }}
+          />
+        )}
+        {deviceFor && (
+          <DeviceSheet
+            visit={deviceFor}
+            onClose={() => setDeviceFor(null)}
+            onSaved={(m) => { setDeviceFor(null); setToast(m); load(scope); }}
           />
         )}
       </AnimatePresence>
@@ -596,6 +660,8 @@ function SetCard({ transfer: t, team, busy, onReceive, onCount, onUsage }) {
       <div className="tk-set-head">
         <b><Box width="14" height="14" /> <bdi dir="ltr">{t.code}</bdi></b>
         <span>{t.toLocation}</span>
+        {/* ستِ عمومیِ «بیمارستان + روز» — مالِ همهٔ بیمارانِ همان‌جا؛ مصرفیِ هر بیمار روی پرونده‌اش کم می‌شود. */}
+        {t.shared && <i className="tk-tag">ستِ عمومیِ بیمارستان</i>}
         {tag && <i className={`tk-tag ${tag[0]}`}>{team ? tag[2] : tag[1]}</i>}
       </div>
       {t.handover && (
@@ -1039,6 +1105,110 @@ export function ConsumeSheet({ visit, onClose, onToast, onDone }) {
   );
 }
 
+/**
+ * **تحویل به کارشناسِ بعدی** (طرحِ تأییدشدهٔ مالک ۱۴۰۵/۰۸/۰۴): ساعت پیش‌فرض «الان» و قابلِ اصلاح؛ اول کسانی
+ * که امروز در همین بیمارستان‌اند. خروجِ مسئولِ فعلی و ورودِ نفرِ بعد با همین یک ساعت ثبت می‌شود و پرونده در
+ * پنلِ او باز می‌شود — همان زنجیره‌ای که فرمِ خدمت «تحویل از …» نشان می‌دهد.
+ */
+function HandoverSheet({ visit, onClose, onSaved }) {
+  const [list, setList] = useState(null);
+  const [pick, setPick] = useState(null);
+  const [at, setAt] = useState(nowTime());
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    api(`/tech/visits/${visit.id}/handover-candidates`)
+      .then((r) => { const rows = Array.isArray(r) ? r : []; setList(rows); if (rows[0]?.where === 'here') setPick(rows[0].accountId); })
+      .catch((e) => { setErr(e.message); setList([]); });
+  }, [visit.id]);
+  const save = async () => {
+    if (!pick) { setErr('کارشناسِ بعدی را انتخاب کنید'); return; }
+    const t = normTime(at);
+    if (badTime(t)) { setErr('ساعت باید به شکلِ ۰۸:۳۰ باشد'); return; }
+    setBusy(true); setErr('');
+    try {
+      await api(`/tech/visits/${visit.id}/handover`, { method: 'POST', body: { toAccountId: pick, at: t } });
+      onSaved(`پرونده تحویلِ ${list.find((x) => x.accountId === pick)?.name ?? 'کارشناسِ بعدی'} شد — ساعتِ ${faTime(t)}`);
+    } catch (e) { setErr(e.message); setBusy(false); }
+  };
+  return (
+    <Overlay backdrop="tk-overlay" panel="tk-sheet sm" as="section" onClose={onClose} closable={!busy}>
+      <header className="tk-sheet-head">
+        <b>تحویل به کارشناسِ بعدی — {visit.patientName}</b>
+        <button type="button" className="tk-x" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
+      </header>
+      <div className="tk-sheet-body">
+        <div className="tk-trow">
+          <TimePick className="tk-field" label="ساعتِ تحویل" value={at} onChange={setAt} />
+          <div className="tk-field tk-now-col">
+            <span aria-hidden="true">&nbsp;</span>
+            <button type="button" className="tk-now" onClick={() => setAt(nowTime())} aria-label="اکنون — ساعتِ تحویل">اکنون</button>
+          </div>
+        </div>
+        {list === null ? <p className="tk-note">در حالِ بارگذاری…</p> : !list.length ? <p className="tk-note">کارشناسِ فعالِ دیگری نیست.</p> : (
+          <div className="tk-pick" role="radiogroup" aria-label="کارشناسِ بعدی">
+            {list.map((c) => (
+              <button key={c.accountId} type="button" role="radio" aria-checked={pick === c.accountId}
+                      className={`tk-pick-i${pick === c.accountId ? ' on' : ''}`} onClick={() => setPick(c.accountId)}>
+                <b>{c.name}</b><small className={c.where === 'here' ? 'here' : undefined}>{c.note}</small>
+              </button>
+            ))}
+          </div>
+        )}
+        <p className="tk-note">خروجِ شما و ورودِ نفرِ بعد با همین ساعت ثبت می‌شود؛ پرونده در پنلِ او باز می‌شود.</p>
+        {err && <p className="tk-note no" role="alert">{err}</p>}
+        <button type="button" className="tk-save" disabled={busy || !pick} onClick={save}>{busy ? 'در حال ثبت…' : 'تحویل بده'}</button>
+      </div>
+    </Overlay>
+  );
+}
+
+/**
+ * دستگاهِ پرونده — دستگاه‌های انبار با وضعیتِ همان روز؛ آنچه حمل به همین بیمارستان برده اول و با برچسب.
+ * «همین دستگاه در … هم ثبت است» هشدار است نه مانع: یک دستگاه بیمارانِ یک بیمارستان را پشتِ هم می‌گیرد.
+ */
+function DeviceSheet({ visit, onClose, onSaved }) {
+  const [list, setList] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    api(`/tech/visits/${visit.id}/devices`).then((r) => setList(Array.isArray(r) ? r : [])).catch((e) => { setErr(e.message); setList([]); });
+  }, [visit.id]);
+  const choose = async (lotId) => {
+    setBusy(true); setErr('');
+    try {
+      await api(`/tech/visits/${visit.id}/device`, { method: 'PUT', body: { lotId } });
+      onSaved(lotId ? 'دستگاه روی پرونده ثبت شد' : 'دستگاه از پرونده برداشته شد');
+    } catch (e) { setErr(e.message); setBusy(false); }
+  };
+  const cur = visit.device?.lotId ?? null;
+  return (
+    <Overlay backdrop="tk-overlay" panel="tk-sheet sm" as="section" onClose={onClose} closable={!busy}>
+      <header className="tk-sheet-head">
+        <b>دستگاهِ {visit.patientName}</b>
+        <button type="button" className="tk-x" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
+      </header>
+      <div className="tk-sheet-body">
+        {list === null ? <p className="tk-note">در حالِ بارگذاری…</p> : !list.length ? <p className="tk-note">دستگاهی در انبار تعریف نشده است.</p> : (
+          <div className="tk-pick" role="radiogroup" aria-label="دستگاه">
+            {list.map((d) => (
+              <button key={d.lotId} type="button" role="radio" aria-checked={cur === d.lotId} disabled={busy}
+                      className={`tk-pick-i${cur === d.lotId ? ' on' : ''}`} onClick={() => choose(d.lotId)}>
+                <b>{d.name}{d.serialNo && <> · <bdi dir="ltr">{d.serialNo}</bdi></>}</b>
+                <small className={d.fromTransport ? 'here' : undefined}>
+                  {[d.fromTransport ? 'از حملِ همین روز' : null, d.stateLabel, ...(d.usedBy ?? []).map((u) => `در ${u.hospital || 'بیمارستانِ دیگر'} هم ثبت است`)].filter(Boolean).join(' · ')}
+                </small>
+              </button>
+            ))}
+          </div>
+        )}
+        {cur && <button type="button" className="tk-ghost" disabled={busy} onClick={() => choose(null)}>بدونِ دستگاه</button>}
+        {err && <p className="tk-note no" role="alert">{err}</p>}
+      </div>
+    </Overlay>
+  );
+}
+
 const TIME_FIELDS = [['opStartTime', 'شروعِ عمل'], ['opEndTime', 'پایانِ عمل']];
 
 /**
@@ -1061,8 +1231,10 @@ async function saveTimes(id, f) {
  * شبیهِ دکمهٔ خطرناک. ستونِ «اکنون» همان `tk-field` است با برچسبِ خالیِ هم‌قد، تا دکمه دقیقاً
  * هم‌ترازِ خودِ کادر بنشیند، حتی وقتی زیرِ کادر پیامِ خطا آمده است.
  */
-function TimesFields({ f, setF }) {
-  return TIME_FIELDS.map(([k, label]) => (
+function TimesFields({ f, setF, work }) {
+  return TIME_FIELDS.map(([k, base]) => {
+    const label = work ? base.replace('عمل', work) : base;
+    return (
     <div key={k} className="tk-trow">
       <TimePick
         className="tk-field"
@@ -1078,7 +1250,8 @@ function TimesFields({ f, setF }) {
         </button>
       </div>
     </div>
-  ));
+    );
+  });
 }
 
 /**
@@ -1107,11 +1280,11 @@ function TimesSheet({ visit, onClose, onSaved }) {
   return (
     <Overlay backdrop="tk-overlay" panel="tk-sheet sm" as="section" onClose={onClose} closable={!busy}>
       <header className="tk-sheet-head">
-        <b>ساعتِ عمل — {visit.patientName}</b>
+        <b>ساعتِ {visit.workLabel || 'عمل'} — {visit.patientName}</b>
         <button type="button" className="tk-x" onClick={onClose} aria-label="بستن"><Close width="17" height="17" /></button>
       </header>
       <div className="tk-sheet-body">
-        <TimesFields f={f} setF={setF} />
+        <TimesFields f={f} setF={setF} work={visit.workLabel} />
         {err && <p className="tk-note no" role="alert">{err}</p>}
         <button type="button" className="tk-save" disabled={busy} onClick={save}>
           {busy ? 'در حال ذخیره…' : 'ذخیرهٔ ساعت'}

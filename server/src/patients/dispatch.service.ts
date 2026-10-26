@@ -4,6 +4,7 @@ import { AuditService } from '../audit/audit.service';
 import { jalaliMonthRange, toJalali } from '../common/jalali';
 import { OTHER_PX, procedureLabel } from './visit-coding';
 import { RoutesService } from './routes.service';
+import { withSharedTransfers } from './shared-transfers';
 
 /**
  * نقش‌هایی که ابلاغِ **per-visit** می‌گیرند.
@@ -135,6 +136,14 @@ export class DispatchService {
       },
     });
 
+    /* ستِ عمومیِ «بیمارستان + روز» بارِ همهٔ بیمارانِ همان‌جاست (`shared-transfers`). */
+    await withSharedTransfers(this.prisma, visits, {
+      where: { status: { not: 'closed' } },
+      include: {
+        movements: { where: { quantity: { gt: 0 }, kind: 'transfer' }, include: { lot: { include: { item: { select: { name: true, size: true, category: true } } } } } },
+        stop: { include: { run: { include: { staff: { include: { person: { select: { firstName: true, lastName: true, phone: true } } } } } } } },
+      },
+    });
     await this.routes?.withPlannedLots(visits.flatMap((v: any) => v.stockTransfers));
     return {
       year: jy, month: jm, day: jd,

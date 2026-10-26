@@ -43,6 +43,7 @@ const mkTech = async (n) => db.account.create({ data: { username: `${tag}t${n}`,
   person: { create: { firstName: `کارشناس${n}`, lastName: tag } } } });
 const t1 = await mkTech(1), t2 = await mkTech(2);
 const hospital = await db.hospital.create({ data: { name: `بیمارستانِ ${tag}` } });
+const hospital2 = await db.hospital.create({ data: { name: `بیمارستانِ دوم ${tag}` } });
 const surgeon = await db.surgeon.create({ data: { person: { create: { firstName: 'دکتر', lastName: `جراح${tag}` } } } });
 const item = await db.item.create({ data: { name: `دستگاهِ ${tag}`, assetKind: 'device', unit: 'دستگاه' } });
 const lot = await db.stockLot.create({ data: { itemId: item.id, serialNo: `SN-${tag}` } });
@@ -50,8 +51,9 @@ const cons = await db.item.create({ data: { name: `ست ${tag}`, assetKind: 'con
 const consLot = await db.stockLot.create({ data: { itemId: cons.id, lotNo: `L-${tag}` } });
 
 const op = new Date(Date.now() + 2 * 864e5);
-const mkVisit = async (n) => (await A('/visits', { kind: 'surgery', firstName: 'بیمارِ', lastName: `خدمت${n}${tag}`, opDate: op.toISOString(), hospitalId: hospital.id, surgeonId: surgeon.id, opStartTime: '08:00' })).data;
-const v1 = await mkVisit(1), v2 = await mkVisit(2);
+const mkVisit = async (n, h = hospital) => (await A('/visits', { kind: 'surgery', firstName: 'بیمارِ', lastName: `خدمت${n}${tag}`, opDate: op.toISOString(), hospitalId: h.id, surgeonId: surgeon.id, opStartTime: '08:00' })).data;
+/* v3 همان بیمارستانِ v1 (بیمارِ بعدی با همان دستگاه)، v2 بیمارستانِ دیگر همان روز (تعارض). */
+const v1 = await mkVisit(1), v2 = await mkVisit(2, hospital2), v3 = await mkVisit(3);
 
 try {
   console.log('۱) تیمِ کارشناسی با ساعت');
@@ -60,7 +62,8 @@ try {
     { accountId: t1.id, fromTime: '08:00', toTime: '10:30' }, { accountId: t2.id, fromTime: '۰۹:۰۰', toTime: '12:00' }] }, 'PUT');
   ok(crew.status === 200 && crew.data?.crew?.length === 2, '**دو کارشناس با ساعتِ خودشان ثبت شد**', JSON.stringify(crew.data).slice(0, 160));
   ok(crew.data?.crew?.[1]?.fromTime === '09:00', 'ارقامِ فارسیِ ساعت نرمال شد', crew.data?.crew?.[1]?.fromTime);
-  ok((await db.visit.findUnique({ where: { id: v1.id } })).techId === t1.id, '**اولی کارشناسِ اصلی (`techId`) شد**');
+  /* مسئولِ فعلی = اولین عضوی که خارج نشده؛ همه خارج شده‌اند → آخری (`crew-sync`). */
+  ok((await db.visit.findUnique({ where: { id: v1.id } })).techId === t2.id, '**هر دو خارج شده‌اند ← مسئولِ پرونده آخرین عضو (`techId`)**');
   ok((await A(`/visits/${v1.id}/service/crew`, { crew: [{ accountId: t1.id, fromTime: '10:00', toTime: '09:00' }] }, 'PUT')).status === 400, 'خروج پیش از ورود رد می‌شود');
   ok((await A(`/visits/${v1.id}/service/crew`, { crew: [{ accountId: t1.id }, { accountId: t1.id }] }, 'PUT')).status === 400, 'کارشناسِ تکراری رد می‌شود');
 
@@ -76,8 +79,11 @@ try {
   ok((await A(`/visits/${v1.id}/service/device`, { lotId: consLot.id }, 'PUT')).status === 404, 'کالای غیرِدستگاه رد می‌شود');
   const dv = await A(`/visits/${v1.id}/service/device`, { lotId: lot.id }, 'PUT');
   ok(dv.data?.device?.lotId === lot.id && dv.data.device.clash.length === 0, '**دستگاه ثبت شد، بی‌تعارض**');
+  const dv3 = await A(`/visits/${v3.id}/service/device`, { lotId: lot.id }, 'PUT');
+  ok(dv3.data?.device?.lotId === lot.id && dv3.data.device.clash.length === 0, '**همان دستگاه برای بیمارِ بعدیِ همان بیمارستان تعارض نیست** (پشتِ هم)', JSON.stringify(dv3.data?.device));
+  await A(`/visits/${v3.id}/service/device`, { lotId: null }, 'PUT');
   const dv2 = await A(`/visits/${v2.id}/service/device`, { lotId: lot.id }, 'PUT');
-  ok(dv2.data?.device?.clash?.length === 1 && dv2.data.device.clash[0].visitId === v1.id, '**همان دستگاه همان روز سرِ مراجعهٔ دیگر هشدار می‌دهد**', JSON.stringify(dv2.data?.device));
+  ok(dv2.data?.device?.clash?.length === 1 && dv2.data.device.clash[0].visitId === v1.id, '**همان دستگاه همان روز در بیمارستانِ دیگر هشدار می‌دهد**', JSON.stringify(dv2.data?.device));
   const opts2 = await A(`/visits/${v2.id}/service/devices`);
   ok(opts2.data?.find((d) => d.lotId === lot.id)?.usedBy?.length === 1, 'فهرستِ دستگاه‌ها می‌گوید سرِ کدام مراجعه است');
   await A(`/visits/${v2.id}/service/device`, { lotId: null }, 'PUT');
@@ -137,7 +143,7 @@ try {
   } finally { await browser.close(); }
   ok(errs.length === 0, 'بی‌خطای JS', errs[0]);
 } finally {
-  for (const v of [v1, v2].filter((x) => x?.id)) {
+  for (const v of [v1, v2, v3].filter((x) => x?.id)) {
     await db.document.deleteMany({ where: { visitId: v.id } }).catch(() => {});
     await db.visitCrew.deleteMany({ where: { visitId: v.id } }).catch(() => {});
   }
