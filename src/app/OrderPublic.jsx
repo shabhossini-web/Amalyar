@@ -132,8 +132,10 @@ export default function OrderPublic() {
             {(row.items ?? []).length > 1 && (
               <ul className="op-check" aria-label="موردهای درخواستی">
                 {row.items.map((it) => {
+                  /* پیش از اولین بررسی «نرسیده» دروغ است — شاید همه را فرستاده باشد و هنوز کسی ندیده. */
+                  const reviewed = state === 'reviewed' || state === 'needs_action';
                   const got = (row.receivedItems ?? []).includes(it);
-                  return <li key={it} className={got ? 'ok' : ''}>{got ? <CheckCircle width="14" height="14" /> : <Clock width="14" height="14" />}<bdi>{it}</bdi><small>{got ? 'رسید' : 'هنوز نرسیده'}</small></li>;
+                  return <li key={it} className={got ? 'ok' : ''}>{got ? <CheckCircle width="14" height="14" /> : <Clock width="14" height="14" />}<bdi>{it}</bdi><small>{got ? 'رسید' : reviewed ? 'هنوز نرسیده' : 'منتظرِ بررسی'}</small></li>;
                 })}
               </ul>
             )}
