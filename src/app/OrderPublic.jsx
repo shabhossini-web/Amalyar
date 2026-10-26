@@ -48,13 +48,12 @@ export default function OrderPublic() {
   const [adding, setAdding] = useState(false);
   const [notice, setNotice] = useState('');
 
+  const reload = () => api(`/public/order/${token}`).then(setRow);
   useEffect(() => {
     document.title = 'عمل‌یار — درخواستِ پزشک';
     fetchFace(); // تم و رنگِ مطب — این صفحه بیرونِ ConfigProvider است (بازبینیِ UX، بندِ ۹۴)
-    api(`/public/order/${token}`)
-      .then(setRow)
-      .catch((e) => setErr(e.message));
-  }, [token]);
+    reload().catch((e) => setErr(e.message));
+  }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * ⚠️ هر فایل همان لحظه می‌رود و به سفارش وصل می‌شود، ولی وضعیت را جلو
@@ -72,7 +71,7 @@ export default function OrderPublic() {
     /* ⚠️ فایل خودش یک پاسخِ کامل است — جوابِ آزمایش معمولاً فقط یک عکس است.
        تا دیروز همین‌جا «متن یا لینکِ پاسخ را وارد کنید» می‌گرفت و بیمار مجبور
        بود چیزی بنویسد. سرور در W0.8 بازش کرد؛ این شرط هم باید همان را بگوید. */
-    if (!f.text.trim() && !f.link.trim() && !files) {
+    if (!f.text.trim() && !f.link.trim() && !files && !(row?.drafts > 0)) {
       setErr('متن، لینک یا فایلِ پاسخ را بفرستید'); return;
     }
     setBusy(true); setErr('');
@@ -82,8 +81,9 @@ export default function OrderPublic() {
       });
       setSent(res?.status && T[res.status] ? res.status : 'answered');
       /* تأییدِ صریح — بیمار باید بداند فرستاده‌اش رسید، نه اینکه با خطا دوباره بفرستد. */
-      setNotice(append ? 'ثبتِ مجدد انجام شد — موارد تازه به پاسخِ قبلی اضافه شد' : 'پاسخ ثبت شد');
-      setRow((r) => (r ? { ...r, sentFiles: (r.sentFiles ?? 0) + files } : r));
+      /* «هر ارسال، پاسخِ جدا»: ارسالِ دوباره پاسخِ تازه‌ای با تاریخِ خودش می‌سازد، نه بازنویسیِ قبلی. */
+      setNotice(append ? 'ثبتِ مجدد انجام شد — پاسخِ تازه برای پزشک رفت' : 'پاسخ ثبت شد و برای پزشک رفت');
+      reload().catch(() => {});
       setF({ text: '', link: '', user: '', pass: '' });
       setFiles(0);
       setAdding(false);
@@ -128,15 +128,38 @@ export default function OrderPublic() {
             )}
             {state === 'needs_action' && row.reviewNote && <p className="op-note op-review">{row.reviewNote}</p>}
             {notice && <p className="op-notice" role="status"><CheckCircle width="15" height="15" /> {notice}</p>}
-            {row.sentFiles > 0 && <small className="op-hint">تا حالا {faNum(row.sentFiles)} فایل فرستاده‌اید.</small>}
+            {/* چک‌لیستِ درخواست — پزشک هنگامِ بررسی «رسید» می‌زند؛ بیمار می‌بیند چه مانده. */}
+            {(row.items ?? []).length > 1 && (
+              <ul className="op-check" aria-label="موردهای درخواستی">
+                {row.items.map((it) => {
+                  const got = (row.receivedItems ?? []).includes(it);
+                  return <li key={it} className={got ? 'ok' : ''}>{got ? <CheckCircle width="14" height="14" /> : <Clock width="14" height="14" />}<bdi>{it}</bdi><small>{got ? 'رسید' : 'هنوز نرسیده'}</small></li>;
+                })}
+              </ul>
+            )}
+            {(row.responses ?? []).length > 0 && (
+              <div className="op-history">
+                <small className="op-hint">پاسخ‌هایی که فرستاده‌اید</small>
+                <ul>
+                  {row.responses.map((r) => (
+                    <li key={r.seq} className={`st-${r.status}`}>
+                      <b>پاسخِ {faNum(r.seq)}</b>
+                      <span>{faDate(r.createdAt)}{r.files ? ` · ${faNum(r.files)} فایل` : ''}{r.hasText ? ' · توضیح' : ''}{r.hasLink ? ' · لینک' : ''}</span>
+                      <i>{r.statusFa}</i>
+                      {r.reviewNote && <em>{r.reviewNote}</em>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {canAppend && !adding && (
               <button type="button" className="op-more" onClick={() => setAdding(true)}>
-                افزودنِ فایل یا توضیحِ تازه
+                فرستادنِ پاسخِ تازه (فایل یا توضیح)
               </button>
             )}
             {open && (
               <div className="op-answer">
-                <h2>{canAnswer ? 'ثبتِ پاسخ' : 'افزودن به پاسخ'}</h2>
+                <h2>{canAnswer ? 'ثبتِ پاسخ' : 'پاسخِ تازه'}</h2>
                 <p className="op-hint">
                   عکسِ برگهٔ جواب را بفرستید، یا اگر جوابتان روی سایتِ آزمایشگاه است لینکش را بگذارید.
                 </p>
@@ -169,14 +192,16 @@ export default function OrderPublic() {
                     disabled={busy}
                     onSave={async (file) => { await upload(file); }}
                   />
-                  {files > 0 && <small className="op-hint">{faNum(files)} فایل پیوست شد.</small>}
+                  {(files > 0 || row.drafts > 0) && (
+                    <small className="op-hint op-drafts">{faNum(Math.max(files, row.drafts ?? 0))} فایل آمادهٔ ارسال است — تا «ارسال» را نزنید برای پزشک نمی‌رود.</small>
+                  )}
                 </div>
                 <label className="db-field"><span>توضیح (اختیاری)</span>
                   <textarea rows={3} value={f.text} onChange={(e) => setF((s) => ({ ...s, text: e.target.value }))} />
                 </label>
                 {err && <p className="op-err-line">{err}</p>}
                 <button type="button" className="op-send" disabled={busy} onClick={() => submit(!canAnswer)}>
-                  {busy ? 'در حالِ ثبت…' : canAnswer ? 'ثبتِ پاسخ' : 'افزودن'}
+                  {busy ? 'در حالِ ارسال…' : canAnswer ? 'ارسالِ پاسخ' : 'ارسالِ پاسخِ تازه'}
                 </button>
               </div>
             )}

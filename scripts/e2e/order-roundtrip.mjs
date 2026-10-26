@@ -47,7 +47,7 @@ try {
   const visit = await db.visit.create({ data: { patientId, seq: 1, kind: 'clinic' } });
 
   console.log('۱) صدای پزشک = توضیحِ درخواست');
-  const order = (await api('/orders/lab', { patientId, visitId: visit.id, tests: ['CBC diff'], note: 'ناشتا بروید' })).data;
+  const order = (await api('/orders/lab', { patientId, visitId: visit.id, tests: ['CBC diff', 'FBS'], note: 'ناشتا بروید' })).data;
   ok(order?.status === 'draft', 'سفارش ساخته شد');
   const voice = await staffUpload(patientId, visit.id, wav(), 'note.wav', 'audio/wav', 'توضیحِ صوتیِ پزشک — درخواستِ آزمایش');
   ok(voice.status === 201 || voice.status === 200, 'صدای پزشک بارگذاری شد', JSON.stringify(voice.data).slice(0, 120));
@@ -55,6 +55,8 @@ try {
   ok(withVoice.data?.status === 'draft', '**صدای پزشک وضعیت را «پاسخ آمد» نمی‌کند**', withVoice.data?.status);
   ok(withVoice.data?.documents?.find((d) => d.id === voice.data.id)?.requestNote === true, 'شیت صدا را «توضیحِ درخواست» می‌شناسد');
   await db.labOrder.update({ where: { id: order.id }, data: { status: 'sent', sentAt: new Date() } });
+  ok((await api(`/orders/lab/${order.id}`, { tests: ['CBC diff'] }, 'PATCH')).status === 409, '**درخواستِ ارسال‌شده قفل است** (تغییرِ آزمایش‌ها ۴۰۹)');
+  ok((await api(`/orders/lab/${order.id}`, { documentIds: [] }, 'PATCH')).status === 200, 'ذخیرهٔ بی‌تغییرِ درخواست رد نمی‌شود');
 
   const view = (await pub(`/public/order/${order.token}`, undefined, 'GET')).data;
   ok(view?.voices?.length === 1 && view.voices[0].id === voice.data.id, '**صفحهٔ بیمار صدای پزشک را دارد**');
@@ -73,21 +75,33 @@ try {
   const first = await pub(`/public/order/${order.token}/answer`, { text: 'جوابِ آزمایش' });
   ok(first.data?.status === 'answered', 'پاسخ ثبت شد');
 
-  console.log('\n۳) افزودنِ عکسِ بیشتر — بی‌خطا');
+  console.log('\n۳) عکسِ بیشتر = پاسخِ تازه، بی‌خطا');
   ok((await patientUpload(order.token, png(), 'p2.png', 'image/png')).status === 201, 'عکسِ دوم بارگذاری شد');
+  ok((await pub(`/public/order/${order.token}`, undefined, 'GET')).data?.drafts === 1, 'صفحهٔ بیمار می‌گوید ۱ فایل آمادهٔ ارسال است');
   const add = await pub(`/public/order/${order.token}/answer`, { append: true });
-  ok(add.status === 200 || add.status === 201, '**«افزودن» پس از بارگذاری خطای «قبلاً ثبت شده» نمی‌دهد**', JSON.stringify(add.data));
-  ok(add.data?.appended === 0 && add.data?.files >= 1, 'پاسخ می‌گوید فایل‌ها رسیده‌اند');
-  await db.document.updateMany({ where: { refType: 'lab_order', refId: order.id }, data: { createdAt: new Date(Date.now() - 5 * 3600_000) } });
-  ok((await pub(`/public/order/${order.token}/answer`, { append: true })).status === 400, '«افزودن»ِ واقعاً خالی هنوز رد می‌شود');
+  ok(add.status === 200 || add.status === 201, '**ارسالِ دوباره پس از بارگذاری خطای «قبلاً ثبت شده» نمی‌دهد**', JSON.stringify(add.data));
+  const resps = await db.orderResponse.findMany({ where: { orderRef: 'lab_order', orderId: order.id }, orderBy: { seq: 'asc' }, include: { documents: true } });
+  ok(resps.length === 2 && resps[0].documents.some((d) => d.fileName === 'p1.png') && resps[1].documents.some((d) => d.fileName === 'p2.png'),
+    '**هر ارسال پاسخِ جدای خودش با مدارکِ خودش**', resps.map((r) => `${r.seq}:${r.documents.map((d) => d.fileName)}`).join(' | '));
+  ok(resps[0].text === 'جوابِ آزمایش' && !resps[1].text, 'متنِ پاسخِ اول در پاسخِ دوم تکرار نمی‌شود');
+  ok((await pub(`/public/order/${order.token}/answer`, { append: true })).status === 400, 'ارسالِ خالی (بی‌فایلِ تازه) رد می‌شود');
 
   console.log('\n۴) «بررسی شد» و سپس چیزِ تازه ← دوباره بررسی‌پذیر');
-  ok((await api(`/orders/lab/${order.id}/review`, { status: 'reviewed' })).data?.status === 'reviewed', 'بررسی شد');
-  ok((await patientUpload(order.token, png(), 'p3.png', 'image/png')).status === 201, 'بیمار پس از بررسی عکسِ تازه فرستاد');
+  const rv = await api(`/orders/lab/${order.id}/review`, { status: 'reviewed', receivedItems: ['FBS', 'جعلی'] });
+  ok(rv.data?.status === 'reviewed', 'بررسی شد');
+  ok(JSON.stringify(rv.data?.receivedItems) === '["FBS"]', '**چک‌لیست: فقط موردِ درخواستی «رسید» می‌خورد**', JSON.stringify(rv.data?.receivedItems));
+  ok(rv.data?.responses?.every((r) => r.status === 'reviewed'), 'تصمیم روی پاسخ‌های بررسی‌نشده نشست');
+  const pv = (await pub(`/public/order/${order.token}`, undefined, 'GET')).data;
+  ok(pv?.items?.length === 2 && JSON.stringify(pv?.receivedItems) === '["FBS"]', '**بیمار می‌بیند کدام مورد رسیده و کدام نه**');
+  ok(pv?.responses?.length === 2 && pv.responses[1].statusFa === 'بررسی شد', 'بیمار فهرستِ پاسخ‌هایش را با وضعیت می‌بیند');
+  ok((await patientUpload(order.token, png(), 'p3.png', 'image/png')).status === 201, 'بیمار پس از بررسی عکسِ تازه گذاشت');
+  const draftView = (await api(`/orders/lab/${order.id}`, { documentIds: [] }, 'PATCH')).data;
+  ok(draftView?.status === 'reviewed' && !draftView?.documents?.some((d) => d.fresh), 'پیش‌نویسِ ارسال‌نشده کارِ بررسی را باز نمی‌کند');
+  ok((await pub(`/public/order/${order.token}/answer`, { append: true })).data?.status === 'answered', 'ارسالِ تازه → دوباره «پاسخ آمد»');
   const rows = (await api(`/orders?patientId=${patientId}`, undefined, 'GET')).data;
   const live = (Array.isArray(rows) ? rows : rows?.lab ?? rows?.orders ?? []).find?.((o) => o.id === order.id && (o.kind ?? 'lab') === 'lab')
     ?? (await api(`/orders/lab/${order.id}`, {}, 'PATCH')).data;
-  ok(live?.documents?.filter((d) => d.fresh).length === 1, '**عکسِ تازه «تازه پس از بررسی» نشان دارد**');
+  ok(live?.responses?.at(-1)?.status === 'new' && live?.responses?.at(-1)?.documents?.length === 1, '**ارسالِ تازه کارتِ «در انتظارِ بررسی»ِ خودش را دارد**');
   ok(live?.documents?.some((d) => d.from === 'patient') && live?.documents?.some((d) => d.from === 'staff'), 'هر مدرک می‌گوید از کیست');
   const again = await api(`/orders/lab/${order.id}/review`, { status: 'needs_action', reviewNote: 'صفحهٔ دوم ناخواناست' });
   ok(again.status === 200 || again.status === 201, '**سفارشِ بررسی‌شده با موادِ تازه دوباره بررسی می‌شود**', JSON.stringify(again.data).slice(0, 120));
@@ -101,8 +115,9 @@ try {
   ok(re.data?.status === 'answered', 'با عکسِ تازه دوباره «پاسخ آمد»');
   const fresh = await db.labOrder.findUnique({ where: { id: order.id } });
   ok(fresh.resultText === 'جوابِ آزمایش', '**ارسالِ دومِ بی‌متن متنِ قبلی را پاک نمی‌کند**', String(fresh.resultText));
-  ok((await patientUpload(order.token, png(), 'p5.png', 'image/png')).status === 201
-    && (await patientUpload(order.token, wav(), 'p6.wav', 'audio/wav')).status === 400, 'سقفِ ۵ فایل فقط فایل‌های بیمار را می‌شمارد (صدای پزشک جزوش نیست)');
+  let up = 0;
+  for (let i = 0; i < 5; i++) up += (await patientUpload(order.token, png(), `d${i}.png`, 'image/png')).status === 201 ? 1 : 0;
+  ok(up === 5 && (await patientUpload(order.token, wav(), 'p6.wav', 'audio/wav')).status === 400, 'سقفِ ۵ فایل در هر ارسال');
 } finally {
   if (patientId) {
     await db.document.deleteMany({ where: { patientId } }).catch(() => {});

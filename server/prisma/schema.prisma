@@ -1127,6 +1127,7 @@ model Patient {
   episodes  Episode[]
   /// علائمِ حیاتی در همهٔ مراجعات (بستهٔ ۶ج).
   vitals    VitalSign[]
+  orderResponses OrderResponse[]
 }
 
 /// مدرکِ پزشکی — آزمایش، تصویربرداری، گزارش، رضایت‌نامه، مدرکِ هویتی…
@@ -1178,7 +1179,11 @@ model Document {
   /// مرحلهٔ مدرک نسبت به عمل: pre | intra | post. خالی = به عملِ مشخصی گره
   /// نخورده (کارتِ شناسایی، فیش، سابقه) — و همهٔ مدارکِ پیش از این ستون.
   phase String? @map("phase")
+  /// پاسخِ سفارشی که این مدرک با آن فرستاده شد (هر ارسالِ بیمار یک پاسخِ جدا). خالی + کارکنان + صدا = توضیحِ درخواست.
+  responseId Int? @map("response_id")
+  response   OrderResponse? @relation(fields: [responseId], references: [id], onDelete: SetNull)
   @@index([visitId, phase])
+  @@index([responseId])
 
 }
 
@@ -2794,6 +2799,8 @@ model LabOrder {
   reviewNote String? @map("review_note")
   reviewedById Int? @map("reviewed_by_id")
   reviewedAt DateTime? @map("reviewed_at")
+  /// چک‌لیستِ کامل‌بودن: کدام موردِ درخواستی (آزمایش/تصویر/مشاوره) رسیده — کارکنان هنگامِ بررسی تیک می‌زنند.
+  receivedItems String[] @default([]) @map("received_items")
 
 }
 
@@ -2823,6 +2830,8 @@ model ImagingOrder {
   reviewNote String? @map("review_note")
   reviewedById Int? @map("reviewed_by_id")
   reviewedAt DateTime? @map("reviewed_at")
+  /// چک‌لیستِ کامل‌بودن: کدام موردِ درخواستی (آزمایش/تصویر/مشاوره) رسیده — کارکنان هنگامِ بررسی تیک می‌زنند.
+  receivedItems String[] @default([]) @map("received_items")
 
 }
 
@@ -2849,6 +2858,8 @@ model ConsultOrder {
   reviewNote String? @map("review_note")
   reviewedById Int? @map("reviewed_by_id")
   reviewedAt DateTime? @map("reviewed_at")
+  /// چک‌لیستِ کامل‌بودن: کدام موردِ درخواستی (آزمایش/تصویر/مشاوره) رسیده — کارکنان هنگامِ بررسی تیک می‌زنند.
+  receivedItems String[] @default([]) @map("received_items")
 
 }
 
@@ -3168,4 +3179,33 @@ model VisitCrew {
   @@unique([visitId, accountId])
   @@index([accountId])
   @@map("visit_crew")
+}
+
+/// یک ارسالِ پاسخ برای یک درخواستِ پاراکلینیک — «هر ارسال، پاسخِ جدا» (تصمیمِ مالک ۱۴۰۵/۰۸/۰۴).
+/// تا دیروز درخواست و پاسخ یک ردیف بودند و هر ارسالِ تازه پاسخِ قبلی را می‌پوشاند («یک برگ کاغذ که رد و بدل می‌شود»).
+/// حالا هر ارسال تاریخ، فرستنده، مدارک و تصمیمِ بررسیِ خودش را دارد. `orderRef` همان `refType`ِ مدارک است.
+model OrderResponse {
+  id           Int        @id @default(autoincrement())
+  orderRef     String     @map("order_ref")
+  orderId      Int        @map("order_id")
+  patient      Patient    @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  patientId    Int        @map("patient_id")
+  seq          Int
+  /// patient | staff — بیمار از لینک فرستاد، یا کارکنان جوابِ رسیده را ثبت کردند.
+  source       String     @default("patient")
+  text         String?
+  link         String?
+  linkUser     String?    @map("link_user")
+  linkPass     String?    @map("link_pass")
+  /// new | reviewed | needs_action
+  status       String     @default("new")
+  reviewNote   String?    @map("review_note")
+  reviewedById Int?       @map("reviewed_by_id")
+  reviewedAt   DateTime?  @map("reviewed_at")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  documents    Document[]
+
+  @@unique([orderRef, orderId, seq])
+  @@index([patientId])
+  @@map("order_responses")
 }

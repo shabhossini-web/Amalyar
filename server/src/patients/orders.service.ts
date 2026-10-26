@@ -20,6 +20,9 @@ import { emitSms, orderTokenIn } from '../reminders/send-reminders';
 export const ORDER_KINDS = ['lab', 'imaging', 'consult', 'referral'] as const;
 export type OrderKind = (typeof ORDER_KINDS)[number];
 
+const RESPONSE_FA: Record<string, string> = { new: 'در انتظارِ بررسی', reviewed: 'بررسی شد', needs_action: 'ناقص' };
+/** فیلدهای **درخواست** — پس از ارسال قفل‌اند (تصمیمِ مالک ۱۴۰۵/۰۸/۰۴). */
+const REQUEST_FIELDS = ['tests', 'modalities', 'region', 'specialty', 'doctorName', 'note', 'dueDate'];
 /** وضعیت‌هایی که «پاسخ رسیده» — پس از این‌ها فقط افزودن معنا دارد، نه پاسخِ تازه. */
 const ANSWERED_STATUSES = ['answered', 'in_review', 'reviewed'];
 /** قرارداد §۵ — سقفِ فایلِ پاسخ به‌ازای هر سفارش و حجمِ هر فایل. */
@@ -141,16 +144,59 @@ export class OrdersService {
       ...d,
       from: d.uploadedById ? 'staff' : 'patient',
       requestNote: !!d.uploadedById && String(d.mimeType ?? '').startsWith('audio/'),
-      fresh: !!row.reviewedAt && !d.uploadedById && d.createdAt > row.reviewedAt,
+      fresh: !!row.reviewedAt && !d.uploadedById && !!d.responseId && d.createdAt > row.reviewedAt,
     }));
-    return { ...this.view(kind, row), documents };
+    const resps = await db.orderResponse.findMany({ where: { orderRef: `${kind}_order`, orderId: row.id }, orderBy: { seq: 'asc' } });
+    const responses = resps.map((r: any) => ({
+      id: r.id, seq: r.seq, source: r.source, sourceFa: r.source === 'staff' ? 'ثبتِ کارکنان' : 'از بیمار',
+      text: r.text, link: r.link, linkUser: r.linkUser, linkPass: r.linkPass,
+      status: r.status, statusFa: RESPONSE_FA[r.status] ?? r.status, reviewNote: r.reviewNote, reviewedAt: r.reviewedAt, createdAt: r.createdAt,
+      documents: documents.filter((d: any) => d.responseId === r.id && !d.contentText && !d.externalUrl),
+    }));
+    return {
+      ...this.view(kind, row), documents, responses,
+      /* صدای کارکنان روی سفارش = توضیحِ درخواست؛ فایل‌های بی‌پاسخِ بیمار = پیش‌نویسِ ارسال‌نشده. */
+      requestNotes: documents.filter((d: any) => d.requestNote && !d.responseId),
+      items: this.items(kind, row),
+      receivedItems: row.receivedItems ?? [],
+    };
   }
 
-  /** مدارکِ بیمار پس از آخرین تصمیمِ بررسی. */
-  private newSinceReview(kind: OrderKind, row: any, tx: any): Promise<number> {
-    if (!row.reviewedAt) return Promise.resolve(0);
+  /** موردهای درخواستی — ردیف‌های چک‌لیستِ کامل‌بودن. */
+  private items(kind: OrderKind, row: any): string[] {
+    if (kind === 'lab') return [...(row.tests ?? [])];
+    if (kind === 'imaging') return [...(row.modalities ?? [])];
+    if (kind === 'consult') return [row.specialty?.trim() ? `مشاورهٔ ${row.specialty.trim()}` : 'پاسخِ مشاوره'];
+    return [];
+  }
+
+  /**
+   * یک ارسالِ پاسخ → یک ردیفِ `OrderResponse` (تصمیمِ مالک ۱۴۰۵/۰۸/۰۴).
+   *
+   * مدارکی که با همین ارسال آمده‌اند به آن می‌پیوندند: برای بیمار هر مدرکِ بی‌پاسخی که خودش گذاشته
+   * (پیش‌نویس‌های بارگذاری‌شده + متن/لینکی که همین حالا ساخته شد)؛ برای کارکنان مدرکِ بی‌پاسخِ کارکنان
+   * جز صدا (صدای کارکنان توضیحِ **درخواست** است، نه پاسخ).
+   */
+  private async recordResponse(kind: OrderKind, row: any, resp: { text?: string | null; link?: string | null; user?: string | null; pass?: string | null },
+    actorId: number | null, tx: any) {
+    const ref = `${kind}_order`;
+    const last = await tx.orderResponse.findFirst({ where: { orderRef: ref, orderId: row.id }, orderBy: { seq: 'desc' }, select: { seq: true } });
+    const source = actorId === null ? 'patient' : 'staff';
+    const r = await tx.orderResponse.create({ data: {
+      orderRef: ref, orderId: row.id, patientId: row.patientId, seq: (last?.seq ?? 0) + 1, source,
+      text: resp.text || null, link: resp.link || null, linkUser: resp.user || null, linkPass: resp.pass || null,
+    } });
+    await tx.document.updateMany({ where: {
+      refType: ref, refId: row.id, patientId: row.patientId, deletedAt: null, responseId: null,
+      ...(source === 'patient' ? { uploadedById: null } : { uploadedById: { not: null }, NOT: { mimeType: { startsWith: 'audio/' } } }),
+    }, data: { responseId: r.id } });
+    return r;
+  }
+
+  /** پیش‌نویس‌های بیمار — فایل‌هایی که بارگذاری شده‌اند ولی هنوز با «ارسال» به پاسخی نپیوسته‌اند. */
+  private draftCount(kind: OrderKind, row: any, tx: any): Promise<number> {
     return tx.document.count({ where: { refType: `${kind}_order`, refId: row.id, patientId: row.patientId,
-      deletedAt: null, uploadedById: null, createdAt: { gt: row.reviewedAt } } });
+      deletedAt: null, uploadedById: null, responseId: null } });
   }
 
   /** An answer and its immutable record documents share the order lock and outbox transaction. */
@@ -158,8 +204,17 @@ export class OrdersService {
     return answerDocuments(kind, row, data, tx, actorId);
   }
 
-  private async answered(kind: OrderKind, row: any, data: any, tx: any, actorId: number | null) {
-    await this.answerDocuments(kind, row, data, tx, actorId);
+  private async answered(kind: OrderKind, row: any, data: any, tx: any, actorId: number | null,
+    resp?: { text?: string | null; link?: string | null; user?: string | null; pass?: string | null }) {
+    /* مدرکِ متن/لینک از **همین ارسال** ساخته می‌شود، نه از مقدارِ نگه‌داشته‌شدهٔ سفارش. */
+    await this.answerDocuments(kind, row, resp ? (kind === 'consult'
+      ? { answerText: resp.text ?? null, answerLink: resp.link ?? null }
+      : { resultText: resp.text ?? null, resultLink: resp.link ?? null, resultUser: resp.user ?? null, resultPass: resp.pass ?? null }) : data, tx, actorId);
+    /* «هر ارسال، پاسخِ جدا» — همین پاسخ با تاریخ و فرستنده و مدارکش ثبت می‌شود. */
+    await this.recordResponse(kind, row, resp ?? {
+      text: data.resultText ?? data.answerText ?? null, link: data.resultLink ?? data.answerLink ?? null,
+      user: data.resultUser ?? null, pass: data.resultPass ?? null,
+    }, actorId, tx);
     const fresh = await this.table(kind, tx).update({ where: { id: row.id }, data: {
       ...data, status: 'answered', reviewNote: null, reviewedAt: null, reviewedById: null,
     } });
@@ -214,14 +269,26 @@ export class OrdersService {
     return this.prisma.$transaction(async tx => {
       const row = await this.locked(kind, id, tx);
       await this.assertAccess(row.patientId, user, tx);
-      if (row.status === status && (status === 'in_review' || row.reviewNote === note)) return this.withDocuments(kind, row, tx);
-      /* سفارشِ «بررسی شد» که بیمار بعدش چیزِ تازه فرستاده دوباره بررسی‌پذیر است — وگرنه کارِ
-         «بررسیِ نتیجه» باز می‌شد ولی شیت دکمه‌ای نداشت و سرور هم رد می‌کرد. */
-      const reopened = row.status === 'reviewed' && await this.newSinceReview(kind, row, tx) > 0;
-      if (!['answered', 'in_review'].includes(row.status) && !reopened) throw new ConflictException('این سفارش اکنون آماده بررسی نیست');
+      /* چک‌لیستِ کامل‌بودن — فقط موردهای همین درخواست؛ ورودیِ دلخواه دور ریخته می‌شود. */
+      const items = this.items(kind, row);
+      const received = Array.isArray(dto?.receivedItems)
+        ? items.filter((it) => dto.receivedItems.includes(it)) : undefined;
+      const sameItems = received === undefined || JSON.stringify(received) === JSON.stringify(row.receivedItems ?? []);
+      if (row.status === status && (status === 'in_review' || row.reviewNote === note) && sameItems) return this.withDocuments(kind, row, tx);
+      if (!['answered', 'in_review'].includes(row.status) && !(row.status === status && received !== undefined)) {
+        throw new ConflictException('این سفارش اکنون آماده بررسی نیست');
+      }
+      const now = new Date();
       const fresh = await this.table(kind, tx).update({ where: { id }, data: { status,
-        ...(status !== 'in_review' ? { reviewNote: note, reviewedById: user.id, reviewedAt: new Date() } : {}),
+        ...(status !== 'in_review' ? { reviewNote: note, reviewedById: user.id, reviewedAt: now } : {}),
+        ...(received !== undefined && 'receivedItems' in row ? { receivedItems: received } : {}),
       } });
+      /* تصمیم روی **همان ارسال‌ها** هم می‌نشیند — هر پاسخی که هنوز بررسی نشده بود (پزشک همه را با هم دید)؛
+         پاسخ‌هایی که قبلاً تصمیم گرفته‌اند تصمیمِ خودشان را نگه می‌دارند. */
+      if (status !== 'in_review') {
+        await tx.orderResponse.updateMany({ where: { orderRef: `${kind}_order`, orderId: id, status: 'new' },
+          data: { status, reviewNote: note, reviewedById: user.id, reviewedAt: now } });
+      }
       if (status !== 'in_review') await this.events.emit({ type: `order.${status}`, patientId: row.patientId,
         visitId: row.visitId, refType: `${kind}_order`, refId: id, actorId: user.id,
         payload: status === 'needs_action' ? { reason: note } : undefined }, tx);
@@ -354,6 +421,17 @@ export class OrdersService {
       const row = await this.locked(kind, id, tx);
       await this.assertAccess(row.patientId, user, tx);
       const data = Object.fromEntries(Object.entries(this.clean(kind, dto ?? {})).filter(([, v]) => v !== undefined));
+      /* درخواستِ ارسال‌شده قفل است: بیمار همان را دیده و بر پایه‌اش پاسخ می‌دهد؛ تغییرِ بی‌صدای آن
+         پاسخ را از درخواستش جدا می‌کرد. برای تغییر، درخواستِ تازه بسازید. */
+      if (row.status !== 'draft') {
+        const same = (a: any, b: any) => (Array.isArray(a) || Array.isArray(b))
+          ? JSON.stringify(a ?? []) === JSON.stringify(b ?? [])
+          : (a instanceof Date || b instanceof Date) ? (a ? new Date(a).getTime() : null) === (b ? new Date(b).getTime() : null)
+            : (a ?? null) === (b ?? null);
+        if (REQUEST_FIELDS.some((k) => k in data && k in row && !same(data[k], row[k]))) {
+          throw new ConflictException('این درخواست برای بیمار فرستاده شده و قفل است — برای تغییر، درخواستِ تازه بسازید');
+        }
+      }
       const filesAdded = await this.attachFiles(kind, row, dto?.documentIds, tx);
       const changed = filesAdded || ['resultText', 'resultLink', 'answerText', 'answerLink', 'resultUser', 'resultPass']
         .some(k => k in data && data[k] !== row[k]);
@@ -361,7 +439,13 @@ export class OrdersService {
       const fresh = changed && hasAnswer ? await this.answered(kind, row, { ...data,
         ...Object.fromEntries(['resultText', 'resultLink', 'answerText', 'answerLink', 'resultUser', 'resultPass']
           .filter(k => k in row).map(k => [k, k in data ? data[k] : row[k]])),
-      }, tx, user.id) : await this.table(kind, tx).update({ where: { id }, data });
+      }, tx, user.id, {
+        /* فقط آنچه همین ذخیره تازه آورده — نه تکرارِ متنِ پاسخِ قبلی در پاسخِ تازه. */
+        text: (['resultText', 'answerText'].map((k) => (k in data && data[k] !== row[k] ? data[k] : null)).find(Boolean) ?? null) as string | null,
+        link: (['resultLink', 'answerLink'].map((k) => (k in data && data[k] !== row[k] ? data[k] : null)).find(Boolean) ?? null) as string | null,
+        user: ('resultUser' in data && data.resultUser !== row.resultUser ? data.resultUser : null) as string | null,
+        pass: ('resultPass' in data && data.resultPass !== row.resultPass ? data.resultPass : null) as string | null,
+      }) : await this.table(kind, tx).update({ where: { id }, data });
       await this.audit.record({ actorId: user.id, action: `order.${kind}.update`, entityType: `${kind}_order`,
         entityId: id, after: { answered: changed && hasAnswer } }, tx);
       return this.withDocuments(kind, fresh, tx);
@@ -495,8 +579,16 @@ export class OrdersService {
             uploadedById: { not: null }, mimeType: { startsWith: 'audio/' } },
           select: { id: true, title: true }, orderBy: { id: 'asc' },
         })).map((d) => ({ id: d.id, title: d.title })),
-        /* آنچه بیمار تا حالا فرستاده — صفحهٔ بیمار شمارش را نشان می‌دهد تا «دوباره بفرستم؟» حدسی نباشد. */
-        sentFiles: await this.patientFileCount(kind, row, this.prisma),
+        /* چک‌لیست: موردهای درخواستی و آنچه پزشک «رسید» زده — بیمار می‌بیند چه مانده. */
+        items: this.items(kind, row),
+        receivedItems: (row as any).receivedItems ?? [],
+        /* پاسخ‌های قبلیِ بیمار، هرکدام با تاریخ و وضعیتِ بررسی (بی‌متنِ کامل — لینک ممکن است دستِ دیگری بچرخد). */
+        responses: (await this.prisma.orderResponse.findMany({ where: { orderRef: `${kind}_order`, orderId: row.id }, orderBy: { seq: 'asc' },
+          include: { _count: { select: { documents: { where: { deletedAt: null, contentText: null, externalUrl: null } } } } } }))
+          .map((r) => ({ seq: r.seq, createdAt: r.createdAt, status: r.status, statusFa: RESPONSE_FA[r.status] ?? r.status,
+            reviewNote: r.status === 'needs_action' ? r.reviewNote : null, files: r._count.documents, hasText: !!r.text, hasLink: !!r.link })),
+        /* فایل‌هایی که بارگذاری شده‌اند ولی هنوز با «ارسال» نرفته‌اند — بیمار باید بداند. */
+        drafts: await this.draftCount(kind, row, this.prisma),
       };
     }
     throw new NotFoundException('این نشانی معتبر نیست یا منقضی شده');
@@ -541,13 +633,15 @@ export class OrdersService {
       return this.prisma.$transaction(async tx => {
         const current = await this.locked(kind, row.id, tx);
         if (!await tx.patient.findFirst({ where: { id: current.patientId, deletedAt: null }, select: { id: true } })) throw new NotFoundException('پرونده پیدا نشد');
-        /* فقط موادِ خودِ بیمار — صدای پزشک روی همین سفارش «پاسخ» نیست. */
-        const files = await this.patientFileCount(kind, current, tx);
-        if (!text && !link && !files) throw new BadRequestException('متن، لینک یا فایلِ پاسخ را بفرستید');
-        /* پس از «ناقص است» همان موادِ قبلی دوباره «پاسخ» نمی‌شود: باید چیزِ تازه‌ای آمده باشد. */
-        if (current.status === 'needs_action' && !text && !link && !await this.newSinceReview(kind, current, tx)) {
-          throw new BadRequestException('پزشک پاسخِ قبلی را ناقص دانسته — فایل یا توضیحِ تازه بفرستید');
+        /* «هر ارسال، پاسخِ جدا»: فقط موادِ **همین** ارسال (پیش‌نویس‌های بارگذاری‌شده + متن/لینکِ همین حالا) —
+           نه فایل‌های پاسخِ قبلی و نه صدای پزشک. */
+        const drafts = await this.draftCount(kind, current, tx);
+        if (!text && !link && !drafts) {
+          throw new BadRequestException(current.status === 'needs_action'
+            ? 'پزشک پاسخِ قبلی را ناقص دانسته — فایل یا توضیحِ تازه بفرستید'
+            : ANSWERED_STATUSES.includes(current.status) ? 'چیزی برای افزودن نیست — اول فایل یا توضیحِ تازه بگذارید' : 'متن، لینک یا فایلِ پاسخ را بفرستید');
         }
+        const resp = { text: text || null, link: link || null, user: str(dto?.user, 120) || null, pass: str(dto?.pass, 120) || null };
         /* متنِ خالیِ ارسالِ دوم متنِ قبلی را پاک نمی‌کند. */
         const keep = (v: string, k: string) => v || current[k] || null;
         const data: any = kind === 'consult' ? { answerText: keep(text, 'answerText'), answerLink: keep(link, 'answerLink') }
@@ -555,28 +649,17 @@ export class OrdersService {
             resultUser: str(dto?.user, 120) || current.resultUser || null, resultPass: str(dto?.pass, 120) || current.resultPass || null };
 
         if (['sent', 'needs_action'].includes(current.status)) {
-          await this.answered(kind, current, data, tx, null);
-          return { ok: true, status: 'answered' };
+          await this.answered(kind, current, data, tx, null, resp);
+          return { ok: true, status: 'answered', appended: 1 };
         }
         if (!append) throw new ConflictException('پاسخ قبلاً ثبت شده یا سفارش آماده پاسخ نیست');
         if (!ANSWERED_STATUSES.includes(current.status)) throw new ConflictException('این سفارش آماده پاسخ نیست');
 
-        /* افزودنِ متن/لینکِ تازه — مدرکِ تکراری دوباره ساخته نمی‌شود، پس
-           دوبار زدنِ همان دکمه کارِ بررسی را الکی باز نمی‌کند. */
-        const made = await this.answerDocuments(kind, current, data, tx, null);
-        if (!made) {
-          /* «افزودن» پس از بارگذاریِ فایل: فایل‌ها همان لحظهٔ بارگذاری ثبت شده‌اند (`publicUpload`) و
-             کارِ بررسی را هم باز کرده‌اند. تا ۱۴۰۵/۰۸/۰۴ این‌جا خطای «قبلاً ثبت شده» می‌آمد در حالی که
-             فایل‌ها واقعاً رسیده بودند — بیمار گیج می‌شد و دوباره می‌فرستاد (گزارشِ مالک). */
-          const recent = await tx.document.count({ where: { refType: `${kind}_order`, refId: current.id,
-            patientId: current.patientId, deletedAt: null, uploadedById: null, contentText: null, externalUrl: null,
-            createdAt: { gt: new Date(Date.now() - 2 * 3600_000) } } });
-          /* فقط «افزودنِ» بی‌متن و بی‌لینک: همان متنِ تکراری هنوز ۴۰۰ است (دوبار زدنِ دکمه). */
-          if (!recent || text || link) throw new BadRequestException('چیزی برای افزودن نیست — همین پاسخ قبلاً ثبت شده');
-          return { ok: true, status: current.status, appended: 0, files: recent };
-        }
-        await this.reopenReview(kind, current, tx, `order.${kind}.appended`, { added: made });
-        return { ok: true, status: current.status, appended: made };
+        /* ارسالِ تازه روی پاسخِ قبلی = **پاسخِ تازه** با تاریخِ خودش؛ سفارش دوباره «پاسخ آمد» می‌شود تا
+           پزشک همین ارسال را بررسی کند. تصمیمِ پاسخ‌های قبلی روی خودشان می‌ماند و متنِ خلاصهٔ سفارش
+           (پاسخِ اول) بازنویسی نمی‌شود — متنِ تازه مالِ همین پاسخ است. */
+        await this.answered(kind, current, {}, tx, null, resp);
+        return { ok: true, status: 'answered', appended: 1 };
       });
     }
     throw new NotFoundException('این نشانی معتبر نیست یا منقضی شده');
@@ -619,7 +702,7 @@ export class OrdersService {
         const current = await this.locked(kind, row.id, tx);
         if (!await tx.patient.findFirst({ where: { id: current.patientId, deletedAt: null }, select: { id: true } })) throw new NotFoundException('پرونده پیدا نشد');
         if (current.status === 'draft') throw new ConflictException('این سفارش هنوز برای شما ارسال نشده است');
-        if (await this.patientFileCount(kind, current, tx) >= MAX_ANSWER_FILES) {
+        if (await this.draftCount(kind, current, tx) >= MAX_ANSWER_FILES || await this.patientFileCount(kind, current, tx) >= MAX_ANSWER_FILES * 5) {
           throw new BadRequestException(`برای هر درخواست حداکثر ${faNum(MAX_ANSWER_FILES)} فایل می‌شود فرستاد`);
         }
         const doc = await tx.document.create({ data: {
@@ -630,12 +713,9 @@ export class OrdersService {
           fileName: (file.originalname || '').slice(0, 200) || 'file',
           mimeType: mime, sha256, size,
         } });
-        if (ANSWERED_STATUSES.includes(current.status)) {
-          await this.reopenReview(kind, current, tx, `order.${kind}.appended`, { documentId: doc.id });
-        } else {
-          await this.audit.record({ actorId: null, action: `order.${kind}.file`, entityType: `${kind}_order`,
-            entityId: current.id, after: { documentId: doc.id, size } }, tx);
-        }
+        /* پیش‌نویس است تا «ارسال» — همان لحظه به پاسخی نمی‌پیوندد و کارِ بررسی را باز نمی‌کند. */
+        await this.audit.record({ actorId: null, action: `order.${kind}.file`, entityType: `${kind}_order`,
+          entityId: current.id, after: { documentId: doc.id, size } }, tx);
         return { id: doc.id, name: doc.fileName, size: doc.size };
       });
     }
@@ -646,21 +726,5 @@ export class OrdersService {
   private patientFileCount(kind: OrderKind, row: any, tx: any): Promise<number> {
     return tx.document.count({ where: { refType: `${kind}_order`, refId: row.id,
       patientId: row.patientId, deletedAt: null, contentText: null, externalUrl: null, uploadedById: null } });
-  }
-
-  /**
-   * موادِ تازه روی سفارشی که قبلاً پاسخ داده شده: وضعیت و `reviewNote` دست
-   * نمی‌خورند، ولی `order.answered` می‌رود تا کارِ بررسی دوباره باز شود.
-   */
-  private async reopenReview(kind: OrderKind, row: any, tx: any, action: string, after: any) {
-    const visit = row.visitId ? await tx.visit.findUnique({ where: { id: row.visitId },
-      select: { surgeon: { select: { person: { select: { account: { select: { id: true, status: true } } } } } } } }) : null;
-    const doctor = visit?.surgeon?.person?.account;
-    await this.events.emit({ type: 'order.answered', patientId: row.patientId, visitId: row.visitId,
-      refType: `${kind}_order`, refId: row.id, actorId: null,
-      payload: { doctorId: doctor?.status === 'active' ? doctor.id : null, again: true },
-    }, tx);
-    await this.audit.record({ actorId: null, action, entityType: `${kind}_order`,
-      entityId: row.id, before: { status: row.status }, after }, tx);
   }
 }

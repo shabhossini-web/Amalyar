@@ -111,7 +111,10 @@ try {
      بود که مالک گزارشش کرد — دکمه را می‌زد، یک توستِ تیره می‌آمد و هیچ‌چیز ثبت
      نمی‌شد. حالا خلاصهٔ جواب در خودِ شیت هست و «بررسی شد» بدونِ یادداشتِ دوم
      باید کار کند؛ برچسبِ پیش‌فرض را سرور می‌گذارد. */
-  await page.locator('.od-result textarea').first().fill('نرمال بود');
+  /* ۱۴۰۵/۰۸/۰۴: کادرهای پاسخِ کارکنان در «ثبتِ پاسخِ تازه…» است — وقتی پاسخِ بیمار هست بسته است. */
+  const staffAns = page.locator('.od-staff-answer');
+  if (!(await staffAns.getAttribute('open').catch(() => null))) await staffAns.locator('summary').click();
+  await page.locator('.od-result .od-staff-answer textarea').first().fill('نرمال بود');
   await page.getByRole('button', { name: 'بررسی شد', exact: true }).click();
   await page.locator('.od-sheet').waitFor({ state: 'detached', timeout: 8000 });
   row = await byVisit();

@@ -38,6 +38,12 @@ import http from 'node:http';
 import { chromium } from 'playwright-core';
 import { browserLogin } from './lib/browser-login.mjs';
 
+/* ⚠️ ۱۴۰۵/۰۸/۰۴: «عملِ تصمیم‌گرفته در ویزیت» و زبانه‌های مرحله‌ای مالِ **مطب** است — شرکتی فرمِ خدمت دارد.
+   دیتابیسِ آزمون پیش‌فرض نورومانیتورینگ است، پس این سوییت مطب می‌شود. */
+if (process.env.E2E_DB) {
+  (await import('node:child_process')).execSync(`psql "${process.env.E2E_DB}" -qtA`, { input: "INSERT INTO settings (key, value, updated_at) VALUES ('vertical','clinic', now()) ON CONFLICT (key) DO UPDATE SET value='clinic', updated_at=now(); INSERT INTO settings (key, value, updated_at) VALUES ('services','[]', now()) ON CONFLICT (key) DO UPDATE SET value='[]', updated_at=now();" });
+}
+
 const API = process.env.E2E_API ?? 'http://localhost:3101/api';
 const UI = process.env.E2E_UI ?? 'http://127.0.0.1:5199';
 const DB = process.env.E2E_DB ?? 'postgresql://amalyar:amalyar@localhost:5432/amalyar_t1';

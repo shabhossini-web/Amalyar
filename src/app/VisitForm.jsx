@@ -460,7 +460,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
      تا منتخب‌ها و «الصاقِ فرم»ِ سربرگ روی زبانهٔ «مشخصات» هم بدانند به کجا الصاق کنند. */
   /* مراجعهٔ **شرکتی** فرمِ عمل (قبل/حین/بعد) ندارد؛ فرمِ خدمت دارد: «پرونده و مشخصات» + «خدمت»
      (تصمیمِ مالک ۱۴۰۵/۰۸/۰۴ — «فرمِ عمل برای نورومانیتورینگ لود می‌شود»). ویرایش روی «خدمت» باز می‌شود. */
-  const [tab, setTab] = useState(() => (initial?.id ? (tenantKind === 'company' ? 'service' : phase) : 'info'));
+  const [tab, setTab] = useState(() => (initial?.id ? (tenantKind === 'company' && initial?.kind !== 'clinic' ? 'service' : phase) : 'info'));
   const [crewDirty, setCrewDirty] = useState(false);
   const goTab = (k) => { setTab(k); if (k !== 'info') setPhase(k); };
   /* پیش‌فرض فقط تا وقتی کاربر خودش دست نزده — بعدش انتخابِ او حاکم است. */
@@ -699,9 +699,12 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     return () => { alive = false; };
   }, [subLoaded, initial?.id]);
 
-  /* شرکتی: **هر** فرمِ مراجعه فرمِ خدمت است — «نورومانیتورینگ»، «ایمپلنت» یا فرمِ خدمتی که در فرم‌ساز
-     ساخته شده (فرمِ تازه = نوعِ تازه). همه همان زبانهٔ «خدمت» را می‌گیرند. */
-  const isService = tenantKind === 'company';
+  /* شرکتی: هر فرمِ مراجعه فرمِ خدمت است — «نورومانیتورینگ»، «ایمپلنت» یا فرمِ خدمتی که در فرم‌ساز
+     ساخته شده (فرمِ تازه = نوعِ تازه). همه همان زبانهٔ «خدمت» را می‌گیرند. تنها استثنا «ویزیت» (`clinic`) است
+     که اگر شرکتی برای خودش ساخته باشد همان چیدمانِ ویزیت (تصمیم، درخواست، ویزیتِ بعدی) را نگه می‌دارد. */
+  const isService = tenantKind === 'company' && f.kind !== 'clinic';
+  /* چانکِ زبانهٔ «خدمت» از همان اول گرفته می‌شود — رفتن به آن (یا پرشِ خودکار به فیلدِ خطادار) نباید منتظرِ شبکه بماند. */
+  useEffect(() => { if (isService) import('./ServicePanel.jsx').catch(() => {}); }, [isService]);
   const isSurgery = f.kind === 'surgery' && !isService;
   /* کلیدهای الصاق‌شده در یک مرحله — «الصاق شده»ِ پنجره و منتخب‌ها به‌ازای همان مرحله است. */
   const attachedIn = (ph) => new Set(subList.filter((x) => x.phase === (ph || '')).map((x) => x.key));
@@ -1084,7 +1087,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     /* فرمِ عمل: فیلدِ حینِ عمل در زبانهٔ «حین»، «ویزیتِ بعدی» در زبانهٔ «بعد» (کنارِ مراقبتِ پس از عمل —
        بستهٔ FF، FF9)، بقیهٔ هسته در زبانهٔ «مشخصات» (surgery-10). */
     /* فرمِ خدمتِ شرکتی: جراح/عمل/بیمارستان/ساعت‌ها و کارشناس در زبانهٔ «خدمت»، بقیه در «پرونده و مشخصات». */
-    else if (isService) setTab(['surgeonId', 'procedureTypeId', 'hospitalId', 'techId', ...INTRA_KEYS].includes(key) ? 'service' : 'info');
+    else if (isService) setTab(['surgeonId', 'procedureTypeId', 'diagnosisId', 'hospitalId', 'techId', ...INTRA_KEYS].includes(key) ? 'service' : 'info');
     else if (f.kind === 'surgery') goTab(INTRA_KEYS.includes(key) ? 'intra' : key === 'nextVisitDate' ? 'post' : 'info');
     revealSel(`[data-core="${key}"]`);
   };
@@ -2209,7 +2212,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     </>);
   };
   /* فرمِ خدمت: جراح، عمل، بیمارستان و ساعت‌ها سرِ زبانهٔ «خدمت» می‌نشینند؛ کارشناس جایش را به «تیم» می‌دهد. */
-  const SERVICE_HEAD_KEYS = ['surgeonId', 'procedureTypeId', 'hospitalId', ...INTRA_KEYS];
+  const SERVICE_HEAD_KEYS = ['surgeonId', 'procedureTypeId', 'diagnosisId', 'hospitalId', ...INTRA_KEYS];
   const mainKeys = builtinOrder.filter((key) => !(f.kind === 'surgery' && INTRA_KEYS.includes(key)) && !SIDE_KEYS.includes(key)
     && !(isService && (SERVICE_HEAD_KEYS.includes(key) || key === 'techId')));
   const sideKeys = SIDE_KEYS.filter((key) => builtinNodes[key]);

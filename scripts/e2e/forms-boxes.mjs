@@ -74,6 +74,11 @@ ok('شیت باز شد', await page.locator('.db-sheet').count() > 0);
   if (await page.locator('.db-stepnav button').count()) await page.locator('.db-stepnav button').last().click();
   await page.waitForTimeout(1200);
   ok('گامِ «تکمیل» آمد', await page.locator('.db-formcard').count() > 0);
+  /* شرکتی (۱۴۰۵/۰۸/۰۴): فیلدهای مخصوصِ خدمت (از جمله همین عکس و پرداخت) در زبانهٔ «خدمت»‌اند. */
+  if (await page.locator('.vf-svctabs').count()) {
+    await page.locator('.vf-svctabs [role="tab"]').last().click();
+    await page.locator('[data-service-panel]').waitFor({ timeout: 10000 }).catch(() => {});
+  }
 }
 
 console.log('\n۲) باکسِ عکس رندر می‌شود');

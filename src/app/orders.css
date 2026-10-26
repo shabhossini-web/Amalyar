@@ -181,3 +181,51 @@
 .od-from.patient { color: var(--cyan); border-color: color-mix(in srgb, var(--cyan) 40%, transparent); }
 .od-from.fresh { color: var(--amber-text); border-color: color-mix(in srgb, var(--amber) 45%, transparent); }
 .od-req-voice { display: grid; gap: 8px; }
+
+/* ── صفحهٔ بیمار: چک‌لیستِ درخواست + پاسخ‌های فرستاده‌شده ─────────────── */
+.op-check { margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.op-check li { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--text2); }
+.op-check li svg { flex: 0 0 auto; color: var(--text3); }
+.op-check li.ok svg { color: var(--green-text); }
+.op-check li small { margin-inline-start: auto; font-size: 11.5px; color: var(--text3); }
+.op-check li.ok small { color: var(--green-text); }
+.op-history { display: grid; gap: 5px; margin-top: 6px; }
+.op-history ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 5px; }
+.op-history li {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 2px 8px; align-items: center; padding: 7px 10px;
+  border-radius: 10px; border: 1px solid rgba(var(--veil-rgb), .12); font-size: 12.5px;
+}
+.op-history li b { color: var(--text1); }
+.op-history li span { color: var(--text3); font-size: 12px; }
+.op-history li i { font-style: normal; font-size: 11.5px; font-weight: 700; color: var(--text2); }
+.op-history li.st-reviewed i { color: var(--green-text); }
+.op-history li.st-needs_action i { color: var(--amber-text); }
+.op-history li em { grid-column: 1 / -1; font-style: normal; font-size: 12px; color: var(--amber-text); }
+.op-drafts { color: var(--amber-text); }
+
+/* ── شیتِ کارکنان: درخواستِ قفل، کارتِ هر پاسخ، چک‌لیستِ بررسی ─────────── */
+.od-locked { margin: 0; padding: 8px 11px; border-radius: 11px; font-size: 12.5px; line-height: 1.9; color: var(--text2);
+  background: rgba(var(--veil-rgb), .04); border: 1px dashed rgba(var(--veil-rgb), .2); }
+.od-req { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: 10px; }
+.od-req:disabled .od-chip:not(.on) { display: none; }
+.od-req:disabled input, .od-req:disabled textarea { opacity: .85; }
+.od-resp { display: grid; gap: 6px; padding: 9px 11px; border-radius: 12px; border: 1px solid rgba(var(--veil-rgb), .14);
+  background: rgba(var(--veil-rgb), .025); }
+.od-resp.st-new { border-color: color-mix(in srgb, var(--cyan) 45%, transparent); }
+.od-resp-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; }
+.od-resp-head b { color: var(--text1); }
+.od-resp-head span { color: var(--text3); }
+.od-rst { margin-inline-start: auto; font-style: normal; font-size: 11.5px; font-weight: 700; color: var(--cyan); }
+.od-rst.st-reviewed { color: var(--green-text); }
+.od-rst.st-needs_action { color: var(--amber-text); }
+.od-resp-note { font-size: 12px; color: var(--text2); }
+.od-staff-answer { display: grid; gap: 8px; }
+.od-staff-answer > summary { cursor: pointer; font-size: 12.5px; font-weight: 700; color: var(--text2); padding: 6px 0; }
+.od-staff-answer > summary:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 6px; }
+.od-staff-answer[open] { gap: 10px; }
+.od-checklist { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.od-checklist label { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 4px 10px; border-radius: 999px; cursor: pointer;
+  font-size: 12px; color: var(--text2); border: 1px solid rgba(var(--veil-rgb), .16); }
+.od-checklist label.on { color: var(--green-text); border-color: color-mix(in srgb, var(--green) 45%, transparent); }
+.od-checklist input { accent-color: var(--green); width: 16px; height: 16px; margin: 0; }
+.od-checklist small { font-size: 11.5px; color: var(--text3); }

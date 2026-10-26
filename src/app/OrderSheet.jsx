@@ -124,10 +124,12 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
     doctorName: order?.doctorName ?? '',
     note: order?.note ?? '',
     dueJ: order?.dueDate ? isoToJStr(order.dueDate) : '',
-    resultText: order?.resultText ?? order?.answerText ?? '',
-    resultLink: order?.resultLink ?? order?.answerLink ?? '',
-    resultUser: order?.resultUser ?? '',
-    resultPass: order?.resultPass ?? '',
+    /* «هر ارسال، پاسخِ جدا»: این کادرها برای **پاسخِ تازه‌ای** است که کارکنان ثبت می‌کنند — پاسخ‌های قبلی
+       کارتِ خودشان را دارند و دیگر در کادرِ قابلِ‌ویرایش پیش‌پر نمی‌شوند (ذخیرهٔ دوباره آن‌ها را بازنویسی می‌کرد). */
+    resultText: '',
+    resultLink: '',
+    resultUser: '',
+    resultPass: '',
   }));
   const [busy, setBusy] = useState(false);
   /* هشدار: سفارشِ **تازه‌شدهٔ** سرور بعد از وصل‌کردنِ صدا (`PATCH documentIds`) — وضعیت و فهرستِ مدارکِ همین
@@ -139,9 +141,16 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
   const [reviewNote, setReviewNote] = useState(order?.reviewNote ?? '');
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
   const reviewable = canReviewOrder(ord);
+  /* درخواستِ ارسال‌شده قفل است (سرور هم رد می‌کند) — بیمار بر پایهٔ همین پاسخ می‌دهد. */
+  const locked = !!ord?.id && ord.status !== 'draft';
+  const [received, setReceived] = useState(() => order?.receivedItems ?? []);
+  const responses = ord?.responses ?? [];
+  const items = ord?.items ?? [];
   /* صدای کارکنان روی سفارش = توضیحِ **درخواست**، نه پاسخ — جایش کنارِ «توضیح برای بیمار» است. */
   const reqVoices = (ord?.documents ?? []).filter((d) => d.requestNote);
-  const answerDocs = (ord?.documents ?? []).filter((d) => !d.requestNote);
+  /* مدارکِ قدیمیِ بی‌پاسخ (پیش از «پاسخِ جدا») — جایی نمی‌روند، فقط جدا دیده می‌شوند. */
+  /* فایلِ بیمار که هنوز با «ارسال» به پاسخی نپیوسته پیش‌نویس است و این‌جا نمی‌آید. */
+  const answerDocs = (ord?.documents ?? []).filter((d) => !d.requestNote && !d.responseId && d.from !== 'patient');
 
   /** پیوستِ کارکنان به **خودِ سفارش** (صدای درخواست یا عکسِ جواب)؛ سفارشِ هنوز ساخته‌نشده → با «ثبت». */
   const attach = async (doc, title, okMsg) => {
@@ -192,7 +201,7 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
       }
       // یادداشتِ خالی برای «بررسی شد» مجاز است؛ برچسبِ پیش‌فرض را **سرور** می‌گذارد
       // (قانون یک‌جا بماند، وگرنه دو لایه دو حرفِ متفاوت می‌زنند).
-      await api(`/orders/${kind}/${ord.id}/review`, { method: 'POST', body: { status, reviewNote: note } });
+      await api(`/orders/${kind}/${ord.id}/review`, { method: 'POST', body: { status, reviewNote: note, ...(items.length ? { receivedItems: received } : {}) } });
       onToast(status === 'reviewed' ? 'ثبت شد — بررسی ثبت شد' : 'ثبت شد — بیمار باید دوباره بفرستد');
       onSaved();
       onClose();
@@ -203,21 +212,24 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
   }));
 
   const body = () => {
-    const out = { patientId, visitId, note: f.note.trim() };
-    if (kind === 'lab') { out.tests = f.tests; }
-    if (kind === 'imaging') { out.modalities = f.modalities; out.region = f.region.trim(); }
-    if (kind === 'consult' || kind === 'referral') {
-      out.specialty = f.specialty.trim(); out.doctorName = f.doctorName.trim();
+    const out = { patientId, visitId };
+    /* درخواستِ قفل‌شده دیگر فرستاده نمی‌شود — تغییری ندارد و مقایسهٔ تاریخ هم بی‌مورد ۴۰۹ می‌داد. */
+    if (!locked) {
+      out.note = f.note.trim();
+      if (kind === 'lab') { out.tests = f.tests; }
+      if (kind === 'imaging') { out.modalities = f.modalities; out.region = f.region.trim(); }
+      if (kind === 'consult' || kind === 'referral') {
+        out.specialty = f.specialty.trim(); out.doctorName = f.doctorName.trim();
+      }
+      if (meta.hasDue) out.dueDate = f.dueJ.trim() ? jStrToIso(f.dueJ) : null;
     }
-    if (meta.hasDue) out.dueDate = f.dueJ.trim() ? jStrToIso(f.dueJ) : null;
     /* صداهای پیش از ساختِ سفارش (حداکثر ۵ در هر درخواست — سقفِ سرور) با «ثبت» به همین سفارش می‌پیوندند. */
     if (pending.length) out.documentIds = pending.map((x) => x.id).slice(0, 5);
+    /* پاسخِ تازهٔ کارکنان — فقط کادرهای پرشده؛ خالی یعنی «پاسخی ثبت نمی‌کنم»، نه «پاسخِ قبلی را پاک کن». */
     if (meta.hasResult) {
-      if (kind === 'consult') { out.answerText = f.resultText.trim(); out.answerLink = f.resultLink.trim(); }
-      else {
-        out.resultText = f.resultText.trim(); out.resultLink = f.resultLink.trim();
-        out.resultUser = f.resultUser.trim(); out.resultPass = f.resultPass.trim();
-      }
+      const put = (k, v) => { if (v.trim()) out[k] = v.trim(); };
+      if (kind === 'consult') { put('answerText', f.resultText); put('answerLink', f.resultLink); }
+      else { put('resultText', f.resultText); put('resultLink', f.resultLink); put('resultUser', f.resultUser); put('resultPass', f.resultPass); }
     }
     return out;
   };
@@ -263,9 +275,13 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
         <button type="button" className="db-x" disabled={busy} onClick={onClose} aria-label="بستن">×</button>
       </div>
 
+      {locked && (
+        <p className="od-locked">این درخواست برای بیمار فرستاده شده و <b>قفل</b> است — بیمار بر پایهٔ همین پاسخ می‌دهد. برای تغییر، درخواستِ تازه بسازید.</p>
+      )}
+      <fieldset className="od-req" disabled={locked}>
       {kind === 'lab' && (
         <div className="od-block">
-          <span className="od-label">آزمایش‌های روتین — تیک بزنید</span>
+          <span className="od-label">{locked ? 'آزمایش‌های درخواستی' : 'آزمایش‌های روتین — تیک بزنید'}</span>
           <div className="od-chips">
             {LAB_PANEL.map((t) => (
               <button key={t} type="button" dir="ltr"
@@ -312,6 +328,11 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
       </label>
 
 
+      {meta.hasDue && (
+        <JDate label="مهلتِ انجام و ارسالِ پاسخ" value={f.dueJ}
+               onChange={(v) => setF((s) => ({ ...s, dueJ: v }))} placeholder="اختیاری" />
+      )}
+      </fieldset>
       {/* توضیحِ صوتیِ پزشک برای بیمار — بخشی از **درخواست** است و در صفحهٔ بیمار پخش می‌شود.
           تا ۱۴۰۵/۰۸/۰۴ داخلِ بخشِ «پاسخ» بود: سفارش را «پاسخ آمد» می‌کرد و به بیمار هم نمی‌رسید. */}
       <div className="db-field od-voice od-req-voice"><span>توضیحِ صوتی برای بیمار (اختیاری)</span>
@@ -338,24 +359,37 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
         />
       </div>
 
-      {meta.hasDue && (
-        <JDate label="مهلتِ انجام و ارسالِ پاسخ" value={f.dueJ}
-               onChange={(v) => setF((s) => ({ ...s, dueJ: v }))} placeholder="اختیاری" />
-      )}
 
       {meta.hasResult && (
         <div className="od-block od-result">
-          <span className="od-label">پاسخ — اگر رسیده</span>
+          <span className="od-label">{responses.length ? `پاسخ‌ها — ${faNum(responses.length)} ارسال` : 'پاسخ'}</span>
           {ord?.id && (
             <p className={`od-status st-${ord.status}`}>
               وضعیت: <b>{ord.statusFa ?? orderFa[ord.status] ?? ord.status}</b>
               {ord.reviewNote && !reviewable && <i> — {ord.reviewNote}</i>}
             </p>
           )}
+          {/* «هر ارسال، پاسخِ جدا» — هر ارسال کارتِ خودش با تاریخ، فرستنده، مدارک و تصمیمِ بررسی. */}
+          {responses.map((r) => (
+            <div key={r.id} className={`od-resp st-${r.status}`} data-response={r.seq}>
+              <div className="od-resp-head">
+                <b>پاسخِ {faNum(r.seq)}</b>
+                <span>{faDate(r.createdAt)} · {r.sourceFa}</span>
+                <i className={`od-rst st-${r.status}`}>{r.statusFa}</i>
+              </div>
+              {r.documents.length > 0 && <AnswerDocs docs={r.documents} onToast={onToast} />}
+              {r.text && <p className="od-doc-text">{r.text}</p>}
+              {r.link && <a className="od-doc-link" href={r.link} target="_blank" rel="noopener noreferrer" dir="ltr">{r.link}</a>}
+              {r.linkUser && <small dir="ltr">{r.linkUser}{r.linkPass ? ` / ${r.linkPass}` : ''}</small>}
+              {r.reviewNote && <small className="od-resp-note">تصمیم: {r.reviewNote}</small>}
+            </div>
+          ))}
           {answerDocs.length > 0 && <AnswerDocs docs={answerDocs} onToast={onToast} />}
           {pending.some((d) => d.audio === false) && (
             <p className="od-status">{faNum(pending.filter((d) => d.audio === false).length)} عکس — با «ثبت» به همین فرم می‌پیوندد</p>
           )}
+          <details className="od-staff-answer" open={!responses.length}>
+          <summary>{responses.length ? 'ثبتِ پاسخِ تازه‌ای که به مطب رسیده' : 'ثبتِ پاسخ — اگر به مطب رسیده'}</summary>
           <label className="db-field"><span>متنِ پاسخ</span>
             <AssistedTextarea disabled={busy} rows={2} value={f.resultText} onChange={set('resultText')} placeholder="خلاصهٔ جواب" />
           </label>
@@ -390,9 +424,23 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
               await attach({ ...doc, mimeType: doc?.mimeType ?? file.type }, file.name, 'عکسِ جواب به همین فرم پیوست شد');
             }}
           />
+          </details>
           {reviewable && (
             <div className="od-review">
-              <span className="od-label">تصمیمِ بررسی</span>
+              <span className="od-label">تصمیمِ بررسی{responses.length ? ` — پاسخِ ${faNum(responses[responses.length - 1].seq)}` : ''}</span>
+              {/* چک‌لیستِ کامل‌بودن: کدام موردِ درخواستی در پاسخ‌ها آمده — بیمار هم همین را می‌بیند. */}
+              {items.length > 1 && (
+                <div className="od-checklist" role="group" aria-label="موردهای رسیده">
+                  {items.map((it) => (
+                    <label key={it} className={received.includes(it) ? 'on' : ''}>
+                      <input type="checkbox" checked={received.includes(it)} disabled={busy}
+                        onChange={() => setReceived((r) => (r.includes(it) ? r.filter((x) => x !== it) : [...r, it]))} />
+                      <bdi dir="auto">{it}</bdi>
+                    </label>
+                  ))}
+                  <small>{faNum(received.length)} از {faNum(items.length)} رسیده</small>
+                </div>
+              )}
               <label className="db-field"><span>یادداشت / تصمیم</span>
                 <AssistedTextarea purpose="تصمیمِ بررسیِ نتیجه" disabled={busy} rows={2} value={reviewNote}
                   onChange={(e) => setReviewNote(e.target.value)} placeholder="مثلاً: نرمال — نیاز به اقدام ندارد" />

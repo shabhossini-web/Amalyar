@@ -52,6 +52,9 @@ const sql = (q) => psql(q).split('\n')[0];
 const num = (q) => Number(sql(q));
 const sqlFails = (q) => { try { psql(q); return false; } catch { return true; } };
 
+/* ⚠️ ۱۴۰۵/۰۸/۰۴: زبانه‌های قبل/حین/بعد (و پیامکِ مراقبتِ عمل‌های همزمان) فقط مالِ **مطب** است — شرکتی فرمِ خدمت دارد. */
+sql(`INSERT INTO settings (key, value, updated_at) VALUES ('vertical','clinic', now()) ON CONFLICT (key) DO UPDATE SET value='clinic', updated_at=now();`);
+sql(`INSERT INTO settings (key, value, updated_at) VALUES ('services','[]', now()) ON CONFLICT (key) DO UPDATE SET value='[]', updated_at=now();`);
 const login = await fetch(API + '/auth/login', {
   method: 'POST', headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ identifier: USER, password: PASS }),
@@ -321,9 +324,10 @@ try {
     const tab = (sect, name) => sect.locator('.db-phasetabs button', { hasText: name }).click().then(() => page.waitForTimeout(350));
     const defaults = async (sect) => {
       await tab(sect, 'قبل از عمل');
-      const pre = await sect.locator('.db-phase[data-phase="pre"] .db-default').allInnerTexts();
+      /* مطب: پیش‌فرض در پیش‌نمای کادرِ مراقبت (`CareEditor`) دیده می‌شود. */
+      const pre = await sect.locator('.db-phase[data-phase="pre"] [data-care-default]').allInnerTexts();
       await tab(sect, 'بعد از عمل');
-      const post = await sect.locator('.db-phase[data-phase="post"] .db-default').allInnerTexts();
+      const post = await sect.locator('.db-phase[data-phase="post"] [data-care-default]').allInnerTexts();
       return { pre, post };
     };
     /* شاهد: تک‌عملی — شمارِ `.db-default` که `postop-flow.mjs` سنجاقش کرده. */
@@ -348,7 +352,7 @@ try {
     await insert.click();
     await page.waitForTimeout(400);
     await tab(sect, 'بعد از عمل');
-    const areas = await sect.locator('.db-phase[data-phase="post"] textarea').evaluateAll((els) => els.map((e) => e.value));
+    const areas = await sect.locator('.db-phase[data-phase="post"] [data-care-open="post"] .db-report-text').allInnerTexts();
     ok('ضربه: متنِ P2 زیرِ قالبِ P1 در متنِ اختصاصی نشست (اصلی حذف نشد)',
       areas.some((v) => v.includes(`پس-یک ${tag}`) && v.includes(`پس-دو ${tag}`)), JSON.stringify(areas.map((v) => v.slice(0, 60))));
     if (SHOTS) await page.screenshot({ path: `${SHOTS}/multi-procedure-careother.png` }).catch(() => {});

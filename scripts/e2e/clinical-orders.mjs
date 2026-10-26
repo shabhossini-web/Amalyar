@@ -12,6 +12,12 @@ import { randomBytes } from 'node:crypto';
 import { execSync } from 'node:child_process';
 import { chromium } from 'playwright-core';
 
+/* ⚠️ ۱۴۰۵/۰۸/۰۴: در شرکتی هر فرمِ مراجعه «فرمِ خدمت» است (زبانهٔ «خدمت»)؛ چیدمانِ ویزیت/عمل (تصمیم، درخواست،
+   ویزیتِ بعدی، زبانه‌های مرحله) فقط مالِ **مطب** است. دیتابیسِ آزمون پیش‌فرض نورومانیتورینگ است، پس این سوییت مطب می‌شود. */
+if (process.env.E2E_DB) {
+  (await import('node:child_process')).execSync(`psql "${process.env.E2E_DB}" -qtA`, { input: "INSERT INTO settings (key, value, updated_at) VALUES ('vertical','clinic', now()) ON CONFLICT (key) DO UPDATE SET value='clinic', updated_at=now(); INSERT INTO settings (key, value, updated_at) VALUES ('services','[]', now()) ON CONFLICT (key) DO UPDATE SET value='[]', updated_at=now();" });
+}
+
 const API = process.env.E2E_API ?? 'http://localhost:3101/api';
 const BASE = process.env.E2E_UI ?? 'http://127.0.0.1:5199';
 const DB = process.env.E2E_DB ?? 'postgresql://amal:amal@localhost:5432/amalyar_uitest';

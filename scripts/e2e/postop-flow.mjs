@@ -188,6 +188,10 @@ try {
   ok(bad.status === 400, `مراجعهٔ ناموجود 400 (${bad.status})`);
 
   console.log('\n۶) مرورگر — بخشِ پس از عمل روی خودِ فرم');
+  /* ⚠️ ۱۴۰۵/۰۸/۰۴: زبانه‌های مرحله‌ای و مراقبت فقط مالِ **مطب** است — شرکتی فرمِ خدمت دارد. مطب مراقبت و
+     شرح را در پاپ‌آپ می‌نویسد (`CareEditor`)، پس این بخش روی مطب و با همان پاپ‌آپ‌ها سنجیده می‌شود. */
+  sql(`INSERT INTO settings (key, value, updated_at) VALUES ('vertical','clinic', now()) ON CONFLICT (key) DO UPDATE SET value='clinic', updated_at=now();`);
+  sql(`INSERT INTO settings (key, value, updated_at) VALUES ('services','[]', now()) ON CONFLICT (key) DO UPDATE SET value='[]', updated_at=now();`);
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', headless: true });
   const page = await browser.newPage({ viewport: { width: 1100, height: 900 } });
   const errors = [];
@@ -201,7 +205,8 @@ try {
     await page.waitForURL('**/app**', { timeout: 15000 });
 
     await page.goto(BASE + `/app/dashboard?patient=${visit.id}`);
-    await page.waitForTimeout(2500);
+    /* منتظرِ خودِ زبانه‌ها، نه ساعت — زیرِ بار ۲٫۵ ثانیه کم می‌آمد. */
+    await page.locator('.db-sheet .db-phasetabs button[aria-selected="true"]').waitFor({ timeout: 15000 }).catch(() => {});
     /* از بستهٔ ۴ (بازخوردِ مالک) مرحله‌ها زبانه‌اند، و از بازبینیِ UX (surgery-10) زبانه‌ها ساختارِ اصلیِ
        فرم‌اند — «مشخصات | قبل | حین | بعد» زیرِ سربرگ — و «برنامهٔ مراقبت و پیگیری» درونِ «بعد از عمل». */
     const sheet = page.locator('.db-sheet');
@@ -227,9 +232,10 @@ try {
       'خطِ برنامه روزِ انتخابی را می‌گوید');
 
     /* پیش‌فرضِ نوعِ عمل باید **دیده** شود — نه اینکه کاربر حدس بزند؛ هر مرحله در تبِ خودش. */
-    ok((await sect.locator('.db-default').innerText()).includes('پانسمان'), '**پیش‌فرضِ بعد از عمل در تبِ «بعد از عمل» است**');
+    const post = sheet.locator('.db-phase[data-phase="post"]');
+    ok((await post.locator('[data-care-default]').innerText()).includes('پانسمان'), '**پیش‌فرضِ بعد از عمل در تبِ «بعد از عمل» است**');
     await tab('قبل از عمل');
-    const defaults = pre.locator('.db-default');
+    const defaults = pre.locator('[data-care-default]');
     ok(await defaults.count() === 1 && (await defaults.first().innerText()).includes('ناشتا'), '**متنِ پیش‌فرضِ قبل از عمل در تبِ «قبل از عمل» است**');
     /* زمانِ ارسال کنارِ عنوان نوشته می‌شود. */
     /* نشانِ زمان کنارِ عنوان — از #63 پیشوندِ «ارسال:» ندارد و خودِ زمان را
@@ -237,9 +243,13 @@ try {
     ok(/روز قبل از عمل|ساعتِ|به‌محضِ ثبت/.test(await pre.locator('.db-carehead').first().innerText()),
       '**زمانِ ارسال کنارِ عنوان صریح گفته شده**');
     /* «استفاده و ویرایش» پیش‌فرض را داخلِ کادر می‌ریزد تا جراح تغییرش دهد. */
-    await defaults.first().locator('button').click();
-    ok((await pre.locator('.db-careblock').first().locator('textarea').inputValue()).includes('ناشتا'),
+    /* مطب: پیش‌فرض در پاپ‌آپِ مراقبت است و «استفاده و ویرایش» آن را در کادرِ همان پاپ‌آپ می‌ریزد. */
+    await pre.locator('[data-care-open="pre"]').click();
+    await page.locator('[data-care-sheet="pre"] .db-default button').click();
+    ok((await page.locator('[data-care-area="pre"]').inputValue()).includes('ناشتا'),
       '**«استفاده و ویرایش» پیش‌فرض را در کادر گذاشت**');
+    await page.locator('[data-act="care-done"]').click();
+    await page.locator('[data-care-sheet]').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
     /* ویزیتِ بعدی داخلِ همین بخش (تبِ «بعد از عمل») است و در فرم دوبار نیامده. */
     await tab('بعد از عمل');
     /* ⚠️ `.jd-next` و نه placeholder: راهنمای همهٔ کادرهای تاریخ «سال / ماه / روز» است
@@ -269,16 +279,20 @@ try {
 
     /* دستیار: پیش‌نویسِ مراقبت. */
     mockReply = `- کمپرسِ سرد ۲۰ دقیقه. [مرورگر ${tag}]`;
-    const careBtn = sect.locator('.db-aibtn');
+    await sect.locator('[data-care-open="post"]').click();
+    const careBtn = page.locator('[data-care-sheet="post"] [data-act="care-ai"]');
     ok(await careBtn.count() === 1, 'دکمهٔ دستیارِ مراقبت هست (aiOn)');
     await careBtn.click();
-    await page.waitForTimeout(1800);
-    ok((await sect.locator('.db-careblock').first().locator('textarea').inputValue()).includes(`[مرورگر ${tag}]`),
+    await page.waitForFunction((t) => (document.querySelector('[data-care-area="post"]')?.value ?? '').includes(t), `[مرورگر ${tag}]`, { timeout: 8000 }).catch(() => {});
+    ok((await page.locator('[data-care-area="post"]').inputValue()).includes(`[مرورگر ${tag}]`),
       '**دستیار متنِ مراقبت را نوشت**');
+    await page.locator('[data-act="care-done"]').click();
+    await page.locator('[data-care-sheet]').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
 
     /* همان «ساخت‌یافته کن/ادامه بنویس» روی شرحِ داخلِ فرم — شرح حالا در تبِ «حین عمل» است. */
     await tab('حین عمل');
-    const rep = page.locator('.db-report');
+    await sheet.locator('.db-phase[data-phase="intra"] [data-report-open]').click();
+    const rep = page.locator('[data-report-sheet]');
     await rep.locator('textarea').fill(`شرحِ خام برای بازنویسی ${tag}`);
     const structBtn = rep.locator('.db-aibtn', { hasText: 'ساخت‌یافته' });
     ok(await structBtn.count() === 1, 'دکمهٔ «ساخت‌یافته کن» روی شرحِ فرم هست');
@@ -287,6 +301,8 @@ try {
     await page.waitForTimeout(1800);
     ok((await rep.locator('textarea').inputValue()).includes(`[${tag}]`), '**شرح بازنویسی شد**');
     ok(await rep.locator('.db-aighost').count() === 1, 'دکمهٔ «برگرداندنِ متنِ خام» آمد');
+    await page.locator('[data-act="report-done"]').click();
+    await page.locator('[data-report-sheet]').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
 
     /* ذخیره → override واقعاً می‌نشیند و یادآوری‌ها با آن کاشته می‌شوند. */
     await page.locator('.db-submit').click();

@@ -67,7 +67,7 @@ try {
     ok(/\/public\/order\/[^/]+\/files$/.test(up.path), `مسیرش همان قراردادِ §۵ است (${up.path})`);
 
     console.log('\n۲) فایل خودش یک پاسخِ کامل است');
-    await page.getByRole('button', { name: 'ثبتِ پاسخ' }).click();
+    await page.getByRole('button', { name: 'ارسالِ پاسخ', exact: true }).click();
     /* یا موفقیت یا خطا — هر کدام زودتر. بی این، رگرسیونِ «فایل پاسخ نیست»
        به‌جای یک سنجهٔ قرمزِ خوانا یک timeoutِ گنگ می‌داد. */
     await page.waitForFunction(
@@ -83,7 +83,7 @@ try {
   console.log('\n۳) اندازهٔ دکمه — باگِ `flex-basis`ِ مشترک');
   {
     const { page, context } = await open(ORDER());
-    const h = await page.getByRole('button', { name: 'ثبتِ پاسخ' })
+    const h = await page.getByRole('button', { name: 'ارسالِ پاسخ', exact: true })
       .evaluate((el) => Math.round(el.getBoundingClientRect().height));
     ok(h > 0 && h <= 56, `ارتفاعِ دکمهٔ ثبت ${h}px است (معیارِ سند: ≤۵۶)`);
     ok(await hOverflow(page) === 0, 'صفحه روی موبایل اسکرولِ افقی ندارد');
@@ -94,7 +94,7 @@ try {
   console.log('\n۴) بدونِ هیچ ورودی، چیزی به سرور نمی‌رود');
   {
     const { page, writes, context } = await open(ORDER());
-    await page.getByRole('button', { name: 'ثبتِ پاسخ' }).click();
+    await page.getByRole('button', { name: 'ارسالِ پاسخ', exact: true }).click();
     await page.waitForFunction(() => document.body.innerText.includes('فایلِ پاسخ'), null, { timeout: 8000 });
     ok(writes.filter((w) => w.path.endsWith('/answer')).length === 0,
       'هیچ درخواستی نرفت و پیامِ خطا هر سه راه را گفت');
@@ -111,12 +111,13 @@ try {
       '⚠️ فرمِ پاسخ خودبه‌خود باز نیست — پاسخِ ثبت‌شده بی‌صدا بازنویسی نمی‌شود');
     ok(await page.locator('input[type=file]').count() === 0, 'و کادرِ بارگذاری هم بسته است');
     ok((await page.textContent('body')).includes('بررسی کرد'), 'وضعیتِ «بررسی شد» از واژه‌نامه نشان داده شد');
-    await page.getByRole('button', { name: 'افزودنِ فایل یا توضیحِ تازه' }).click();
+    await page.getByRole('button', { name: 'فرستادنِ پاسخِ تازه (فایل یا توضیح)' }).click();
     ok(await page.locator('input[type=file]').count() > 0, 'با یک کلیکِ صریح، کادرِ افزودن باز می‌شود');
     await page.locator('input[type=file]').first().setInputFiles(shot);
     await page.waitForFunction(() => document.body.innerText.includes('ارسال شد'), null, { timeout: 8000 });
-    await page.getByRole('button', { name: 'افزودن', exact: true }).click();
-    await page.waitForFunction(() => !document.body.innerText.includes('افزودن به پاسخ'), null, { timeout: 8000 });
+    /* ۱۴۰۵/۰۸/۰۴ — «هر ارسال، پاسخِ جدا»: دکمه «ارسالِ پاسخِ تازه» است و پس از ارسال تأییدِ «ثبتِ مجدد» می‌آید. */
+    await page.getByRole('button', { name: 'ارسالِ پاسخِ تازه', exact: true }).click();
+    await page.waitForFunction(() => document.body.innerText.includes('ثبتِ مجدد انجام شد'), null, { timeout: 8000 });
     const ans = writes.find((w) => w.path.endsWith('/answer'));
     ok(ans?.body?.append === true, '⚠️ و با `append:true` رفت — وضعیت و تصمیمِ بررسی دست نمی‌خورد');
     await context.close();

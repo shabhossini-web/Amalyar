@@ -22,6 +22,9 @@ const ok = (c, m) => { if (c) { pass++; console.log('  ✔ ' + m); } else { fail
 const sql = (q) => execSync(`psql "${DB}" -qtA`, { input: q }).toString().trim().split('\n')[0];
 
 const tag = 'pi' + randomBytes(3).toString('hex');
+/* ⚠️ ۱۴۰۵/۰۸/۰۴: مراقبتِ پیش از عمل و زبانه‌های مرحله‌ای فقط مالِ **مطب** است — شرکتی فرمِ خدمت دارد. */
+sql(`INSERT INTO settings (key, value, updated_at) VALUES ('vertical','clinic', now()) ON CONFLICT (key) DO UPDATE SET value='clinic', updated_at=now();`);
+sql(`INSERT INTO settings (key, value, updated_at) VALUES ('services','[]', now()) ON CONFLICT (key) DO UPDATE SET value='[]', updated_at=now();`);
 const login = await fetch(API + '/auth/login', {
   method: 'POST', headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ identifier: 'admin', password: 'test1234' }),

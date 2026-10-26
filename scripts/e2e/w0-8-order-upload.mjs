@@ -95,29 +95,31 @@ try {
   const app1 = await answer(sent.token, { append: true, text: 'صفحهٔ دومِ جواب' });
   ok(app1.status < 300, 'با append پذیرفته شد');
   const afterAppend = await db.labOrder.findUnique({ where: { id: sent.id } });
-  ok(afterAppend.status === 'reviewed'
-    && afterAppend.reviewNote === beforeAppend.reviewNote
-    && +afterAppend.reviewedAt === +beforeAppend.reviewedAt,
-    '⚠️ تصمیمِ بررسیِ ثبت‌شده دست‌نخورده ماند — سندِ پرونده پاک نمی‌شود');
+  /* ۱۴۰۵/۰۸/۰۴ — «هر ارسال، پاسخِ جدا»: ارسالِ تازه پاسخِ تازه‌ای است که باید بررسی شود (سفارش دوباره
+     «پاسخ آمد»)؛ تصمیمِ قبلی روی **پاسخِ قبلی** می‌ماند — سندِ پرونده پاک نمی‌شود. */
+  ok(afterAppend.status === 'answered', 'ارسالِ تازه سفارش را دوباره «پاسخ آمد» کرد تا بررسی شود');
   ok(afterAppend.resultText === beforeAppend.resultText,
     'متنِ پاسخِ اولِ روی خودِ سفارش هم بازنویسی نشد');
+  const respRows = await db.orderResponse.findMany({ where: { orderRef: 'lab_order', orderId: sent.id }, orderBy: { seq: 'asc' } });
+  ok(respRows.length === 2 && respRows[1].text === 'صفحهٔ دومِ جواب', 'پاسخِ تازه ردیفِ خودش را با متنِ خودش گرفت');
   ok((await docsOf(sent.id)).some(d => d.contentText === 'صفحهٔ دومِ جواب'),
     'متنِ افزوده مدرکِ تازهٔ خودش را گرفت');
   ok((await eventsOf(sent.id)).filter(e => e.type === 'order.answered').length === 2,
     'رویدادِ تازه رفت تا کارِ بررسی دوباره باز شود');
 
-  const dup = await answer(sent.token, { append: true, text: 'صفحهٔ دومِ جواب' });
-  ok(dup.status === 400, 'appendِ تکراری ۴۰۰ می‌گیرد — دوبار زدنِ دکمه کارِ بررسی را باز نمی‌کند');
+  const dup = await answer(sent.token, { append: true });
+  ok(dup.status === 400, 'ارسالِ خالی (بی‌فایل/متنِ تازه) ۴۰۰ می‌گیرد — دوبار زدنِ دکمه کارِ بررسی را باز نمی‌کند');
   ok((await eventsOf(sent.id)).filter(e => e.type === 'order.answered').length === 2,
     'و رویدادِ سومی صادر نشد');
 
-  console.log('\n۴) آپلود روی سفارشِ پاسخ‌داده‌شده = افزودن');
+  console.log('\n۴) آپلود روی سفارشِ پاسخ‌داده‌شده = پیش‌نویسِ پاسخِ تازه');
   const upAfter = await upload(sent.token, pngOf(2));
-  ok(upAfter.status < 300, 'فایلِ تازه روی سفارشِ reviewed پذیرفته شد');
-  ok((await db.labOrder.findUnique({ where: { id: sent.id } })).status === 'reviewed',
-    'وضعیت همچنان reviewed است');
+  ok(upAfter.status < 300, 'فایلِ تازه روی سفارشِ پاسخ‌دار پذیرفته شد');
+  ok((await eventsOf(sent.id)).filter(e => e.type === 'order.answered').length === 2,
+    'پیش‌نویس تا «ارسال» رویدادی نمی‌سازد');
+  ok((await answer(sent.token, { append: true })).status < 300, 'ارسالِ همان فایل پذیرفته شد');
   ok((await eventsOf(sent.id)).filter(e => e.type === 'order.answered').length === 3,
-    'ولی رویداد رفت — مادهٔ تازه باید دوباره دیده شود');
+    'و رویداد رفت — مادهٔ تازه باید دوباره دیده شود');
 
   console.log('\n۵) گاردهای فایل');
   const lie = await upload(sent.token, Buffer.from('<html><script>alert(1)</script></html>'), 'x.png', 'image/png');
