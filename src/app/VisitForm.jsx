@@ -2213,6 +2213,18 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
   };
   /* فرمِ خدمت: جراح، عمل، بیمارستان و ساعت‌ها سرِ زبانهٔ «خدمت» می‌نشینند؛ کارشناس جایش را به «تیم» می‌دهد. */
   const SERVICE_HEAD_KEYS = ['surgeonId', 'procedureTypeId', 'diagnosisId', 'hospitalId', ...INTRA_KEYS];
+  const serviceHead = isService ? (
+    <>
+      <div className="db-grid2 db-builtins">{SERVICE_HEAD_KEYS.map(cell)}</div>
+      {/* فیلدهای مخصوصِ همین خدمت (فرم‌ساز) — کنارِ بقیهٔ بخش‌های خدمت، نه در «پرونده». */}
+      {restFields.length > 0 && (
+        <div className="db-extra vf-extra">
+          <DynForm assistance fields={restFields} values={extra} errors={extraErr} onChange={setExtra}
+            disabled={busy} myRole={myRole} onVoice={onVoice} voiceUrl={voiceUrl} />
+        </div>
+      )}
+    </>
+  ) : null;
   const mainKeys = builtinOrder.filter((key) => !(f.kind === 'surgery' && INTRA_KEYS.includes(key)) && !SIDE_KEYS.includes(key)
     && !(isService && (SERVICE_HEAD_KEYS.includes(key) || key === 'techId')));
   const sideKeys = SIDE_KEYS.filter((key) => builtinNodes[key]);
@@ -2613,7 +2625,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
           عمل» آمد (surgery-10): مراقبتِ قبل از عمل در زبانهٔ خودش، و برنامهٔ پس از عمل با خلاصه‌اش. */}
       {isService && tab === 'service' && (
         <div className="db-phase" data-phase="service" role="tabpanel" aria-label={`خدمتِ ${visitTitle}`}>
-          <Suspense fallback={<p className="db-decide-hint">در حالِ بارگذاری…</p>}>
+          {/* ⚠️ تا چانکِ پنل برسد، خودِ فیلدهای اجباری (جراح/بیمارستان) باید دیده شوند: خطای «X را کامل کنید»
+              کاربر را به همین زبانه می‌آورد و پردهٔ «در حالِ بارگذاری» جای فیلد را می‌گرفت. */}
+          <Suspense fallback={<>{serviceHead}<p className="db-decide-hint">در حالِ بارگذاری…</p></>}>
             <ServicePanel
               visitId={initial?.id ?? null}
               patientName={editing ? `${f.firstName} ${f.lastName}`.trim() : (picked?.fullName ?? `${f.firstName} ${f.lastName}`.trim())}
@@ -2623,16 +2637,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
               crewDirty={crewDirty}
               onCrewSaved={() => setCrewDirty(false)}
               techs={defs.techs ?? []}
-              head={<>
-                <div className="db-grid2 db-builtins">{SERVICE_HEAD_KEYS.map(cell)}</div>
-                {/* فیلدهای مخصوصِ همین خدمت (فرم‌ساز) — کنارِ بقیهٔ بخش‌های خدمت، نه در «پرونده». */}
-                {restFields.length > 0 && (
-                  <div className="db-extra vf-extra">
-                    <DynForm assistance fields={restFields} values={extra} errors={extraErr} onChange={setExtra}
-                      disabled={busy} myRole={myRole} onVoice={onVoice} voiceUrl={voiceUrl} />
-                  </div>
-                )}
-              </>}
+              head={serviceHead}
               onToast={onToast}
               disabled={busy}
             />

@@ -192,6 +192,11 @@ try {
      شرح را در پاپ‌آپ می‌نویسد (`CareEditor`)، پس این بخش روی مطب و با همان پاپ‌آپ‌ها سنجیده می‌شود. */
   sql(`INSERT INTO settings (key, value, updated_at) VALUES ('vertical','clinic', now()) ON CONFLICT (key) DO UPDATE SET value='clinic', updated_at=now();`);
   sql(`INSERT INTO settings (key, value, updated_at) VALUES ('services','[]', now()) ON CONFLICT (key) DO UPDATE SET value='[]', updated_at=now();`);
+  /* مطب بدونِ فرمِ «ویزیت» فهرستِ بیماران را نمی‌سازد و پیوندِ `?patient=` شیت را باز نمی‌کند (همان چیدمانِ surgery-phase-tabs). */
+  if (!((await send('/forms/visit-kinds', 'GET')).json ?? []).some((k) => (k.kind ?? k.key) === 'clinic')) {
+    const cf = (await send('/forms', 'POST', { key: 'clinic', title: 'فرمِ ویزیت', scope: 'visit' })).json;
+    if (cf?.id) trash.forms.push(cf.id);
+  }
   const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', headless: true });
   const page = await browser.newPage({ viewport: { width: 1100, height: 900 } });
   const errors = [];

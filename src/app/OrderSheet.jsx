@@ -278,7 +278,24 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
       {locked && (
         <p className="od-locked">این درخواست برای بیمار فرستاده شده و <b>قفل</b> است — بیمار بر پایهٔ همین پاسخ می‌دهد. برای تغییر، درخواستِ تازه بسازید.</p>
       )}
-      <fieldset className="od-req" disabled={locked}>
+      {/* درخواستِ قفل = خلاصهٔ خواندنی، نه همان فرم با کادرهای خاکستری. چیپ‌های فرم فقط پنلِ روتین
+          را دارند، پس آزمایشِ سفارشی («قند ناشتا») در حالتِ قفل اصلاً دیده نمی‌شد. */}
+      {locked && (
+        <div className="od-block od-req-ro" data-request-summary>
+          {items.length > 0 && (
+            <>
+              <span className="od-label">{kind === 'lab' ? 'آزمایش‌های درخواستی' : kind === 'imaging' ? 'تصویربرداریِ درخواستی' : 'درخواست'}</span>
+              <ul className="od-ro-items">{items.map((it) => <li key={it}><bdi>{it}</bdi></li>)}</ul>
+            </>
+          )}
+          {kind === 'imaging' && ord.region && <p className="od-ro-line">ناحیه: <b>{ord.region}</b></p>}
+          {kind === 'referral' && ord.specialty && <p className="od-ro-line">تخصص: <b>{ord.specialty}</b>{ord.doctorName ? ` — ${ord.doctorName}` : ''}</p>}
+          {kind === 'consult' && ord.doctorName && <p className="od-ro-line">پزشکِ پیشنهادی: <b>{ord.doctorName}</b></p>}
+          {ord.note && <p className="od-ro-note">{ord.note}</p>}
+          {ord.dueDate && <p className="od-ro-line">مهلتِ انجام و ارسالِ پاسخ: <b>{faDate(ord.dueDate)}</b></p>}
+        </div>
+      )}
+      {!locked && <fieldset className="od-req">
       {kind === 'lab' && (
         <div className="od-block">
           <span className="od-label">{locked ? 'آزمایش‌های درخواستی' : 'آزمایش‌های روتین — تیک بزنید'}</span>
@@ -332,7 +349,7 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
         <JDate label="مهلتِ انجام و ارسالِ پاسخ" value={f.dueJ}
                onChange={(v) => setF((s) => ({ ...s, dueJ: v }))} placeholder="اختیاری" />
       )}
-      </fieldset>
+      </fieldset>}
       {/* توضیحِ صوتیِ پزشک برای بیمار — بخشی از **درخواست** است و در صفحهٔ بیمار پخش می‌شود.
           تا ۱۴۰۵/۰۸/۰۴ داخلِ بخشِ «پاسخ» بود: سفارش را «پاسخ آمد» می‌کرد و به بیمار هم نمی‌رسید. */}
       <div className="db-field od-voice od-req-voice"><span>توضیحِ صوتی برای بیمار (اختیاری)</span>
