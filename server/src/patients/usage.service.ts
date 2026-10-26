@@ -15,8 +15,9 @@ import { deliveryState } from './handover';
  * یک برگه برای هر عمل، سه گروه:
  *  - **از ست** — محتویاتِ ردیابی‌شدهٔ ستِ همراهِ همین عمل (محلِ «ست SE-07»): مصرف از خودِ ست کم می‌شود
  *    (حرکتِ `out` در همان محل، به نامِ همین عمل و همین حواله)؛ تکمیلِ بعدی در انبار کسری را می‌بندد.
- *  - **ارسالیِ حواله** — قلمِ غیرِ ستی که با حواله رفته (ده الکترودِ آزاد): همان برگهٔ مصرفِ قدیم
- *    (`recordUsage`)، تا دو برگه دو عدد نگویند.
+ *  - **ارسالیِ حواله** — قلمِ غیرِ ستی که با حواله رفته (ده الکترودِ آزاد): حرکتِ `out` به نامِ **همین بیمار**
+ *    (`consumeFromTransfer`)؛ سقف = ارسالی منهای مصرفِ بیمارانِ دیگر از همان حواله (ستِ عمومیِ بیمارستان).
+ *    برگهٔ حواله دیگر مصرف نمی‌گیرد، فقط همین‌ها را به تفکیکِ بیمار نشان می‌دهد (۱۴۰۵/۰۸/۰۴).
  *  - **از کیف/انبار** — کالاهای تیک‌خوردهٔ «نمایش در پنلِ کارشناسی» که در ست نیستند: از موجودیِ انبار
  *    (محلِ خانه) کم می‌شود؛ انبار که کم بیاورد، عدد و نامِ کالا گفته می‌شود نه «خطا».
  *
@@ -119,6 +120,7 @@ export class VisitUsageService {
       const sent = t.movements.filter((m) => m.location === t.toLocation && m.lot);
       const loose: UsageLine[] = [];
       let usedOf: Map<number, number> | null = null;
+      let allOf: Map<number, number> | null = null;
       for (const m of sent) {
         const item = m.lot!.item;
         if (item.assetKind === 'set' && m.lot!.serialNo) {
@@ -148,10 +150,17 @@ export class VisitUsageService {
           setBlocks.push({ transferId: t.id, code: t.code, setLotId: set.lotId, serialNo: set.serialNo ?? null, name: set.itemName, location: set.location, lines });
         } else {
           if (!usedOf) {
+            /* مصرفِ همین بیمار و مصرفِ همه از همین حواله — ستِ عمومیِ بیمارستان بینِ چند بیمار است. */
             const agg = await this.prisma.stockMovement.groupBy({
-              by: ['lotId'], where: { transferId: t.id, kind: { in: ['out', 'return'] } }, _sum: { quantity: true },
+              by: ['lotId', 'visitId'], where: { transferId: t.id, kind: { in: ['out', 'return'] } }, _sum: { quantity: true },
             });
-            usedOf = new Map(agg.map((a) => [a.lotId, -(a._sum.quantity ?? 0)]));
+            usedOf = new Map();
+            allOf = new Map();
+            for (const a of agg) {
+              const q = -(a._sum.quantity ?? 0);
+              allOf.set(a.lotId, (allOf.get(a.lotId) ?? 0) + q);
+              if (a.visitId === v.id) usedOf.set(a.lotId, (usedOf.get(a.lotId) ?? 0) + q);
+            }
           }
           const multi = item.usageMode === 'multi';
           const key = usageKey('transfer', m.lotId, item.id);
@@ -160,7 +169,8 @@ export class VisitUsageService {
             key, source: 'transfer', mode: multi ? 'use' : 'consume',
             itemId: item.id, name: labelOf(item), unit: item.unit ?? 'عدد', usageMode: item.usageMode,
             setLotId: null, transferId: t.id, lotId: m.lotId,
-            limit: multi ? null : m.quantity,
+            /* سقف = ارسالی منهای مصرفِ بیمارانِ دیگر از همین حواله. */
+            limit: multi ? null : m.quantity - ((allOf!.get(m.lotId) ?? 0) - (usedOf.get(m.lotId) ?? 0)),
             // یک‌بارمصرفِ ارسالی: عدد از خودِ دفتر (برگهٔ مصرفِ قدیم هم همین را می‌نویسد)، نه از ردیفِ ما.
             quantity: multi ? (recorded.get(key)?.quantity ?? 0) : (usedOf.get(m.lotId) ?? 0),
             usesTotal: 0,
@@ -245,7 +255,7 @@ export class VisitUsageService {
         }
         if (line.source === 'set') await this.consumeFromSet(visitId, sheet.code, line, delta, user);
         else if (line.source === 'warehouse') await this.consumeFromHome(visitId, sheet.code, sheet.home, line, delta, user);
-        else await this.inventory.recordUsage(line.transferId!, [{ lotId: line.lotId!, used: target }], user);
+        else await this.inventory.consumeFromTransfer(line.transferId!, line.lotId!, visitId, target, user);
       }
       if (target === 0) {
         await this.prisma.visitUsage.deleteMany({ where: { visitId, key } });

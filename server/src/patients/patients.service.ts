@@ -7,7 +7,7 @@ import { randomUUID } from 'crypto';
 import { jobRoleLabel, fieldRoles } from '../common/job-roles';
 import { CANCEL_REASONS } from '../common/cancel-reasons';
 import { syncCrew } from './crew-sync';
-import { followVisitMove } from './shared-transfers';
+import { followVisitMove, staleText, StaleTransfer } from './shared-transfers';
 import { serviceTitleOf, visitTitleOf } from './visit-title';
 import { LEVEL } from '../common/levels';
 import { ownVisitWhere, scopedPatientWhere, scopedVisitWhere as scopedVisitWhereOf } from '../common/own-scope';
@@ -1913,6 +1913,7 @@ export class PatientsService {
     if (dto.nationalId !== undefined) patientPatch.nationalId = dto.nationalId || null;
     if (dto.birthDate !== undefined) patientPatch.birthDate = toDateValue(dto.birthDate) ?? null;
 
+    let stale: StaleTransfer[] = [];
     const updated = await this.prisma.$transaction(async (tx) => {
       const visitPatch: any = await this.resolveRefs(tx, dto);
       // null صریح یعنی «پاک کن» (SetNull + پاک‌شدنِ نامِ denormalized)
@@ -2020,7 +2021,7 @@ export class PatientsService {
         ...(visitPatch.opStartTime !== undefined || visitPatch.opEndTime !== undefined ? { times: 'op' as const } : {}),
       });
       /* تاریخ یا بیمارستان عوض شد → حملِ هنوز نرفتهٔ همین مراجعه هم جابه‌جا می‌شود. */
-      if (visitPatch.opDate !== undefined || visitPatch.hospitalId !== undefined) await followVisitMove(tx, id);
+      if (visitPatch.opDate !== undefined || visitPatch.hospitalId !== undefined) stale = (await followVisitMove(tx, id)).gone;
       return crewWrote ? tx.visit.findUniqueOrThrow({ where: { id }, include: INCLUDE_VISIT_FULL }) : upd;
     });
     const kinds = await this.forms.kindMap();
@@ -2033,7 +2034,22 @@ export class PatientsService {
        پیامکش) هم عوض می‌شود — تا دیروز ذخیرهٔ بعدیِ عمل تاریخِ منشی را بازنویسی می‌کرد. */
     await this.syncPostOpParent(id);
     await this.carrySurgeonToFollowers(v, updated);
-    return result;
+    return { ...result, ...(await this.reportStale(id, v.patientId, stale, user)) };
+  }
+
+  /**
+   * «حملِ جامانده» (تصمیمِ مالک ۱۴۰۵/۰۸/۰۴): تغییرِ تاریخ/بیمارستان ثبت شد ولی ست/دستگاهِ **رفته** در بیمارستانِ
+   * قبلی است. هشدار به همان نویسنده (پاسخ) + کار برای صفِ دفتر و مسئولِ فعلیِ پرونده (`work-rules: transport.stale`).
+   */
+  private async reportStale(visitId: number, patientId: number, gone: StaleTransfer[], user?: any) {
+    if (!gone.length) return {};
+    const why = staleText(gone)!;
+    const techId = (await this.prisma.visit.findUnique({ where: { id: visitId }, select: { techId: true } }))?.techId ?? null;
+    for (const g of gone) {
+      await this.events.emit({ type: 'transport.stale', visitId, patientId, refType: 'stock_transfer', refId: g.id,
+        actorId: user?.id ?? null, payload: { code: g.code, place: g.place, techId, why } });
+    }
+    return { transportWarning: why };
   }
 
   /**
@@ -2145,12 +2161,13 @@ export class PatientsService {
     if (next && next.getTime() < todayRangeUtc()[0].getTime()) {
       throw new BadRequestException('تاریخِ تازه باید امروز یا بعد از آن باشد');
     }
+    let stale: StaleTransfer[] = [];
     const updated = await this.prisma.$transaction(async (tx) => {
       /* ساعتِ حضور مشتقِ برنامهٔ چینشِ **همان روز** است (`syncVisitDuty`)؛ روزِ تازه، حضورِ تازه —
          و بی‌تاریخ، بی‌حضور. همان قاعدهٔ `updateVisit`. */
       await tx.visit.update({ where: { id }, data: { opDate: next } });
       await syncCrew(tx, id);
-      await followVisitMove(tx, id);
+      stale = (await followVisitMove(tx, id)).gone;
       return tx.visit.findUniqueOrThrow({ where: { id }, include: INCLUDE_PATIENT });
     });
     await this.audit.record({
@@ -2164,7 +2181,7 @@ export class PatientsService {
     await this.reminders.syncNextVisit(id);
     await this.syncPostOpVisit(id);
     await this.syncPostOpParent(id);
-    return enrich(updated, await this.forms.kindMap());
+    return { ...enrich(updated, await this.forms.kindMap()), ...(await this.reportStale(id, v.patientId, stale, user)) };
   }
 
   /// حذفِ مراجعه؛ اگر آخرین مراجعهٔ بیمار بود، خودِ بیمار هم پاک می‌شود

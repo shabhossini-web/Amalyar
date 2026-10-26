@@ -53,17 +53,21 @@ export async function withSharedTransfers(prisma: any, visits: any[], shape: { s
  * می‌شود (`stopId = null`) تا در تختهٔ روزِ تازه «بی‌راننده» دیده شود، نه بی‌صدا با رانندهٔ دیروز. حوالهٔ
  * رفته دست نمی‌خورد — شمارش‌شان برگردانده می‌شود تا نویسنده بگوید.
  */
-export async function followVisitMove(tx: any, visitId: number): Promise<{ moved: number; gone: number }> {
+export type StaleTransfer = { id: number; code: string; place: string };
+
+export async function followVisitMove(tx: any, visitId: number): Promise<{ moved: number; gone: StaleTransfer[] }> {
   const v = await tx.visit.findUnique({ where: { id: visitId }, select: { opDate: true, hospitalId: true, hospital: { select: { name: true } } } });
-  if (!v) return { moved: 0, gone: 0 };
+  if (!v) return { moved: 0, gone: [] };
   /* ستِ عمومیِ «بیمارستان + روز» با جابه‌جاییِ لنگرش جابه‌جا نمی‌شود — مالِ بقیهٔ بیمارانِ همان‌جاست. */
-  const rows = await tx.stockTransfer.findMany({ where: { visitId, shared: false, status: { not: 'closed' } }, select: { id: true, status: true, plannedFor: true, hospitalId: true, stopId: true } });
-  let moved = 0, gone = 0;
+  const rows = await tx.stockTransfer.findMany({ where: { visitId, shared: false, status: { not: 'closed' } }, select: { id: true, code: true, toLocation: true, status: true, plannedFor: true, hospitalId: true, stopId: true } });
+  let moved = 0;
+  const gone: StaleTransfer[] = [];
   for (const t of rows) {
     const sameDay = !!v.opDate && !!t.plannedFor && t.plannedFor.toISOString().slice(0, 10) === v.opDate.toISOString().slice(0, 10);
     const sameHospital = !v.hospitalId || t.hospitalId === v.hospitalId;
     if (sameDay && sameHospital) continue;
-    if (t.status !== 'planned') { gone++; continue; }
+    /* رفته: دست نمی‌خورد — فراخوان هشدار می‌دهد و کارِ «حملِ جامانده» می‌سازد (`transport.stale`). */
+    if (t.status !== 'planned') { gone.push({ id: t.id, code: t.code, place: t.toLocation }); continue; }
     await tx.stockTransfer.update({ where: { id: t.id }, data: {
       ...(v.opDate ? { plannedFor: dayOf(v.opDate) } : {}),
       ...(v.hospitalId ? { hospitalId: v.hospitalId, toLocation: v.hospital?.name ?? undefined } : {}),
@@ -73,3 +77,8 @@ export async function followVisitMove(tx: any, visitId: number): Promise<{ moved
   }
   return { moved, gone };
 }
+
+/** متنِ هشدارِ «حملِ جامانده» — همان جمله روی صفحهٔ نویسنده و در یادداشتِ کار. */
+export const staleText = (gone: StaleTransfer[]) => gone.length
+  ? `ست/دستگاهِ این عمل (${gone.map((g) => g.code).join('، ')}) هنوز در ${[...new Set(gone.map((g) => g.place))].join('، ')} است — برگرداندن یا جابه‌جایی به بیمارستان/روزِ تازه با چینش و حمل.`
+  : null;

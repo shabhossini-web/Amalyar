@@ -1400,7 +1400,6 @@ function TransferDetail({ id, onClose, onChanged, onError }) {
   const [rel, setRel] = useState('');
   const [check, setCheck] = useState(null);
   const [miss, setMiss] = useState({});
-  const [used, setUsed] = useState({}); // lotId → مقدارِ در حالِ ویرایش
   const [sets, setSets] = useState([]); // ست‌های سریالیِ همین حواله (بستهٔ ب: شمارشِ برگشت)
   const [cnt, setCnt] = useState({}); // `${lotId}:${partId}` → { counted, damaged }
 
@@ -1408,8 +1407,6 @@ function TransferDetail({ id, onClose, onChanged, onError }) {
     try {
       const fresh = await api(`/stock/transfers/${id}`);
       setT(fresh);
-      // ورودی‌ها با عددِ سرور هم‌گام می‌شوند تا پس از ثبت، مقدارِ قدیمی نماند.
-      setUsed(Object.fromEntries(fresh.lines.map((l) => [l.lotId, String(l.used)])));
     } catch (e) { onError(e.message); onClose(); }
   }, [id, onError, onClose]);
   useEffect(() => { load(); }, [load]);
@@ -1472,34 +1469,15 @@ function TransferDetail({ id, onClose, onChanged, onError }) {
               <div key={l.movementId} className="iv-trline">
                 <b>{l.itemName}{l.itemSize ? ` — ${l.itemSize}` : ''}</b>
                 <small dir="ltr">{l.serialNo || l.lotNo || `#${l.lotId}`}</small>
-                {t.status === 'closed' ? (
-                  <span>ارسال {num(l.sent)} · مصرف {num(l.used)} · مانده {num(l.remaining)}</span>
-                ) : (
-                  <div className="iv-uline">
-                    <span>ارسال {num(l.sent)}</span>
-                    <label>
-                      مصرف شد
-                      <input dir="ltr" inputMode="numeric"
-                             value={used[l.lotId] ?? String(l.used)}
-                             onChange={(e) => setUsed((s) => ({ ...s, [l.lotId]: e.target.value }))} />
-                    </label>
-                    <span className={l.remaining ? 'rem' : ''}>مانده {num(l.remaining)}</span>
-                  </div>
+                {/* برگهٔ حواله فقط جمع و مانده (تصمیمِ مالک ۱۴۰۵/۰۸/۰۴) — مصرف از کارتِ هر بیمار در پنلِ کارشناسی ثبت می‌شود. */}
+                <span>ارسال {num(l.sent)} · مصرف {num(l.used)} · مانده {num(l.remaining)}</span>
+                {(l.byVisit ?? []).length > 0 && (
+                  <small className="iv-byvisit">{l.byVisit.map((b) => `${b.name ?? 'بی‌صاحب (ثبتِ قدیمی)'} ${num(b.used)}`).join('، ')}</small>
                 )}
               </div>
             ))}
           </div>
-
-          {t.status !== 'closed' && (
-            <button type="button" className="iv-usebtn" disabled={busy}
-                    onClick={() => act(
-                      `/stock/transfers/${id}/usage`,
-                      { lines: t.lines.map((l) => ({ lotId: l.lotId, used: Number(toEnDigits(used[l.lotId] ?? String(l.used))) || 0 })) },
-                      'برگهٔ مصرف ثبت شد',
-                    )}>
-              ثبتِ برگهٔ مصرف
-            </button>
-          )}
+          {t.status !== 'closed' && <p className="iv-note">مصرف از کارتِ هر بیمار ثبت می‌شود («ثبتِ مصرفیِ این بیمار» در پنلِ کارشناسی).</p>}
 
           {/* دستِ دومِ تحویلِ دوطرفه — کنارِ رسیدِ CSR، نه به‌جایش: یکی امضای بیمارستان است، یکی امضای کارشناسِ خودمان. */}
           {t.receipt && (

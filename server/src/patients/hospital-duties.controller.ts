@@ -14,6 +14,7 @@ class DutyDto {
   @IsString() @MaxLength(8) arriveTime!: string;
 }
 class AssignDto { @ValidateIf((_o, value) => value !== null) @IsInt() @Min(1) techId!: number | null; }
+class CrewMemberDto { @IsInt() @Min(1) techId!: number; }
 class DayDto { @IsString() @MaxLength(10) date!: string; }
 @Controller('dispatch/roster')
 @UseGuards(JwtAuthGuard, FeatureGuard, PermissionGuard)
@@ -28,6 +29,11 @@ export class HospitalDutiesController {
   remove(@Param('id', ParseIntPipe) id: number, @CurrentUser() user: any) { return this.duties.remove(id, user); }
   @Patch('visits/:id') @RequirePermissions('patients.update', 'patients.read_all')
   assign(@Param('id', ParseIntPipe) id: number, @Body() dto: AssignDto, @CurrentUser() user: any) { return this.duties.assign(id, dto.techId ?? null, user); }
+  /* تیمِ بیمار از تختهٔ چینش — افزودن از حاضرانِ همان بیمارستان و روز، برداشتنِ عضوِ شروع‌نکرده. */
+  @Post('visits/:id/crew') @RequirePermissions('patients.update', 'patients.read_all')
+  addCrew(@Param('id', ParseIntPipe) id: number, @Body() dto: CrewMemberDto, @CurrentUser() user: any) { return this.duties.addCrew(id, dto.techId, user); }
+  @Delete('visits/:id/crew/:techId') @RequirePermissions('patients.update', 'patients.read_all')
+  removeCrew(@Param('id', ParseIntPipe) id: number, @Param('techId', ParseIntPipe) techId: number, @CurrentUser() user: any) { return this.duties.removeCrew(id, techId, user); }
   @Get('preview') @RequirePermissions('patients.read', 'patients.read_all')
   preview(@Query('date') date: string) { return this.duties.preview(date); }
   @Post('send') @RequirePermissions('patients.update', 'patients.read_all')

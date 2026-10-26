@@ -496,8 +496,9 @@ export function StatusSheet({ visit, today, onClose, onSaved }) {
   const send = async (body, msg) => {
     setBusy(true); setErr('');
     try {
-      await api(`/tech/visits/${visit.id}/status`, { method: 'POST', body });
-      onSaved(msg);
+      const r = await api(`/tech/visits/${visit.id}/status`, { method: 'POST', body });
+      /* «حملِ جامانده»: ستِ این عمل رفته و در بیمارستانِ قبلی است — همان هشدارِ سرور. */
+      onSaved(r?.transportWarning ? `${msg} — ${r.transportWarning}` : msg);
     } catch (e) { setErr(e.message); setBusy(false); throw e; }
   };
   const markDone = async (toToday) => {
@@ -886,8 +887,13 @@ function UsageSheet({ transferId, onClose, onToast }) {
               <b>{l.itemName}{l.itemSize ? ` — ${l.itemSize}` : ''}</b>
               <small dir="ltr">{l.serialNo || l.lotNo || `#${l.lotId}`}</small>
               <span>ارسال {num(l.sent)} · مصرف {num(l.used)}</span>
+              {/* مصرفِ هر بیمار از همین قلم — ثبت از کارتِ همان بیمار؛ «بی‌صاحب» = ثبتِ قدیمیِ همین برگه. */}
+              {(l.byVisit ?? []).length > 0 && (
+                <small className="tk-byvisit">{l.byVisit.map((b) => `${b.name ?? 'بی‌صاحب (ثبتِ قدیمی)'} ${num(b.used)}`).join('، ')}</small>
+              )}
             </div>
           ))}
+          <p className="tk-note">مصرف از کارتِ هر بیمار ثبت می‌شود («ثبتِ مصرفیِ این بیمار»)؛ این‌جا جمع و مانده است.</p>
 
           {/* اعلامِ پایان هم دارایی را آزاد می‌کند هم صفِ جمع‌آوری را می‌سازد —
               دفتر خودش نمی‌داند عمل کِی واقعاً تمام شد. */}

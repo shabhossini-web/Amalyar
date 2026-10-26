@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { badTime, faTime, normTime } from '../lib/time.js';
 import TimePick from '../ui/TimePick.jsx';
-import { Send } from '../ui/icons.jsx';
+import { Close, Plus, Send } from '../ui/icons.jsx';
 import { useTerms } from './config.jsx';
 
 const faNum = (n) => Number(n ?? 0).toLocaleString('fa-IR');
@@ -78,11 +78,9 @@ export default function HospitalRoster({ date, techs, hospitals, onChanged }) {
         </> : <p>برای این {t.surgery}‌ها بیمارستان را در ویرایشِ {t.surgery} از تعاریفِ پایه انتخاب کنید. <Link to="/app/dashboard">رفتن به {t.surgery}‌ها</Link></p>}
         <div className="roster-visits">{h.visits.map(v => <div className="roster-visit" key={v.id}>
           <div><b>{v.name}</b><small>{v.opStartTime ? faTime(v.opStartTime) : 'بدون ساعت'} · <bdi dir="ltr">{v.code}</bdi></small>{v.hospitalText && !h.hospitalId && <small>{v.hospitalText}</small>}{v.instructions && <small>دستور: {v.instructions}</small>}{Array.isArray(v.requiredItems) && v.requiredItems.length > 0 && <small>اقلام: {v.requiredItems.map(r => `${r.name ?? r.itemId} × ${faNum(r.quantity)}`).join('، ')}</small>}</div>
-          <label>کارشناسِ {t.surgery}<select aria-label={`کارشناس ${v.name}`} value={v.techId ?? ''} disabled={busy || !h.hospitalId} onChange={e => act(`/dispatch/roster/visits/${v.id}`, 'PATCH', { techId: e.target.value ? Number(e.target.value) : null })}>
-            <option value="">آزاد؛ قابل پذیرش توسط کارشناس بیمارستان</option>
-            {v.techId && !h.duties.some(d => d.techId === v.techId) && <option value={v.techId}>{v.techName} — هنوز در برنامه حضور نیست</option>}
-            {h.duties.filter(d => d.active).map(d => <option key={d.techId} value={d.techId}>{d.name} · حضور {faTime(d.arriveTime)}</option>)}
-          </select></label>
+          <Crew visit={v} hospital={h} busy={busy} word={t.surgery}
+            onAdd={techId => act(`/dispatch/roster/visits/${v.id}/crew`, 'POST', { techId })}
+            onRemove={techId => act(`/dispatch/roster/visits/${v.id}/crew/${techId}`, 'DELETE')} />
         </div>)}</div>
       </section>)}
       {/* «ابلاغِ برنامهٔ روز» اصلی‌ترین کارِ این صفحه است: دکمهٔ اصلیِ درشتِ پایینِ روز (company-02).
@@ -100,6 +98,41 @@ export default function HospitalRoster({ date, techs, hospitals, onChanged }) {
         {!!preview.programs.length && <button type="button" className="roster-send-main" disabled={busy} onClick={send}><Send width="17" height="17" aria-hidden="true" /> ارسالِ برنامهٔ روز با پیامک و ربات</button>}
       </section>}
     </>}
+  </div>;
+}
+
+/**
+ * **تیمِ بیمار روی تختهٔ چینش** (تصمیمِ مالک ۱۴۰۵/۰۸/۰۴): یک چیپ برای هر عضو با ساعتِ ورود/خروجش و برچسبِ «مسئول»
+ * روی مسئولِ فعلی. افزودن فقط از حاضرانِ همان بیمارستان و روز؛ برداشتن فقط عضوی که شروع نکرده — ساعت‌ها فقط از
+ * پنلِ کارشناس و فرمِ خدمت می‌آیند. بیمارِ بی‌تیم «آزاد» است و کارشناسِ همان بیمارستان می‌تواند بپذیردش.
+ */
+function Crew({ visit: v, hospital: h, busy, word, onAdd, onRemove }) {
+  const [pick, setPick] = useState('');
+  /* مراجعهٔ قدیمی فقط `techId` دارد و هنوز تیمی ندارد — همان یک نفر چیپ می‌شود. */
+  const members = v.crew?.length ? v.crew : v.techId ? [{ accountId: v.techId, name: v.techName, fromTime: null, toTime: null }] : [];
+  const free = h.duties.filter(d => d.active && !members.some(m => m.accountId === d.techId));
+  const span = (m) => m.fromTime ? `${faTime(m.fromTime)} تا ${m.toTime ? faTime(m.toTime) : 'اکنون'}` : 'شروع نکرده';
+  const add = async () => { if (await onAdd(Number(pick))) setPick(''); };
+  return <div className="roster-crew" role="group" aria-label={`تیمِ ${v.name}`}>
+    <span className="roster-crew-title">تیمِ {word}</span>
+    {!members.length && <span className="roster-crew-free">آزاد؛ قابل پذیرش توسط کارشناسِ بیمارستان</span>}
+    <ul className="roster-chips">{members.map(m => {
+      const started = !!(m.fromTime || m.toTime), absent = !h.duties.some(d => d.techId === m.accountId);
+      return <li key={m.accountId} className={`roster-chip${m.accountId === v.techId ? ' is-lead' : ''}`}>
+        <span><b>{m.name}</b>{m.accountId === v.techId && <em>مسئول</em>}</span>
+        <small>{span(m)}{absent && ' · هنوز در برنامهٔ حضور نیست'}</small>
+        {!started && <button type="button" disabled={busy || !h.hospitalId} onClick={() => onRemove(m.accountId)} aria-label={`برداشتنِ ${m.name} از تیمِ ${v.name}`}><Close width="14" height="14" aria-hidden="true" /></button>}
+      </li>;
+    })}</ul>
+    {!!h.hospitalId && (free.length
+      ? <div className="roster-crew-add">
+          <select aria-label={`افزودنِ کارشناس به تیمِ ${v.name}`} value={pick} disabled={busy} onChange={e => setPick(e.target.value)}>
+            <option value="">{members.length ? 'افزودنِ کارشناسِ دیگر' : 'انتخابِ کارشناس'}</option>
+            {free.map(d => <option key={d.techId} value={d.techId}>{d.name} · حضور {faTime(d.arriveTime)}</option>)}
+          </select>
+          <button type="button" disabled={busy || !pick} onClick={add}><Plus width="15" height="15" aria-hidden="true" /> افزودن</button>
+        </div>
+      : !members.length && <small className="roster-crew-hint">اول حضورِ کارشناس را برای این بیمارستان ثبت کنید.</small>)}
   </div>;
 }
 

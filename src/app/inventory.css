@@ -426,3 +426,4 @@
 .iv-dmg { max-width: var(--page-w); margin: 22px auto 0; display: grid; gap: 8px; }
 .iv-dmg h2 { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 14px; }
 .iv-dmg h2 svg { color: var(--amber-text); }
+.iv-byvisit { display: block; margin-top: 3px; font-size: 11.5px; color: var(--text2); }

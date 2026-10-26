@@ -21,6 +21,7 @@ export const TYPE_FA = {
   complete_report: 'گزارشِ خدمت', confirm_usage: 'تأییدِ مصرف', confirm_delivery: 'تأییدِ تحویل', issue_invoice: 'صدورِ فاکتور', resend_sms: 'پیامک',
   follow_up_unanswered: 'پیگیریِ بی‌پاسخ', fill_form: 'فرم', upload_result: 'ارسالِ نتیجه', pick_slot: 'انتخابِ زمان', manual: 'یادداشت',
   repair_data: 'تطبیقِ دادهٔ ناقص', reupload_doc: 'مدرکِ بی‌فایل',
+  transport_stale: 'حملِ جامانده', transport_stale_tech: 'حملِ جامانده',
 };
 
 const faNum = (n) => Number(n || 0).toLocaleString('fa-IR');

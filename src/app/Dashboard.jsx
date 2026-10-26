@@ -1125,6 +1125,8 @@ export default function Dashboard() {
     }
     /* «عمل» نامِ خودش را دارد — در مطب «ویزیت ثبت شد» برای یک عمل غلط بود. */
     const word = saved?.kind === 'surgery' ? t.surgery : t.visit;
+    /* «حملِ جامانده» (۱۴۰۵/۰۸/۰۴): تاریخ/بیمارستان عوض شد ولی ست رفته — هشدار از سرور، کار هم برای دفتر ساخته شد. */
+    if (wasEdit && saved?.transportWarning) { setToast(`${word} ویرایش شد — ${saved.transportWarning}`); return; }
     if (wasEdit) { setToast(`${word} ویرایش شد`); return; }
 
     // کاربر باید بفهمد مراجعه در کدام پرونده و با چه شماره‌ای نشست — به‌ویژه وقتی

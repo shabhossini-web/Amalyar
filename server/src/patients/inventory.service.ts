@@ -925,6 +925,8 @@ export class InventoryService {
         returned.push({ lotId, quantity: atDest });
       }
       await tx.stockTransfer.update({ where: { id }, data: { status: 'closed' } });
+      /* «حملِ جامانده» با برگشتِ ست بسته می‌شود (work-rules: transfer.closed). */
+      await this.events.emit({ type: 'transfer.closed', visitId: null, refType: 'stock_transfer', refId: id, actorId: user?.id ?? null }, tx);
     });
 
     await this.audit.record({
@@ -947,51 +949,44 @@ export class InventoryService {
    * مانده و «چه چیزی باید برگردد» از همین‌جا خودکار درمی‌آید — کارشناس هیچ‌وقت
    * چیزی را که برمی‌گردد نمی‌شمارد.
    */
-  async recordUsage(id: number, lines: { lotId: number; used: number }[], user: any) {
-    const t = await this.assertTransfer(id, user);
-    if (t.status === 'closed') throw new BadRequestException('این حواله بسته شده و مصرفش قابلِ تغییر نیست');
-
-    const sent = await this.prisma.stockMovement.findMany({
-      where: { transferId: id, kind: 'transfer', quantity: { gt: 0 }, location: t.toLocation },
-      select: { lotId: true, quantity: true },
-    });
-    const sentOf = new Map(sent.map((s) => [s.lotId, s.quantity]));
-
-    const changes: { lotId: number; from: number; to: number }[] = [];
-    await this.prisma.$transaction(async (tx) => {
-      for (const line of lines) {
-        if (!sentOf.has(line.lotId)) throw new BadRequestException('این لات در حواله نیست');
-        const target = intOrZero(line.used, 'تعدادِ مصرف‌شده');
-        if (target < 0) throw new BadRequestException('تعدادِ مصرف‌شده نمی‌تواند منفی باشد');
-        if (target > sentOf.get(line.lotId)!) {
-          throw new BadRequestException(`بیشتر از ارسالی مصرف نمی‌شود — ${sentOf.get(line.lotId)} عدد فرستاده شده`);
-        }
-
-        const agg = await tx.stockMovement.aggregate({
-          where: { transferId: id, lotId: line.lotId, kind: { in: ['out', 'return'] } },
-          _sum: { quantity: true },
-        });
-        const already = -(agg._sum.quantity ?? 0); // خروج منفی است
-        const delta = target - already;
-        if (delta === 0) continue;
-
-        const meta = { transferId: id, visitId: t.visitId, visitCode: t.visitCode, location: t.toLocation, reason: `برگهٔ مصرفِ ${t.code}` };
-        if (delta > 0) await this.move(line.lotId, 'out', -delta, meta, user, tx);
-        else await this.move(line.lotId, 'return', -delta, { ...meta, reason: `اصلاحِ برگهٔ مصرفِ ${t.code}` }, user, tx);
-        changes.push({ lotId: line.lotId, from: already, to: target });
-      }
-    });
-
-    await this.audit.record({
-      actorId: user?.id, action: 'stock.transfer.usage', entityType: 'stock_transfer', entityId: id,
-      after: { changes },
-    });
-    /* W2.2: ثبتِ مصرف ← بستنِ «تأییدِ مصرفِ سرِ عمل» (work-rules: usage.confirmed؛ ref = مراجعه). */
-    if (t.visitId) {
-      await this.events.emit({ type: 'usage.confirmed', visitId: t.visitId, actorId: user?.id ?? null, payload: { transferId: id, changes } });
-    }
-    return this.transfer(id, user);
+  /**
+   * **برگهٔ حواله دیگر مصرف نمی‌گیرد** (تصمیمِ مالک ۱۴۰۵/۰۸/۰۴): مصرف فقط از «ثبتِ مصرفیِ این بیمار» روی پروندهٔ
+   * همان بیمار می‌نشیند (`consumeFromTransfer`). تا امروز این برگه جمعِ کلِ مصرف را می‌گرفت و به هیچ بیماری
+   * نمی‌رسید — و روی ستِ عمومیِ بیمارستان، ثبتِ یک بیمار عددِ بقیه را بازنویسی می‌کرد.
+   */
+  async recordUsage(_id: number, _lines: { lotId: number; used: number }[], _user: any): Promise<never> {
+    throw new BadRequestException('مصرف از کارتِ هر بیمار ثبت می‌شود («ثبتِ مصرفیِ این بیمار») — برگهٔ حواله فقط جمع و مانده را نشان می‌دهد');
   }
+
+  /**
+   * مصرفِ **یک بیمار** از قلمِ یک حواله — «جمعِ مصرف‌شدهٔ همین بیمار» (نه «چقدر کم کن»)، با حرکتِ `out`/`return`ِ
+   * برچسب‌خورده به **همان** بیمار. سقف = ارسالی منهای مصرفِ بیمارانِ دیگر از همان حواله (ستِ عمومیِ بیمارستان).
+   * فراخوان دامنهٔ بیمار را از قبل سنجیده است (`VisitUsageService.save`).
+   */
+  async consumeFromTransfer(transferId: number, lotId: number, visitId: number, target: number, user: any) {
+    if (!Number.isInteger(target) || target < 0) throw new BadRequestException('تعدادِ مصرف‌شده نمی‌تواند منفی باشد');
+    const t = await this.prisma.stockTransfer.findUnique({ where: { id: transferId }, select: { id: true, code: true, status: true, toLocation: true } });
+    if (!t) throw new NotFoundException('حواله یافت نشد');
+    if (t.status === 'closed') throw new BadRequestException('این حواله بسته شده و مصرفش قابلِ تغییر نیست');
+    const v = await this.prisma.visit.findUnique({ where: { id: visitId }, select: { seq: true, patient: { select: { code: true } } } });
+    if (!v) throw new NotFoundException('مراجعه یافت نشد');
+    await this.prisma.$transaction(async (tx) => {
+      const sentAgg = await tx.stockMovement.aggregate({ where: { transferId, lotId, kind: 'transfer', quantity: { gt: 0 }, location: t.toLocation }, _sum: { quantity: true } });
+      const sent = sentAgg._sum.quantity ?? 0;
+      if (!sent) throw new BadRequestException('این لات در حواله نیست');
+      const sum = async (extra: any) => -((await tx.stockMovement.aggregate({ where: { transferId, lotId, kind: { in: ['out', 'return'] }, ...extra }, _sum: { quantity: true } }))._sum.quantity ?? 0);
+      const all = await sum({});
+      const mine = await sum({ visitId });
+      const room = sent - (all - mine);
+      if (target > room) throw new BadRequestException(`بیشتر از ارسالی مصرف نمی‌شود — برای این بیمار ${room} عدد مانده است`);
+      const delta = target - mine;
+      if (!delta) return;
+      const meta = { transferId, visitId, visitCode: `${v.patient.code}-V${v.seq}`, location: t.toLocation, reason: `مصرفِ سرِ عمل — ${t.code}` };
+      if (delta > 0) await this.move(lotId, 'out', -delta, meta, user, tx);
+      else await this.move(lotId, 'return', -delta, { ...meta, reason: `اصلاحِ مصرفِ سرِ عمل — ${t.code}` }, user, tx);
+    });
+  }
+
 
   /**
    * دامنهٔ حواله برای کارشناس.
@@ -1089,6 +1084,17 @@ export class InventoryService {
       _sum: { quantity: true },
     });
     const usedOf = new Map(used.map((u) => [u.lotId, -(u._sum.quantity ?? 0)]));
+    /* مصرفِ هر قلم به تفکیکِ بیمار — برگهٔ حواله فقط همین را نشان می‌دهد (مصرف از کارتِ هر بیمار). حرکتِ بی‌بیمار =
+       «بی‌صاحبِ قدیمی» (پیش از ۱۴۰۵/۰۸/۰۴ از همین برگه ثبت شده بود). */
+    const perVisit = await this.prisma.stockMovement.groupBy({
+      by: ['lotId', 'visitId'], where: { transferId: t.id, kind: { in: ['out', 'return'] } }, _sum: { quantity: true },
+    });
+    const vIds = [...new Set(perVisit.map((p) => p.visitId).filter((x): x is number => !!x))];
+    const vNames = new Map((vIds.length ? await this.prisma.visit.findMany({ where: { id: { in: vIds } },
+      select: { id: true, patient: { select: { firstName: true, lastName: true } } } }) : [])
+      .map((x) => [x.id, `${x.patient.firstName} ${x.patient.lastName}`.trim()]));
+    const byVisitOf = (lotId: number) => perVisit.filter((p) => p.lotId === lotId && -(p._sum.quantity ?? 0) > 0)
+      .map((p) => ({ visitId: p.visitId, name: p.visitId ? vNames.get(p.visitId) ?? '—' : null, used: -(p._sum.quantity ?? 0) }));
 
     // حوالهٔ برنامه‌ریزی‌شده هنوز حرکتی ندارد؛ قلم‌هایش را از `plannedLines`
     // می‌سازیم تا برگهٔ چاپ و صفحه با حوالهٔ ارسال‌شده یک شکل باشند.
@@ -1124,6 +1130,7 @@ export class InventoryService {
           /// هنوز در مقصد است — یعنی هنوز مصرف نشده و باید برگردد.
           remaining: Math.max(0, atDest),
           used: usedOf.get(m.lotId) ?? 0,
+          byVisit: byVisitOf(m.lotId),
         };
       });
 

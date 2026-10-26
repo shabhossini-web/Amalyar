@@ -360,3 +360,4 @@
 @media (max-width: 620px) { .tk-mon-t, .tk-pick-i, .tk-handover { min-height: 44px; } }
 @media (prefers-reduced-motion: reduce) { .tk-mon-t, .tk-pick-i { transition: none; } }
 .tk-dev-row bdi { white-space: nowrap; }
+.tk-byvisit { flex-basis: 100%; font-size: 11.5px; color: var(--text2); }

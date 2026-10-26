@@ -299,6 +299,25 @@
 .roster-duty label, .roster-visit label, .roster-extra { display: grid; gap: 6px; min-width: 0; flex: 1 1 160px; }
 .roster-duty b, .roster-visit > div { flex: 1 1 160px; }
 .roster-visit small { display: block; margin-top: 6px; opacity: .7; }
+/* تیمِ بیمار: چیپِ هر عضو با ساعت؛ مسئولِ فعلی با برچسب و بوردرِ برند. */
+.roster-crew { flex: 2 1 260px; min-width: 0; display: grid; gap: 8px; }
+.roster-crew-title { font-size: 12.5px; color: var(--text2); }
+.roster-crew-free, .roster-crew-hint { font-size: 13px; color: var(--text2); }
+.roster-chips { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.roster-chip { display: flex; align-items: center; gap: 4px 10px; flex-wrap: wrap; min-width: 0; padding-block: 6px; padding-inline: 12px 6px; border-radius: 12px; border: 1px solid var(--card-border); background: rgba(var(--veil-rgb), .04); }
+.roster-chip.is-lead { border-color: rgba(var(--brand-2-rgb), .55); background: rgba(var(--brand-rgb), .08); }
+.roster-chip > span { display: inline-flex; align-items: center; gap: 6px; }
+.roster-chip em { font-style: normal; font-size: 11.5px; font-weight: 700; padding: 1px 8px; border-radius: 999px; color: var(--brand-text); background: rgba(var(--brand-rgb), .12); }
+.roster-visit .roster-chip small { display: inline; margin: 0; opacity: 1; color: var(--text2); font-size: 12px; }
+.roster-chip > button { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; border: 1px solid transparent; background: transparent; color: var(--text2); cursor: pointer; }
+.roster-chip > button:hover:not(:disabled) { color: var(--red-text); border-color: var(--card-border); }
+.roster-chip > button:focus-visible, .roster-crew-add > button:focus-visible { outline: 2px solid var(--brand-2); outline-offset: 2px; }
+.roster-chip > button:disabled, .roster-crew-add > button:disabled { opacity: .4; cursor: default; }
+.roster-crew-add { display: flex; gap: 8px; align-items: stretch; flex-wrap: wrap; }
+.roster-crew-add select { flex: 1 1 180px; width: auto; }
+.roster-crew-add > button { min-height: 44px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--card-border); border-radius: 12px; padding: 10px 14px; background: var(--card); color: inherit; cursor: pointer; font: inherit; font-size: 13px; font-weight: 700; }
+.roster-crew-add > button:hover:not(:disabled) { border-color: rgba(var(--brand-2-rgb), .55); }
+@media (prefers-reduced-motion: reduce) { .roster-chip, .roster-chip > button { transition: none; } }
 .hospital-roster select { min-width: 0; max-width: 100%; width: 100%; padding: 12px; border-radius: 12px; border: 1px solid var(--card-border); background: var(--bg3); color: inherit; }
 /* ⚠️ فقط دکمه‌های **خودِ ردیف** (`>`): قاعدهٔ بی‌فرزندِ قبلی روی دکمهٔ ساعتِ `TimePick` هم
    می‌نشست و آیکونِ ساعت را به ۱۰ پیکسل می‌فشرد — شبیهِ یک نقطه (company-18). */

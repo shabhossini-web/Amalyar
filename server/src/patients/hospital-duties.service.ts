@@ -124,12 +124,55 @@ export class HospitalDutiesService {
     });
   }
 
+  /**
+   * **تیم از تختهٔ چینش** (تصمیمِ مالک ۱۴۰۵/۰۸/۰۴): افزودنِ عضو فقط از کسانی که آن روز در همان بیمارستان حضور
+   * دارند (همان قیدِ `assign`)؛ برداشتن فقط عضوی که هنوز شروع نکرده — ساعت‌ها فقط از پنل و فرم. مسئولِ فعلی و
+   * حضور از تیم مشتق می‌شوند (`crew-sync`).
+   */
+  async addCrew(id: number, techId: number, user: any) {
+    return this.prisma.$transaction(async (tx) => {
+      const v = await tx.visit.findFirst({ where: { id, patient: { deletedAt: null } } });
+      if (!v?.hospitalId || !v.opDate) throw new BadRequestException('ابتدا بیمارستان و تاریخ مراجعه را مشخص کنید');
+      const date = scheduleDate(v.opDate.toISOString().slice(0, 10));
+      const duty = await tx.hospitalDuty.findUnique({ where: { date_hospitalId_techId: { date, hospitalId: v.hospitalId, techId } }, include: { tech: { select: { status: true } } } });
+      if (!duty || duty.tech.status !== 'active') throw new BadRequestException('این کارشناس در برنامه همین بیمارستان و روز نیست');
+      /* مراجعهٔ قدیمی که فقط `techId` دارد: اول همان کارشناس روی تیم بنشیند، وگرنه عضوِ تازه جایش را می‌گرفت. */
+      if (v.techId && !(await tx.visitCrew.count({ where: { visitId: id } }))) await syncCrew(tx, id);
+      const rows = await tx.visitCrew.findMany({ where: { visitId: id }, orderBy: [{ sort: 'asc' }, { id: 'asc' }] });
+      if (rows.some((r: any) => r.accountId === techId)) throw new ConflictException('این کارشناس همین حالا در تیم است');
+      if (rows.length >= 8) throw new BadRequestException('حداکثر ۸ کارشناس');
+      await tx.visitCrew.create({ data: { visitId: id, accountId: techId, sort: (rows[rows.length - 1]?.sort ?? -1) + 1, source: 'dispatch' } });
+      await syncCrew(tx, id);
+      await tx.auditEvent.create({ data: { actorId: user.id, action: 'dispatch.crew.add', entityType: 'visit', entityId: String(id), afterJson: { techId } } });
+      return { ok: true };
+    });
+  }
+
+  async removeCrew(id: number, techId: number, user: any) {
+    return this.prisma.$transaction(async (tx) => {
+      const find = () => tx.visitCrew.findUnique({ where: { visitId_accountId: { visitId: id, accountId: techId } } });
+      let row = await find();
+      /* مراجعهٔ قدیمی (فقط `techId`، بی‌تیم): تخته چیپش را از `techId` می‌سازد؛ اول روی تیم بنشیند تا برداشتنی شود. */
+      if (!row && (await tx.visit.count({ where: { id, techId, crew: { none: {} } } }))) { await syncCrew(tx, id); row = await find(); }
+      if (!row) throw new NotFoundException('این کارشناس در تیمِ این بیمار نیست');
+      if (row.fromTime || row.toTime) throw new BadRequestException('این کارشناس کارش را شروع کرده — از فرمِ خدمت اصلاح کنید');
+      await tx.visitCrew.delete({ where: { id: row.id } });
+      /* آخرین عضو رفت: پرونده بی‌کارشناس می‌شود — وگرنه `syncCrew` همان `techId`ِ مانده را دوباره روی تیم می‌کاشت. */
+      await tx.visit.updateMany({ where: { id, techId }, data: { techId: null } });
+      await syncCrew(tx, id);
+      await tx.auditEvent.create({ data: { actorId: user.id, action: 'dispatch.crew.remove', entityType: 'visit', entityId: String(id), beforeJson: { techId } } });
+      return { ok: true };
+    });
+  }
+
   async preview(raw: string) {
     const board = await this.day(raw), programs = new Map<number, { techId: number; name: string; text: string }>();
     for (const hospital of board.hospitals) for (const duty of hospital.duties.filter((d: any) => d.active)) {
       const mine = hospital.visits.filter((v: any) => v.techId === duty.techId || v.crew.some((c: any) => c.accountId === duty.techId)), open = hospital.visits.filter((v: any) => !v.techId && v.opStatus === 'pending');
       if (!programs.has(duty.techId)) programs.set(duty.techId, { techId: duty.techId, name: duty.name, text: `${duty.name}\nبرنامه ${faDateStr(scheduleDate(raw))}` });
-      const lines = (rows: any[]) => rows.map(v => `${v.name}${v.opStartTime ? ` — ساعت عمل ${v.opStartTime}` : ''}`).join('\n') || 'ندارد';
+      /* بیمارِ چندنفره: «همراه با: …» — هر عضو می‌داند با چه کسی سرِ همان عمل است (تصمیمِ مالک ۱۴۰۵/۰۸/۰۴). */
+      const mates = (v: any) => (v.crew ?? []).filter((c: any) => c.accountId !== duty.techId).map((c: any) => c.name);
+      const lines = (rows: any[]) => rows.map(v => `${v.name}${v.opStartTime ? ` — ساعت عمل ${v.opStartTime}` : ''}${mates(v).length ? ` — همراه با: ${mates(v).join('، ')}` : ''}`).join('\n') || 'ندارد';
       programs.get(duty.techId)!.text += `\n\n${hospital.name} — حضور ${duty.arriveTime}\nبیماران قطعی شما:\n${lines(mine)}\nبیماران احتمالی (هنوز بدون کارشناس):\n${lines(open)}`;
     }
     return { date: raw, programs: [...programs.values()] };

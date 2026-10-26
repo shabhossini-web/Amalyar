@@ -337,12 +337,13 @@ export class TechService {
     if (cur?.opStatus !== 'pending') {
       throw new BadRequestException('وضعیتِ این عمل قبلاً ثبت شده است؛ برای تغییرش با مدیر هماهنگ کنید');
     }
-    if (dto.status === 'postponed') await this.patients.postpone(id, dto.opDate ?? null, user);
+    let transportWarning: string | undefined;
+    if (dto.status === 'postponed') transportWarning = ((await this.patients.postpone(id, dto.opDate ?? null, user)) as any).transportWarning;
     else if (dto.status === 'done') await this.patients.setStatus(id, 'done', user);
     else if (dto.status === 'cancelled') {
       await this.patients.setStatus(id, 'cancelled', user, { reason: dto.cancelReason, note: dto.cancelNote });
     } else throw new BadRequestException('وضعیت نامعتبر است');
-    return this.one(id, user);
+    return { ...(await this.one(id, user)), ...(transportWarning ? { transportWarning } : {}) };
   }
 
   /**

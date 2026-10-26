@@ -293,6 +293,35 @@ export const RULES: Record<string, Rule> = {
   }),
   'delivery.confirmed': (_e, ref) => close(ref, 'confirm_delivery'),
 
+  /* ── حملِ جامانده (تصمیمِ مالک ۱۴۰۵/۰۸/۰۴) ── تاریخ یا بیمارستانِ عمل عوض شد ولی ست/دستگاهش **رفته** و در
+     بیمارستانِ قبلی است (`shared-transfers.followVisitMove`). تغییر ثبت می‌شود؛ دفتر (صفِ چینش/حمل) تصمیم می‌گیرد
+     برگردد یا جابه‌جا شود، و مسئولِ فعلیِ پرونده هم در پنلش می‌بیند. با بسته‌شدنِ حواله (برگشت) هر دو بسته می‌شوند. */
+  'transport.stale': (e, ref) => ({
+    upserts: [
+      {
+        ...base(e, 'transport_stale', ref),
+        title: `حملِ جامانده — ${e.payload?.code ? `حوالهٔ ${e.payload.code}` : 'حواله'} هنوز در ${e.payload?.place ?? 'بیمارستانِ قبلی'} است`,
+        ownerRole: 'secretary',
+        dueAt: e.at ?? new Date(),
+        priority: 2,
+        note: e.payload?.why ?? null,
+        reopen: true,
+      },
+      ...(e.payload?.techId ? [{
+        ...base(e, 'transport_stale_tech', ref),
+        title: `ستِ این عمل هنوز در ${e.payload?.place ?? 'بیمارستانِ قبلی'} است`,
+        ownerRole: 'technician',
+        ownerAccountId: e.payload.techId,
+        dueAt: e.at ?? new Date(),
+        priority: 1,
+        note: e.payload?.why ?? null,
+        reopen: true,
+      }] : []),
+    ],
+    closes: [],
+  }),
+  'transfer.closed': (_e, ref) => close(ref, 'transport_stale', 'transport_stale_tech'),
+
   /* ── مدرکِ بی‌فایل (مالک، ۱۴۰۵/۰۷/۲۰) ── ردیفِ مدرک هست ولی فایلش روی سرور نیست (`detectLostFiles`).
      کارِ **منشی**: از بیمار یا پزشک دوباره بگیرد و روی همان ردیف «آپلودِ دوباره» بزند. با آپلودِ دوباره یا
      حذفِ خودِ ردیف بسته می‌شود. `reopen` برای فایلی است که بعد از آپلودِ دوباره **باز** نیست؛ کاری که منشی

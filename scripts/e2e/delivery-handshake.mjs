@@ -244,7 +244,7 @@ try {
   pass('unconfirmed past the day → «تأییدِ تحویل» for the office (secretary); the tech\'s clean receipt closes it');
 
   // ── 9) usage after receipt still works on the shipped transfer ──
-  await inventory.recordUsage(t1.id, [{ lotId: elLot.id, used: 4 }], techUser);
+  await inventory.consumeFromTransfer(t1.id, elLot.id, visit.id, 4, techUser);
   assert.equal(await at(elLot.id, t1c.toLocation), 6, 'usage deducts from the set at the hospital');
   pass('usage sheet keeps working after the handshake');
 
