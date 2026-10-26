@@ -148,6 +148,7 @@ superadmin-today
 company-service-flow
 company-flow-ui
 company-service-panel
+crew-unified
 p89-clinical
 waitlist
 p89-ui

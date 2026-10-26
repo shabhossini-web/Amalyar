@@ -135,9 +135,26 @@ try {
   ok((await A(`/visits/${v.id}/service/crew`, { crew: [{ accountId: t1.id }] }, 'PUT')).status === 200
     && (await crewOf(v.id))[0].source === 'dispatch', 'ذخیرهٔ دوبارهٔ فرم «از کجا آمد»ِ عضو را از دست نمی‌دهد');
 
-  console.log('\n۷) گزارشِ حذف‌شده');
+  console.log('\n۷) ستِ عمومیِ «بیمارستان + روز»');
+  const v2 = (await A('/visits', { kind: 'surgery', firstName: 'بیمارِ', lastName: `دوم${tag}`, opDate: dayDate.toISOString(), hospitalId: hospital.id, surgeonId: surgeon.id, opStartTime: '13:00' })).data;
+  await A(`/dispatch/roster/visits/${v2.id}`, { techId: t1.id }, 'PATCH');
+  const setItem = await db.item.create({ data: { name: `ستِ عمومی ${tag}`, assetKind: 'consumable', unit: 'عدد' } });
+  const setLot = await db.stockLot.create({ data: { itemId: setItem.id, lotNo: `S-${tag}` } });
+  await db.stockTransfer.create({ data: { code: `HV-S${tag}`, fromLocation: 'انبار', toLocation: hospital.name, hospitalId: hospital.id, visitId: v.id, shared: true,
+    status: 'planned', plannedFor: dayDate, plannedLines: [{ lotId: setLot.id, quantity: 5 }] } });
+  const agS = (await call(tok1, '/tech/agenda?scope=today')).data;
+  const sOf = (id) => agS?.visits?.find((x) => x.id === id)?.transfers?.find((t) => t.code === `HV-S${tag}`);
+  ok(sOf(v.id)?.shared && sOf(v2.id)?.shared, '**ستِ عمومی روی کارتِ هر دو بیمارِ همان بیمارستان آمد، با برچسبِ «عمومی»**', JSON.stringify([sOf(v.id), sOf(v2.id)]).slice(0, 200));
+  const movedDay = new Date(dayDate.getTime() + 2 * 864e5);
+  await A(`/visits/${v.id}`, { opDate: movedDay.toISOString() }, 'PATCH');
+  const hv = await db.stockTransfer.findFirst({ where: { code: `HV-U${tag}` } });
+  const hs = await db.stockTransfer.findFirst({ where: { code: `HV-S${tag}` } });
+  ok(hv?.plannedFor?.toISOString().slice(0, 10) === movedDay.toISOString().slice(0, 10) && hv?.stopId === null, '**موکول‌شدنِ عمل حملِ هنوز نرفته‌اش را هم به روزِ تازه برد**', hv?.plannedFor?.toISOString());
+  ok(hs?.plannedFor?.toISOString().slice(0, 10) === day, 'ستِ عمومیِ بیمارستان با لنگرش جابه‌جا نشد — مالِ بقیه است');
+
+  console.log('\n۸) گزارشِ حذف‌شده');
   const doc = await db.document.create({ data: { patientId: v.patientId, visitId: v.id, category: 'report', title: 'گزارش', fileName: 'r.pdf', mimeType: 'application/pdf', size: 1, sha256: 'x'.repeat(64), deletedAt: new Date() } }).catch((e) => ({ err: String(e).slice(0, 200) }));
-  const ag = (await call(tok1, '/tech/agenda?scope=today')).data;
+  const ag = (await call(tok1, '/tech/agenda?scope=upcoming')).data;
   ok(!doc.err && ag?.visits?.find((x) => x.id === v.id)?.reportAt === null, '**گزارشِ حذف‌شده «ثبت شده» دیده نمی‌شود**', doc.err ?? '');
 } finally {
   await db.$disconnect();

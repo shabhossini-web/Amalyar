@@ -359,3 +359,4 @@
 .tk-mon-t:focus-visible, .tk-pick-i:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 @media (max-width: 620px) { .tk-mon-t, .tk-pick-i, .tk-handover { min-height: 44px; } }
 @media (prefers-reduced-motion: reduce) { .tk-mon-t, .tk-pick-i { transition: none; } }
+.tk-dev-row bdi { white-space: nowrap; }

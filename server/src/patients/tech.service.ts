@@ -129,9 +129,10 @@ export class TechService {
     private record: RecordService,
     private duties: HospitalDutiesService,
     private events: EventsService,
-    private crew: ServiceCrewService,
     /* اختیاری: بی‌آن حوالهٔ برنامه‌ریزی‌شده بی‌نامِ کالا می‌ماند (رفتارِ پیش از ۱۴۰۵/۰۷/۰۹). */
     private routes?: RoutesService,
+    /* آخر، چون سوییت‌های e2e این سرویس را با آرگومانِ جایگاهی می‌سازند (`delivery-handshake`). */
+    private crew?: ServiceCrewService,
   ) {}
 
   private range(scope: AgendaScope): [Date, Date] {
@@ -383,20 +384,20 @@ export class TechService {
   /** «تحویل به کارشناسِ بعدی» — منطق در `ServiceCrewService.handover` (همان تیمِ فرمِ خدمت). */
   async handover(id: number, dto: { toAccountId: number; at?: string | null }, user: any) {
     await this.ownVisit(id, user);
-    await this.crew.handover(id, dto, user);
+    await this.crew!.handover(id, dto, user);
     return this.one(id, user);
   }
 
   async handoverCandidates(id: number, user: any) {
     await this.ownVisit(id, user);
-    return this.crew.handoverCandidates(id);
+    return this.crew!.handoverCandidates(id);
   }
 
   /** دستگاه‌های انبار برای روزِ همین عمل + آنچه حمل به همین بیمارستان برده (پیشنهاد). */
   async devices(id: number, user: any) {
     await this.ownVisit(id, user);
     const v = await this.prisma.visit.findUnique({ where: { id }, select: { id: true, hospitalId: true, opDate: true } });
-    const [options, sent] = await Promise.all([this.crew.deviceOptions(id), transportDevices(this.prisma, v!)]);
+    const [options, sent] = await Promise.all([this.crew!.deviceOptions(id), transportDevices(this.prisma, v!)]);
     const sentIds = new Set(sent.map((d) => d.lotId));
     return options.map((o: any) => ({ ...o, fromTransport: sentIds.has(o.lotId) }))
       .sort((a: any, b: any) => Number(b.fromTransport) - Number(a.fromTransport));
@@ -404,7 +405,7 @@ export class TechService {
 
   async setDevice(id: number, lotId: number | null, user: any) {
     await this.ownVisit(id, user);
-    await this.crew.setDevice(id, lotId, user);
+    await this.crew!.setDevice(id, lotId, user);
     return this.one(id, user);
   }
 }
