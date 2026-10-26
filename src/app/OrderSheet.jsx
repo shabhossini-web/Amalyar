@@ -43,7 +43,9 @@ export const ORDER_META = {
    داشتند («نتیجه آمد — بررسی نشده» این‌جا، «پاسخ آمده» در فرمِ مراجعه،
    «نتیجه آمده» در میزِ پزشک). حالا از `/config.statuses.order` می‌آید. */
 /** سفارشی که پاسخش آمده و هنوز تصمیمی رویش ثبت نشده — همین‌جا بررسی می‌شود. */
-export const canReviewOrder = (o) => !!o?.id && ['answered', 'in_review'].includes(o.status);
+export const canReviewOrder = (o) => !!o?.id && (['answered', 'in_review'].includes(o.status)
+  /* «بررسی شد» که بیمار بعدش چیزِ تازه فرستاده دوباره بررسی‌پذیر است (سرور هم همین را می‌پذیرد). */
+  || (o.status === 'reviewed' && (o.documents ?? []).some((d) => d.fresh)));
 
 const faNum = (n) => String(n).replace(/\d/g, (d) => '۰۱۲۳۴۵۶۷۸۹'[d]);
 
@@ -60,7 +62,7 @@ function AnswerDocs({ docs, onToast }) {
   return (
     <div className="od-docs">
       {/* برچسبِ بی‌طرف: این فهرست هم فایلِ بیمار را دارد و هم صدایی که کارمند خودش توی همین شیت ضبط کرده. */}
-      <span className="od-label">{faNum(docs.length)} مورد — پاسخ و پیوست‌ها</span>
+      <span className="od-label">{faNum(docs.length)} مورد — پاسخ</span>
       <ul className="od-doc-list">
         {docs.map((d) => (
           <li key={d.id} className={`od-doc${String(d.mimeType ?? '').startsWith('audio/') ? ' is-audio' : ''}`}>
@@ -79,6 +81,9 @@ function AnswerDocs({ docs, onToast }) {
               <button type="button" className="od-doc-file" onClick={() => openDoc(d, onToast)}>{d.fileName}</button>
             )}
             <small>
+              {/* چه کسی فرستاد — تا ۱۴۰۵/۰۸/۰۴ فایلِ بیمار و پیوستِ کارکنان بی‌نشان کنارِ هم بودند. */}
+              <i className={`od-from ${d.from === 'patient' ? 'patient' : ''}`}>{d.from === 'patient' ? 'از بیمار' : 'از کارکنان'}</i>
+              {d.fresh && <i className="od-from fresh">تازه پس از بررسی</i>}
               {/* صدا نامش را خودِ پخش‌کننده بالا نشان می‌دهد؛ تکرارش در کپشن فقط شلوغی بود. */}
               {[
                 String(d.mimeType ?? '').startsWith('audio/') ? null : (d.title || d.fileName),
@@ -134,6 +139,25 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
   const [reviewNote, setReviewNote] = useState(order?.reviewNote ?? '');
   const set = (k) => (e) => setF((s) => ({ ...s, [k]: e.target.value }));
   const reviewable = canReviewOrder(ord);
+  /* صدای کارکنان روی سفارش = توضیحِ **درخواست**، نه پاسخ — جایش کنارِ «توضیح برای بیمار» است. */
+  const reqVoices = (ord?.documents ?? []).filter((d) => d.requestNote);
+  const answerDocs = (ord?.documents ?? []).filter((d) => !d.requestNote);
+
+  /** پیوستِ کارکنان به **خودِ سفارش** (صدای درخواست یا عکسِ جواب)؛ سفارشِ هنوز ساخته‌نشده → با «ثبت». */
+  const attach = async (doc, title, okMsg) => {
+    if (ord?.id) {
+      try {
+        setLive(await api(`/orders/${kind}/${ord.id}`, { method: 'PATCH', body: { documentIds: [doc.id] } }));
+        onSaved?.();
+        onToast(okMsg);
+      } catch (e) {
+        onToast(`در مدارکِ پرونده ثبت شد ولی به این فرم وصل نشد — ${e.message}`);
+      }
+    } else if (doc?.id) {
+      setPending((list) => [...list, { id: doc.id, title, audio: String(doc.mimeType ?? '').startsWith('audio/') }]);
+      onToast(`${okMsg} — با «ثبت» به این فرم می‌پیوندد`);
+    }
+  };
 
   /**
    * تصمیمِ بررسی — `POST /orders/:kind/:id/review` (CONTRACTS §۴/§۵).
@@ -288,6 +312,32 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
       </label>
 
 
+      {/* توضیحِ صوتیِ پزشک برای بیمار — بخشی از **درخواست** است و در صفحهٔ بیمار پخش می‌شود.
+          تا ۱۴۰۵/۰۸/۰۴ داخلِ بخشِ «پاسخ» بود: سفارش را «پاسخ آمد» می‌کرد و به بیمار هم نمی‌رسید. */}
+      <div className="db-field od-voice od-req-voice"><span>توضیحِ صوتی برای بیمار (اختیاری)</span>
+        {reqVoices.map((d) => (
+          <VoiceClip key={d.id} load={() => apiBlobUrl(`/patients/documents/${d.id}/file`)} name={d.title || 'توضیحِ صوتی'} disabled={busy} />
+        ))}
+        {pending.filter((d) => d.audio !== false).map((d) => (
+          <div key={d.id} data-pending-voices>
+            <VoiceClip load={() => apiBlobUrl(`/patients/documents/${d.id}/file`)} name={d.title} disabled={busy} />
+          </div>
+        ))}
+        <VoiceNote
+          disabled={busy}
+          onSave={async (file) => {
+            const fdv = new FormData();
+            fdv.append('file', file);
+            fdv.append('category', kind === 'imaging' ? 'imaging' : kind === 'lab' ? 'lab' : 'report');
+            const title = `توضیحِ صوتیِ پزشک — ${meta.fa}`.slice(0, 120);
+            fdv.append('title', title);
+            if (visitId) fdv.append('visitId', String(visitId));
+            const doc = await apiUpload(`/patients/${patientId}/documents`, fdv);
+            await attach({ ...doc, mimeType: doc?.mimeType ?? 'audio/wav' }, title, 'توضیحِ صوتی به درخواست پیوست شد');
+          }}
+        />
+      </div>
+
       {meta.hasDue && (
         <JDate label="مهلتِ انجام و ارسالِ پاسخ" value={f.dueJ}
                onChange={(v) => setF((s) => ({ ...s, dueJ: v }))} placeholder="اختیاری" />
@@ -302,18 +352,9 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
               {ord.reviewNote && !reviewable && <i> — {ord.reviewNote}</i>}
             </p>
           )}
-          {(ord?.documents ?? []).length > 0 && <AnswerDocs docs={ord.documents} onToast={onToast} />}
-          {pending.length > 0 && (
-            <div className="od-docs od-pending" data-pending-voices>
-              <span className="od-label">{faNum(pending.length)} ضبط — با «ثبت» به همین فرم می‌پیوندد</span>
-              <ul className="od-doc-list">
-                {pending.map((d) => (
-                  <li key={d.id} className="od-doc is-audio">
-                    <VoiceClip load={() => apiBlobUrl(`/patients/documents/${d.id}/file`)} name={d.title} disabled={busy} />
-                  </li>
-                ))}
-              </ul>
-            </div>
+          {answerDocs.length > 0 && <AnswerDocs docs={answerDocs} onToast={onToast} />}
+          {pending.some((d) => d.audio === false) && (
+            <p className="od-status">{faNum(pending.filter((d) => d.audio === false).length)} عکس — با «ثبت» به همین فرم می‌پیوندد</p>
           )}
           <label className="db-field"><span>متنِ پاسخ</span>
             <AssistedTextarea disabled={busy} rows={2} value={f.resultText} onChange={set('resultText')} placeholder="خلاصهٔ جواب" />
@@ -321,38 +362,6 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
           <label className="db-field"><span>لینکِ پاسخ</span>
             <input dir="ltr" value={f.resultLink} onChange={set('resultLink')} placeholder="https://…" />
           </label>
-          {/* توضیحِ صوتیِ کارکنان زیرِ لینک (بستهٔ ۶د) — «رادیولوژیست تلفنی گفت…».
-              مدرکِ همان پرونده و مراجعه می‌شود، با دستهٔ همین سفارش. */}
-          <div className="db-field od-voice"><span>توضیحِ صوتی (اختیاری)</span>
-            <VoiceNote
-              disabled={busy}
-              onSave={async (file) => {
-                const fdv = new FormData();
-                fdv.append('file', file);
-                fdv.append('category', kind === 'imaging' ? 'imaging' : kind === 'lab' ? 'lab' : 'report');
-                const title = `توضیحِ صوتی — ${meta.fa}${f.specialty ? ` — ${f.specialty}` : ''}`.slice(0, 120);
-                fdv.append('title', title);
-                if (visitId) fdv.append('visitId', String(visitId));
-                const doc = await apiUpload(`/patients/${patientId}/documents`, fdv);
-                /* هشدار: صدا باید به **خودِ سفارش** وصل شود و همان‌جا دیده شود. تا ۱۴۰۵/۰۷/۱۵ فقط مدرکِ پرونده
-                   می‌شد و در همین فرم هیچ‌جا دیده نمی‌شد — مالک نوشت «ویس ثبت می‌شود، اتچ می‌شود، نشان داده
-                   نمی‌شود». سفارشِ ساخته‌شده: همان لحظه با `documentIds` وصل می‌شود (سرور وضعیت را «پاسخ آمد» می‌کند،
-                   مثلِ هر پاسخِ دیگری). سفارشِ هنوز ساخته‌نشده: در `pending` می‌ماند تا «ثبت». */
-                if (ord?.id) {
-                  try {
-                    setLive(await api(`/orders/${kind}/${ord.id}`, { method: 'PATCH', body: { documentIds: [doc.id] } }));
-                    onSaved?.();
-                    onToast('توضیحِ صوتی به همین فرم پیوست شد');
-                  } catch (e) {
-                    onToast(`صدا در مدارکِ پرونده ثبت شد ولی به این فرم وصل نشد — ${e.message}`);
-                  }
-                } else if (doc?.id) {
-                  setPending((list) => [...list, { id: doc.id, title }]);
-                  onToast('توضیحِ صوتی ثبت شد — با «ثبت» به این فرم می‌پیوندد');
-                }
-              }}
-            />
-          </div>
           {kind !== 'consult' && (
             <div className="db-grid2">
               <label className="db-field"><span>نامِ کاربری (اگر لینک رمز دارد)</span>
@@ -376,10 +385,10 @@ function OrderSheet({ kind, patientId, visitId, order, onClose, onSaved, onToast
               fd.append('category', kind === 'imaging' ? 'imaging' : kind === 'lab' ? 'lab' : 'report');
               fd.append('title', `${meta.fa}${f.specialty ? ` — ${f.specialty}` : ''}`);
               if (visitId) fd.append('visitId', String(visitId));
-              await apiUpload(`/patients/${patientId}/documents`, fd);
+              const doc = await apiUpload(`/patients/${patientId}/documents`, fd);
+              /* تا ۱۴۰۵/۰۸/۰۴ عکسِ جوابی که کارکنان می‌گذاشتند فقط مدرکِ پرونده می‌شد و در همین فرم دیده نمی‌شد. */
+              await attach({ ...doc, mimeType: doc?.mimeType ?? file.type }, file.name, 'عکسِ جواب به همین فرم پیوست شد');
             }}
-            /* «ثبت شد» فقط وقتی همه رفتند (R2)؛ فایلِ خطادار با «تلاشِ دوباره» در همین کادر می‌ماند. */
-            onAllDone={({ ok = 0, failed = 0 } = {}) => { if (ok && !failed) onToast('عکسِ جواب در مدارکِ پرونده ثبت شد'); }}
           />
           {reviewable && (
             <div className="od-review">

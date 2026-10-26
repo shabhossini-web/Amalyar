@@ -133,9 +133,24 @@ export class OrdersService {
   }
 
   private async withDocuments(kind: OrderKind, row: any, db: any = this.prisma) {
-    const documents = await db.document.findMany({ where: { refType: `${kind}_order`, refId: row.id,
+    const rows = await db.document.findMany({ where: { refType: `${kind}_order`, refId: row.id,
       patientId: row.patientId, deletedAt: null }, orderBy: { id: 'asc' } });
+    /* «چه کسی فرستاد» و «تازه پس از بررسی» — شیت تا امروز همه را یک‌جا و بی‌نشان می‌چید و
+       صدای جراح کنارِ عکسِ بیمار «پاسخ» دیده می‌شد. */
+    const documents = rows.map((d: any) => ({
+      ...d,
+      from: d.uploadedById ? 'staff' : 'patient',
+      requestNote: !!d.uploadedById && String(d.mimeType ?? '').startsWith('audio/'),
+      fresh: !!row.reviewedAt && !d.uploadedById && d.createdAt > row.reviewedAt,
+    }));
     return { ...this.view(kind, row), documents };
+  }
+
+  /** مدارکِ بیمار پس از آخرین تصمیمِ بررسی. */
+  private newSinceReview(kind: OrderKind, row: any, tx: any): Promise<number> {
+    if (!row.reviewedAt) return Promise.resolve(0);
+    return tx.document.count({ where: { refType: `${kind}_order`, refId: row.id, patientId: row.patientId,
+      deletedAt: null, uploadedById: null, createdAt: { gt: row.reviewedAt } } });
   }
 
   /** An answer and its immutable record documents share the order lock and outbox transaction. */
@@ -165,6 +180,9 @@ export class OrdersService {
     if (!Array.isArray(ids) || ids.length > 5 || ids.some(id => !Number.isSafeInteger(id) || id <= 0)) {
       throw new BadRequestException('شناسه مدارک نامعتبر است');
     }
+    /* «پاسخ» فقط مدرکِ غیرصوتی است. صدایی که کارکنان روی همین سفارش ضبط می‌کنند توضیحِ
+       **درخواست** است («ناشتا بروید»، «فقط لگن»): تا ۱۴۰۵/۰۸/۰۴ وضعیت را «پاسخ آمد» می‌کرد،
+       بیمار دیگر نمی‌توانست پاسخ بفرستد و صدا را هم هرگز نمی‌شنید (گزارشِ مالک). */
     let changed = false;
     for (const id of [...new Set(ids)].sort((a, b) => a - b)) {
       await tx.$queryRaw`SELECT id FROM documents WHERE id = ${id} FOR UPDATE`;
@@ -175,7 +193,7 @@ export class OrdersService {
       if (!doc.refType) {
         await tx.document.update({ where: { id }, data: { refType: `${kind}_order`, refId: row.id,
           category: kind === 'lab' ? 'lab' : kind === 'imaging' ? 'imaging' : 'report' } });
-        changed = true;
+        if (!String(doc.mimeType ?? '').startsWith('audio/')) changed = true;
       }
     }
     return changed;
@@ -197,7 +215,10 @@ export class OrdersService {
       const row = await this.locked(kind, id, tx);
       await this.assertAccess(row.patientId, user, tx);
       if (row.status === status && (status === 'in_review' || row.reviewNote === note)) return this.withDocuments(kind, row, tx);
-      if (!['answered', 'in_review'].includes(row.status)) throw new ConflictException('این سفارش اکنون آماده بررسی نیست');
+      /* سفارشِ «بررسی شد» که بیمار بعدش چیزِ تازه فرستاده دوباره بررسی‌پذیر است — وگرنه کارِ
+         «بررسیِ نتیجه» باز می‌شد ولی شیت دکمه‌ای نداشت و سرور هم رد می‌کرد. */
+      const reopened = row.status === 'reviewed' && await this.newSinceReview(kind, row, tx) > 0;
+      if (!['answered', 'in_review'].includes(row.status) && !reopened) throw new ConflictException('این سفارش اکنون آماده بررسی نیست');
       const fresh = await this.table(kind, tx).update({ where: { id }, data: { status,
         ...(status !== 'in_review' ? { reviewNote: note, reviewedById: user.id, reviewedAt: new Date() } : {}),
       } });
@@ -467,7 +488,29 @@ export class OrdersService {
         dueDate: row.dueDate ?? null,
         status: row.status,
         answered: !!(row.resultText || row.resultLink || row.answerText || row.answerLink),
+        reviewNote: row.status === 'needs_action' ? row.reviewNote ?? null : null,
+        /* توضیحِ صوتیِ پزشک برای همین درخواست — بیمار باید بشنودش (فقط صدای کارکنان، نه فایلِ خودِ بیمار). */
+        voices: (await this.prisma.document.findMany({
+          where: { refType: `${kind}_order`, refId: row.id, patientId: row.patientId, deletedAt: null,
+            uploadedById: { not: null }, mimeType: { startsWith: 'audio/' } },
+          select: { id: true, title: true }, orderBy: { id: 'asc' },
+        })).map((d) => ({ id: d.id, title: d.title })),
+        /* آنچه بیمار تا حالا فرستاده — صفحهٔ بیمار شمارش را نشان می‌دهد تا «دوباره بفرستم؟» حدسی نباشد. */
+        sentFiles: await this.patientFileCount(kind, row, this.prisma),
       };
+    }
+    throw new NotFoundException('این نشانی معتبر نیست یا منقضی شده');
+  }
+
+  /** پخشِ توضیحِ صوتیِ پزشک در صفحهٔ عمومی — فقط صدای کارکنانِ متصل به همین توکن. */
+  async publicVoice(token: string, documentId: number) {
+    for (const kind of ORDER_KINDS) {
+      const row = await this.table(kind).findUnique({ where: { token } });
+      if (!row) continue;
+      const doc = await this.prisma.document.findFirst({ where: { id: documentId, refType: `${kind}_order`, refId: row.id,
+        patientId: row.patientId, deletedAt: null, uploadedById: { not: null }, mimeType: { startsWith: 'audio/' } } });
+      if (!doc) throw new NotFoundException('فایل پیدا نشد');
+      return { mimeType: doc.mimeType, stream: this.storage.stream(doc.sha256) };
     }
     throw new NotFoundException('این نشانی معتبر نیست یا منقضی شده');
   }
@@ -498,11 +541,18 @@ export class OrdersService {
       return this.prisma.$transaction(async tx => {
         const current = await this.locked(kind, row.id, tx);
         if (!await tx.patient.findFirst({ where: { id: current.patientId, deletedAt: null }, select: { id: true } })) throw new NotFoundException('پرونده پیدا نشد');
-        const files = await this.fileCount(kind, current, tx);
+        /* فقط موادِ خودِ بیمار — صدای پزشک روی همین سفارش «پاسخ» نیست. */
+        const files = await this.patientFileCount(kind, current, tx);
         if (!text && !link && !files) throw new BadRequestException('متن، لینک یا فایلِ پاسخ را بفرستید');
-        const data: any = kind === 'consult' ? { answerText: text || null, answerLink: link || null }
-          : { resultText: text || null, resultLink: link || null,
-            resultUser: str(dto?.user, 120) || null, resultPass: str(dto?.pass, 120) || null };
+        /* پس از «ناقص است» همان موادِ قبلی دوباره «پاسخ» نمی‌شود: باید چیزِ تازه‌ای آمده باشد. */
+        if (current.status === 'needs_action' && !text && !link && !await this.newSinceReview(kind, current, tx)) {
+          throw new BadRequestException('پزشک پاسخِ قبلی را ناقص دانسته — فایل یا توضیحِ تازه بفرستید');
+        }
+        /* متنِ خالیِ ارسالِ دوم متنِ قبلی را پاک نمی‌کند. */
+        const keep = (v: string, k: string) => v || current[k] || null;
+        const data: any = kind === 'consult' ? { answerText: keep(text, 'answerText'), answerLink: keep(link, 'answerLink') }
+          : { resultText: keep(text, 'resultText'), resultLink: keep(link, 'resultLink'),
+            resultUser: str(dto?.user, 120) || current.resultUser || null, resultPass: str(dto?.pass, 120) || current.resultPass || null };
 
         if (['sent', 'needs_action'].includes(current.status)) {
           await this.answered(kind, current, data, tx, null);
@@ -514,7 +564,17 @@ export class OrdersService {
         /* افزودنِ متن/لینکِ تازه — مدرکِ تکراری دوباره ساخته نمی‌شود، پس
            دوبار زدنِ همان دکمه کارِ بررسی را الکی باز نمی‌کند. */
         const made = await this.answerDocuments(kind, current, data, tx, null);
-        if (!made) throw new BadRequestException('چیزی برای افزودن نیست — همین پاسخ قبلاً ثبت شده');
+        if (!made) {
+          /* «افزودن» پس از بارگذاریِ فایل: فایل‌ها همان لحظهٔ بارگذاری ثبت شده‌اند (`publicUpload`) و
+             کارِ بررسی را هم باز کرده‌اند. تا ۱۴۰۵/۰۸/۰۴ این‌جا خطای «قبلاً ثبت شده» می‌آمد در حالی که
+             فایل‌ها واقعاً رسیده بودند — بیمار گیج می‌شد و دوباره می‌فرستاد (گزارشِ مالک). */
+          const recent = await tx.document.count({ where: { refType: `${kind}_order`, refId: current.id,
+            patientId: current.patientId, deletedAt: null, uploadedById: null, contentText: null, externalUrl: null,
+            createdAt: { gt: new Date(Date.now() - 2 * 3600_000) } } });
+          /* فقط «افزودنِ» بی‌متن و بی‌لینک: همان متنِ تکراری هنوز ۴۰۰ است (دوبار زدنِ دکمه). */
+          if (!recent || text || link) throw new BadRequestException('چیزی برای افزودن نیست — همین پاسخ قبلاً ثبت شده');
+          return { ok: true, status: current.status, appended: 0, files: recent };
+        }
         await this.reopenReview(kind, current, tx, `order.${kind}.appended`, { added: made });
         return { ok: true, status: current.status, appended: made };
       });
@@ -559,7 +619,7 @@ export class OrdersService {
         const current = await this.locked(kind, row.id, tx);
         if (!await tx.patient.findFirst({ where: { id: current.patientId, deletedAt: null }, select: { id: true } })) throw new NotFoundException('پرونده پیدا نشد');
         if (current.status === 'draft') throw new ConflictException('این سفارش هنوز برای شما ارسال نشده است');
-        if (await this.fileCount(kind, current, tx) >= MAX_ANSWER_FILES) {
+        if (await this.patientFileCount(kind, current, tx) >= MAX_ANSWER_FILES) {
           throw new BadRequestException(`برای هر درخواست حداکثر ${faNum(MAX_ANSWER_FILES)} فایل می‌شود فرستاد`);
         }
         const doc = await tx.document.create({ data: {
@@ -582,10 +642,10 @@ export class OrdersService {
     throw new NotFoundException('این نشانی معتبر نیست یا منقضی شده');
   }
 
-  /** شمارِ فایل‌های پیوستِ یک سفارش — متن و لینک فایل نیستند، پس در سقف نمی‌آیند. */
-  private fileCount(kind: OrderKind, row: any, tx: any): Promise<number> {
+  /** فایل‌های **خودِ بیمار** روی این سفارش — صدا/عکسی که کارکنان پیوست کرده‌اند جزوِ سقف و «پاسخ» نیست. */
+  private patientFileCount(kind: OrderKind, row: any, tx: any): Promise<number> {
     return tx.document.count({ where: { refType: `${kind}_order`, refId: row.id,
-      patientId: row.patientId, deletedAt: null, contentText: null, externalUrl: null } });
+      patientId: row.patientId, deletedAt: null, contentText: null, externalUrl: null, uploadedById: null } });
   }
 
   /**

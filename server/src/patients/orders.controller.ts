@@ -1,7 +1,8 @@
 import {
-  Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors,
+  Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, Res, UploadedFile, UseGuards, UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { LevelGuard } from '../auth/level.guard';
 import { MinLevel } from '../auth/min-level.decorator';
@@ -73,6 +74,14 @@ export class PublicOrdersController {
   @Get(':token')
   view(@Param('token') token: string) {
     return this.orders.publicView(token);
+  }
+
+  /** توضیحِ صوتیِ پزشک برای همین درخواست. */
+  @Get(':token/voice/:id')
+  async voice(@Param('token') token: string, @Param('id', ParseIntPipe) id: number, @Res() res: Response) {
+    const v = await this.orders.publicVoice(token, id);
+    res.setHeader('Content-Type', v.mimeType); res.setHeader('Cache-Control', 'private, no-store');
+    v.stream.pipe(res);
   }
 
   @Post(':token/answer')

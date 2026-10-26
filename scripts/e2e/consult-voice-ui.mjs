@@ -151,11 +151,14 @@ try {
   ok('سرور صدا را پذیرفت', after === before + 1, `${before} → ${after}`);
   await shot('consult-voice-03-after-save');
 
+  /* ۱۴۰۵/۰۸/۰۴: صدای کارمند توضیحِ **درخواست** است، نه پاسخ — کنارِ «توضیح برای بیمار» می‌نشیند،
+     صدای بیمار در فهرستِ پاسخ می‌ماند (گزارشِ مالک: «توضیحای صوتی ثبت و فرستاده نمیشن»). */
   const clips = await page.locator('.od-doc [data-voice-clip]').count();
-  ok('**صدای ضبط‌شده همان‌جا در شیت دیده می‌شود** (دو صدا: بیمار + کارمند)', clips === 2, `clips=${clips}`);
+  const reqClips = await page.locator('.od-req-voice [data-voice-clip]').count();
+  ok('**صدای ضبط‌شده همان‌جا در شیت دیده می‌شود** (بیمار در پاسخ، کارمند در درخواست)', clips === 1 && reqClips === 1, `answer=${clips} request=${reqClips}`);
   ok('صدای مراجعهٔ دیگر در این شیت نیامد',
     !(await page.locator('.od-sheet').innerText()).includes('مراجعهٔ دیگر'));
-  const staffDoc = num(`SELECT id FROM documents WHERE patient_id=${visit.patientId} AND mime_type='audio/wav' AND deleted_at IS NULL AND title LIKE 'توضیحِ صوتی — %' ORDER BY id DESC LIMIT 1`);
+  const staffDoc = num(`SELECT id FROM documents WHERE patient_id=${visit.patientId} AND mime_type='audio/wav' AND deleted_at IS NULL AND title LIKE 'توضیحِ صوتیِ پزشک%' ORDER BY id DESC LIMIT 1`);
   ok('صدای کارمند به **همین سفارش** وصل شد', sql(`SELECT coalesce(ref_type,'-') || ':' || coalesce(ref_id::text,'-') FROM documents WHERE id=${staffDoc}`) === `consult_order:${order.id}`,
     sql(`SELECT coalesce(ref_type,'-') || ':' || coalesce(ref_id::text,'-') FROM documents WHERE id=${staffDoc}`));
 
@@ -163,7 +166,8 @@ try {
   await page.keyboard.press('Escape');
   await page.locator('.od-sheet').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
   await openSheet();
-  ok('پس از بازکردنِ دوباره هر دو صدا هست', (await page.locator('.od-doc [data-voice-clip]').count()) === 2);
+  ok('پس از بازکردنِ دوباره هر دو صدا هست',
+    (await page.locator('.od-doc [data-voice-clip]').count()) === 1 && (await page.locator('.od-req-voice [data-voice-clip]').count()) === 1);
   await shot('consult-voice-04-reopened');
 
   const row = await orderRow();

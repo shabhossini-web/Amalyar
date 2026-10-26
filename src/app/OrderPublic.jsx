@@ -7,13 +7,13 @@
  */
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { api, apiUpload } from '../lib/api.js';
+import { api, apiBlobUrl, apiUpload } from '../lib/api.js';
 import { fetchFace } from '../lib/public-face.js';
 import { faDate } from '../lib/jalali.js';
 import { PATIENT } from '../lib/terms.js';
 import { Alert, CheckCircle, Clock } from '../ui/icons.jsx';
 import FileDrop from '../ui/FileDrop.jsx';
-import VoiceNote from '../ui/VoiceNote.jsx';
+import VoiceNote, { VoiceClip } from '../ui/VoiceNote.jsx';
 import './orders.css';
 import './launcher.css';
 
@@ -46,6 +46,7 @@ export default function OrderPublic() {
   const [sent, setSent] = useState('');
   const [files, setFiles] = useState(0);
   const [adding, setAdding] = useState(false);
+  const [notice, setNotice] = useState('');
 
   useEffect(() => {
     document.title = 'عمل‌یار — درخواستِ پزشک';
@@ -80,6 +81,9 @@ export default function OrderPublic() {
         method: 'POST', body: append ? { ...f, append: true } : f,
       });
       setSent(res?.status && T[res.status] ? res.status : 'answered');
+      /* تأییدِ صریح — بیمار باید بداند فرستاده‌اش رسید، نه اینکه با خطا دوباره بفرستد. */
+      setNotice(append ? 'ثبتِ مجدد انجام شد — موارد تازه به پاسخِ قبلی اضافه شد' : 'پاسخ ثبت شد');
+      setRow((r) => (r ? { ...r, sentFiles: (r.sentFiles ?? 0) + files } : r));
       setF({ text: '', link: '', user: '', pass: '' });
       setFiles(0);
       setAdding(false);
@@ -107,12 +111,24 @@ export default function OrderPublic() {
         <p className="op-summary">{row.summary}</p>
         {row.note && <p className="op-note">{row.note}</p>}
         {row.dueDate && <p className="op-due">مهلتِ انجام: <b>{faDate(row.dueDate)}</b></p>}
+        {/* توضیحِ صوتیِ پزشک برای همین درخواست — تا ۱۴۰۵/۰۸/۰۴ ثبت می‌شد ولی به بیمار نمی‌رسید. */}
+        {(row.voices ?? []).length > 0 && (
+          <div className="op-voices">
+            {row.voices.map((v) => (
+              <VoiceClip key={v.id} name={v.title || 'توضیحِ صوتیِ پزشک'}
+                load={() => apiBlobUrl(`/public/order/${token}/voice/${v.id}`)} />
+            ))}
+          </div>
+        )}
 
         {row.kind !== 'referral' && (
           <>
             {state && (
               <p className={`op-ok st-${state}`}><StateIcon width="15" height="15" /> {T[state]}</p>
             )}
+            {state === 'needs_action' && row.reviewNote && <p className="op-note op-review">{row.reviewNote}</p>}
+            {notice && <p className="op-notice" role="status"><CheckCircle width="15" height="15" /> {notice}</p>}
+            {row.sentFiles > 0 && <small className="op-hint">تا حالا {faNum(row.sentFiles)} فایل فرستاده‌اید.</small>}
             {canAppend && !adding && (
               <button type="button" className="op-more" onClick={() => setAdding(true)}>
                 افزودنِ فایل یا توضیحِ تازه
