@@ -20,7 +20,7 @@ export async function transportDevices(tx: any, visit: { id: number; hospitalId:
       status: { not: 'closed' },
       OR: [
         { visitId: visit.id },
-        ...(visit.hospitalId && day ? [{ visitId: null, hospitalId: visit.hospitalId, plannedFor: { gte: day, lt: new Date(day.getTime() + DAY) } }] : []),
+        ...(visit.hospitalId && day ? [{ OR: [{ shared: true }, { visitId: null }], hospitalId: visit.hospitalId, plannedFor: { gte: day, lt: new Date(day.getTime() + DAY) } }] : []),
       ],
     },
     select: { status: true, toLocation: true, plannedLines: true, movements: { where: { kind: 'transfer', quantity: { gt: 0 } }, select: { lotId: true, location: true } } },

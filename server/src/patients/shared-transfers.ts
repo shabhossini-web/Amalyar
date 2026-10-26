@@ -1,11 +1,11 @@
 /**
  * **ارسالِ عمومی = مالِ «بیمارستان + روز»** (تصمیمِ مالک ۱۴۰۵/۰۸/۰۴).
  *
- * تحویلِ تختهٔ حمل (`planDelivery`) تا امروز حواله را به **اولین** بیمارِ آن بیمارستان در آن روز می‌چسباند؛
- * پس ستِ عمومی فقط روی کارتِ یک بیمارِ دلخواه دیده می‌شد و مصرفیِ بقیه از آن ثبت نمی‌شد. حالا چنین حواله‌ای
- * `visitId = null` است و هر خواننده‌ای که «ست‌های این عمل» را می‌خواهد، حواله‌های عمومیِ همان بیمارستان و روز را
- * هم با همین تابع می‌گیرد — هر کارشناسِ آن بیمارستان در آن روز می‌بیندشان و مصرفیِ هر بیمار روی پرونده‌اش
- * از همان ست کم می‌شود.
+ * تحویلِ تختهٔ حمل (`planDelivery`) حواله را به **اولین** بیمارِ آن بیمارستان در آن روز می‌چسباند (لنگرِ بازهٔ
+ * تعهدِ انبار)؛ پس ستِ عمومی فقط روی کارتِ یک بیمارِ دلخواه دیده می‌شد و مصرفیِ بقیه از آن ثبت نمی‌شد. حالا
+ * چنین حواله‌ای `shared = true` است و هر خواننده‌ای که «ست‌های این عمل» را می‌خواهد، ست‌های عمومیِ همان
+ * بیمارستان و روز را هم با همین تابع می‌گیرد — هر کارشناسِ آن بیمارستان در آن روز می‌بیندشان و مصرفیِ هر بیمار
+ * روی پرونده‌اش از همان ست کم می‌شود. (حوالهٔ بی‌مراجعهٔ قدیمی هم همین حکم را دارد.)
  */
 const DAY = 24 * 3600_000;
 const dayOf = (d: Date) => new Date(`${d.toISOString().slice(0, 10)}T00:00:00.000Z`);
@@ -13,7 +13,7 @@ const dayOf = (d: Date) => new Date(`${d.toISOString().slice(0, 10)}T00:00:00.00
 export function sharedTransfersWhere(hospitalId: number | null | undefined, opDate: Date | null | undefined) {
   if (!hospitalId || !opDate) return null;
   const d = dayOf(opDate);
-  return { visitId: null, hospitalId, plannedFor: { gte: d, lt: new Date(d.getTime() + DAY) } };
+  return { OR: [{ shared: true }, { visitId: null }], hospitalId, plannedFor: { gte: d, lt: new Date(d.getTime() + DAY) } };
 }
 
 /**
@@ -28,7 +28,7 @@ export async function withSharedTransfers(prisma: any, visits: any[], shape: { s
     if (w) pairs.set(`${v.hospitalId}:${w.plannedFor.gte.toISOString()}`, w);
   }
   if (!pairs.size) return;
-  const query: any = { where: { ...(shape.where ?? {}), OR: [...pairs.values()] }, orderBy: shape.orderBy ?? { id: 'asc' } };
+  const query: any = { where: { AND: [shape.where ?? {}, { OR: [...pairs.values()] }] }, orderBy: shape.orderBy ?? { id: 'asc' } };
   if (shape.select) query.select = { ...shape.select, hospitalId: true, plannedFor: true };
   else if (shape.include) query.include = shape.include;
   const rows = await prisma.stockTransfer.findMany(query);
@@ -38,7 +38,9 @@ export async function withSharedTransfers(prisma: any, visits: any[], shape: { s
     if (!w) continue;
     const have = new Set((v.stockTransfers ?? []).map((t: any) => t.id));
     const mine = rows.filter((t: any) => t.hospitalId === v.hospitalId && t.plannedFor >= w.plannedFor.gte && t.plannedFor < w.plannedFor.lt && !have.has(t.id));
-    if (mine.length) v.stockTransfers = [...(v.stockTransfers ?? []), ...mine.map((t: any) => ({ ...t, shared: true }))];
+    /* حوالهٔ لنگرِ همین مراجعه هم «عمومی» برچسب می‌خورد — کارشناس بداند مالِ همه است. */
+    v.stockTransfers = [...(v.stockTransfers ?? []).map((t: any) => (rows.some((r: any) => r.id === t.id) ? { ...t, shared: true } : t)),
+      ...mine.map((t: any) => ({ ...t, shared: true }))];
   }
 }
 
@@ -54,7 +56,8 @@ export async function withSharedTransfers(prisma: any, visits: any[], shape: { s
 export async function followVisitMove(tx: any, visitId: number): Promise<{ moved: number; gone: number }> {
   const v = await tx.visit.findUnique({ where: { id: visitId }, select: { opDate: true, hospitalId: true, hospital: { select: { name: true } } } });
   if (!v) return { moved: 0, gone: 0 };
-  const rows = await tx.stockTransfer.findMany({ where: { visitId, status: { not: 'closed' } }, select: { id: true, status: true, plannedFor: true, hospitalId: true, stopId: true } });
+  /* ستِ عمومیِ «بیمارستان + روز» با جابه‌جاییِ لنگرش جابه‌جا نمی‌شود — مالِ بقیهٔ بیمارانِ همان‌جاست. */
+  const rows = await tx.stockTransfer.findMany({ where: { visitId, shared: false, status: { not: 'closed' } }, select: { id: true, status: true, plannedFor: true, hospitalId: true, stopId: true } });
   let moved = 0, gone = 0;
   for (const t of rows) {
     const sameDay = !!v.opDate && !!t.plannedFor && t.plannedFor.toISOString().slice(0, 10) === v.opDate.toISOString().slice(0, 10);

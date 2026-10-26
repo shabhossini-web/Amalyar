@@ -537,7 +537,7 @@ export class InventoryService {
   async sendTransfer(
     dto: {
       toLocation?: string; fromLocation?: string; hospitalId?: number; visitId?: number; notes?: string;
-      plannedFor?: string; windowFrom?: string; windowTo?: string; force?: boolean; planOnly?: boolean;
+      plannedFor?: string; windowFrom?: string; windowTo?: string; force?: boolean; planOnly?: boolean; shared?: boolean;
       lines?: { lotId: number; quantity: number }[];
     },
     user: any,
@@ -612,6 +612,7 @@ export class InventoryService {
           windowFrom: want[0], windowTo: dateOrNull(dto.windowTo, 'پایانِ تعهد'),
           hospitalId: dto.hospitalId ?? null,
           visitId: dto.visitId ?? null,
+          shared: dto.shared === true,
           notes: text(dto.notes),
           createdById: user?.id ?? null,
         },
@@ -785,7 +786,7 @@ export class InventoryService {
         data: { techReceivedAt: new Date(), techReceivedById: user?.id ?? null, techReceiptIssue: issue, techReceiptNote: note },
       });
       /* دستگاهِ همین حواله → دستگاهِ پرونده(های) آن بیمارستان در آن روز، اگر هنوز ندارند (`device-link`). */
-      const targets = t.visitId ? [{ id: t.visitId }] : (t.hospitalId && t.plannedFor ? await tx.visit.findMany({
+      const targets = t.visitId && !t.shared ? [{ id: t.visitId }] : (t.hospitalId && t.plannedFor ? await tx.visit.findMany({
         where: { hospitalId: t.hospitalId, deviceLotId: null, opStatus: { not: 'cancelled' }, patient: { deletedAt: null },
           opDate: { gte: dayStart(t.plannedFor), lt: new Date(dayStart(t.plannedFor).getTime() + 86400000) } },
         select: { id: true },
@@ -1007,7 +1008,7 @@ export class InventoryService {
     if (Number.isInteger(user?.id)) {
       own.push({ createdById: user.id });
       /* ستِ عمومیِ «بیمارستان + روز» (`shared-transfers`): کارشناسی که این روزها در آن بیمارستان حضور دارد. */
-      own.push({ visitId: null, hospital: { duties: { some: { techId: user.id, date: { gte: new Date(Date.now() - 7 * 864e5) } } } } });
+      own.push({ shared: true, hospital: { duties: { some: { techId: user.id, date: { gte: new Date(Date.now() - 7 * 864e5) } } } } });
     }
     return { OR: own };
   }

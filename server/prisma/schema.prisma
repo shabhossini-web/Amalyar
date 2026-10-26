@@ -507,6 +507,9 @@ model StockTransfer {
   stop       TransportStop? @relation(fields: [stopId], references: [id], onDelete: SetNull)
   stopId     Int?      @map("stop_id")
 
+  /// ستِ عمومیِ «بیمارستان + روز» (تحویلِ تختهٔ حمل) — مالِ همهٔ بیمارانِ همان بیمارستان در همان روز، نه فقط
+  /// مراجعهٔ `visitId` (که فقط لنگرِ فنیِ بازهٔ تعهد است). `shared-transfers.ts`.
+  shared     Boolean   @default(false)
   /// planned | sent | received | closed
   status     String    @default("sent")
   /// قلم‌های حوالهٔ **برنامه‌ریزی‌شده** — تا وقتی بار نرفته، دفترِ انبار نباید
