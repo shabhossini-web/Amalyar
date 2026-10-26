@@ -1703,7 +1703,8 @@ export class PatientsService {
          (تصمیمِ مالک ۱۴۰۵/۰۶/۲۶). داخلِ همین تراکنش، تا انتساب و ردیفِ حضورش
          هرگز از هم جدا نیفتند. */
       /* کارشناسِ فرم روی تیمِ پرونده می‌نشیند و حضور/مسئولِ فعلی از تیم مشتق می‌شود (`crew-sync`). */
-      if (await syncCrew(tx, visit.id, { tech: { source: 'form' }, times: 'op' })) {
+      /* مراجعهٔ تازهٔ بی‌کارشناس تیمی ندارد — هیچ کوئریِ اضافه در تراکنشِ ساخت (W1.4/W1.5: تک‌اتصالی، هم‌زمان). */
+      if (visit.techId && await syncCrew(tx, visit.id, { tech: { source: 'form' }, times: 'op' })) {
         visit = await tx.visit.findUniqueOrThrow({ where: { id: visit.id }, include: INCLUDE_PATIENT });
       }
       await syncLinkDocuments(tx, { patientId, visitId: visit.id, fields: formFields as any, values: extraIn ?? {}, actorId: userId ?? null });
