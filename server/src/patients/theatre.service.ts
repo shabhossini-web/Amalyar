@@ -557,7 +557,7 @@ export class TheatreService {
     });
     const stamped = r.count === 1;
     /* شروع/پایانِ عمل = ورودِ اولین / خروجِ آخرین عضوِ تیم (`crew-sync`). */
-    if (stamped) await this.prisma.$transaction((tx) => syncCrew(tx, visitId, { times: 'op' }));
+    if (stamped) await this.prisma.$transaction((tx) => syncCrew(tx, visitId, { times: 'actual' }));
     if (stamped) {
       await this.audit.record({
         actorId: user?.id, action: `visit.${which}`, entityType: 'visit', entityId: visitId,
@@ -615,7 +615,7 @@ export class TheatreService {
       data: { ...patch, opTimesUpdatedAt: new Date() },
     });
     if (r.count !== 1) throw new ConflictException(TIMES_CONFLICT);
-    await this.prisma.$transaction((tx) => syncCrew(tx, visitId, { times: 'op' }));
+    await this.prisma.$transaction((tx) => syncCrew(tx, visitId, { times: 'actual' }));
     await this.audit.record({
       actorId: user?.id, action: 'visit.times', entityType: 'visit', entityId: visitId,
       before: { opStartTime: v.opStartTime, opEndTime: v.opEndTime }, after: patch,

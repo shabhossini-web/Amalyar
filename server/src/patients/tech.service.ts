@@ -315,7 +315,7 @@ export class TechService {
    */
   async setTimes(id: number, dto: any, user: any) {
     await this.ownVisit(id, user);
-    await this.patients.setTimes(id, dto, user);
+    await this.patients.setTimes(id, dto, user, true);
     return this.one(id, user);
   }
 

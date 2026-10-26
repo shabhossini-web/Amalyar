@@ -1827,7 +1827,7 @@ export class PatientsService {
    * یا پنلِ چینش) لازم نیست اجازهٔ ویرایشِ مبلغ و جراح و بیمار را داشته باشد.
    * دامنه‌اش همان scope مراجعه است: کارشناس فقط مراجعاتِ خودش.
    */
-  async setTimes(id: number, dto: any, user?: any) {
+  async setTimes(id: number, dto: any, user?: any, actual = false) {
     await this.assertVisitAccess(id, user);
     const patch = timePatch(dto);
     if (!Object.keys(patch).length) throw new BadRequestException('ساعتی برای ثبت نیامده است');
@@ -1836,7 +1836,8 @@ export class PatientsService {
     /* ساعتِ شروع/پایان = ورود/خروجِ تیم — هم‌زمان روی تیمِ پرونده (`crew-sync`). */
     const updated = await this.prisma.$transaction(async (tx) => {
       await tx.visit.update({ where: { id }, data: patch });
-      await syncCrew(tx, id, { times: 'op' });
+      /* `actual` = «شروع/پایان»ِ واقعیِ کارشناس (پنل)؛ وگرنه ساعتِ برنامه از داشبورد. */
+      await syncCrew(tx, id, { times: actual ? 'actual' : 'op' });
       return tx.visit.findUniqueOrThrow({ where: { id }, include: INCLUDE_PATIENT });
     });
     const result = enrich(updated, await this.forms.kindMap());

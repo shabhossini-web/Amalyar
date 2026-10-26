@@ -19,8 +19,14 @@ import { autoDevice } from './device-link';
 export type CrewSyncOpts = {
   /** `techId` تازه از نویسنده‌ای بیرون از تیم آمده (چینش، پذیرش، فرمِ مراجعه) و باید روی تیم بنشیند. */
   tech?: { source: 'dispatch' | 'claim' | 'form' | 'legacy' };
-  /** کدام طرفِ ساعت تازه نوشته شده: `op` (ثبتِ ساعتِ عمل/مانیتورینگ) یا `crew` (فرمِ خدمت، تحویل). */
-  times?: 'op' | 'crew';
+  /**
+   * کدام طرفِ ساعت تازه نوشته شده:
+   * - `actual` — «شروع/پایان»ِ واقعی از پنلِ کارشناس یا میزِ اتاقِ عمل: ورودِ اولین / خروجِ آخرین عضو **همین** می‌شود؛
+   * - `op` — ساعتِ برنامه از فرم/داشبورد: فقط ساعت‌هایی از تیم که از قبل ثبت شده‌اند هم‌گام می‌شوند (ساعتِ
+   *   برنامه‌ریزیِ عمل «ورودِ کارشناس» نیست — وگرنه برداشتنِ کارشناسِ برنامه‌ریزی‌شده «شروع‌کرده» دیده می‌شد)؛
+   * - `crew` — فرمِ خدمت یا تحویل: ساعتِ پرونده از تیم.
+   */
+  times?: 'op' | 'actual' | 'crew';
 };
 
 type Row = { id: number; accountId: number; fromTime: string | null; toTime: string | null; sort: number };
@@ -68,10 +74,13 @@ export async function syncCrew(tx: any, visitId: number, opts: CrewSyncOpts = {}
   const patch: Record<string, any> = {};
   if (rows.length) {
     const first = rows[0], last = rows[rows.length - 1];
-    if (opts.times === 'op') {
-      if (v.opStartTime && first.fromTime !== v.opStartTime) await tx.visitCrew.update({ where: { id: first.id }, data: { fromTime: v.opStartTime } });
+    if (opts.times === 'actual' || opts.times === 'op') {
+      const actual = opts.times === 'actual';
+      if (v.opStartTime && first.fromTime !== v.opStartTime && (actual || first.fromTime)) {
+        await tx.visitCrew.update({ where: { id: first.id }, data: { fromTime: v.opStartTime } });
+      }
       /* پایان فقط روی آخرین عضو می‌نشیند — عضوِ میانی را تحویل بسته است. */
-      if (v.opEndTime !== last.toTime && (v.opEndTime || last.toTime)) {
+      if (v.opEndTime !== last.toTime && (actual ? (v.opEndTime || last.toTime) : (v.opEndTime && last.toTime))) {
         await tx.visitCrew.update({ where: { id: last.id }, data: { toTime: v.opEndTime } });
       }
       rows = await load();
@@ -99,5 +108,5 @@ export async function syncCrew(tx: any, visitId: number, opts: CrewSyncOpts = {}
   if (arrive !== v.techArriveTime) patch.techArriveTime = arrive;
   if (Object.keys(patch).length) await tx.visit.update({ where: { id: visitId }, data: patch });
   /* شروعِ مانیتورینگ = دستگاه سرِ کار است: اگر حمل فقط یک دستگاه برده، همان دستگاهِ پرونده می‌شود. */
-  if (opts.times === 'op' && (patch.opStartTime ?? v.opStartTime)) await autoDevice(tx, visitId);
+  if (opts.times === 'actual' && (patch.opStartTime ?? v.opStartTime)) await autoDevice(tx, visitId);
 }
