@@ -38,12 +38,17 @@ export function currentMember<T extends { toTime: string | null }>(rows: T[]): T
 
 const started = (r: Row | null) => !!r && (!!r.fromTime || !!r.toTime);
 
-export async function syncCrew(tx: any, visitId: number, opts: CrewSyncOpts = {}) {
+/** @returns آیا چیزی روی تیم یا مراجعه نوشته شد (فراخوان فقط آن‌وقت دوباره می‌خوانَد). */
+export async function syncCrew(tx: any, visitId: number, opts: CrewSyncOpts = {}): Promise<boolean> {
   const v = await tx.visit.findUnique({
     where: { id: visitId },
-    select: { id: true, techId: true, hospitalId: true, opDate: true, opStartTime: true, opEndTime: true, techArriveTime: true },
+    select: { id: true, techId: true, hospitalId: true, opDate: true, opStartTime: true, opEndTime: true, techArriveTime: true, _count: { select: { crew: true } } },
   });
-  if (!v) return;
+  if (!v) return false;
+  /* مراجعهٔ بی‌کارشناس و بی‌تیم (بیشترِ ویزیت‌های مطب): کاری نیست — همان یک کوئری، مثلِ `syncVisitDuty`ِ قبلی.
+     ⚠️ تراکنشِ ساختِ مراجعه روی یک اتصال است (W1.4)؛ هر کوئریِ اضافه صفِ درخواستِ هم‌زمان را کند می‌کند. */
+  if (!v.techId && !v._count.crew && !v.techArriveTime) return false;
+  let wrote = false;
   const load = (): Promise<Row[]> => tx.visitCrew.findMany({ where: { visitId }, orderBy: [{ sort: 'asc' }, { id: 'asc' }] });
   let rows = await load();
 
@@ -54,18 +59,19 @@ export async function syncCrew(tx: any, visitId: number, opts: CrewSyncOpts = {}
     const next = v.techId;
     if (next === null) {
       /* برداشتنِ کارشناس فقط وقتی که هنوز کارش را شروع نکرده؛ شروع‌کرده بخشی از سابقهٔ همین عمل است. */
-      if (cur && !started(cur)) await tx.visitCrew.delete({ where: { id: cur.id } });
+      if (cur && !started(cur)) { await tx.visitCrew.delete({ where: { id: cur.id } }); wrote = true; }
     } else if (!rows.some((r) => r.accountId === next)) {
-      if (!cur) await tx.visitCrew.create({ data: { visitId, accountId: next, sort: 0, source } });
-      else if (!started(cur)) await tx.visitCrew.update({ where: { id: cur.id }, data: { accountId: next, source } });
+      if (!cur) { await tx.visitCrew.create({ data: { visitId, accountId: next, sort: 0, source } }); wrote = true; }
+      else if (!started(cur)) { await tx.visitCrew.update({ where: { id: cur.id }, data: { accountId: next, source } }); wrote = true; }
       else {
         /* مسئولِ فعلی کارش را شروع کرده: نفرِ تازه «بعدی» می‌شود، نه جایگزین — تحویل با دکمهٔ «تحویل». */
         await tx.visitCrew.updateMany({ where: { visitId, sort: { gt: cur.sort } }, data: { sort: { increment: 1 } } });
         await tx.visitCrew.create({ data: { visitId, accountId: next, sort: cur.sort + 1, source } });
+        wrote = true;
       }
     } else if (cur && cur.accountId !== next && !started(cur)) {
       /* کارشناسِ برنامه‌ریزی‌شدهٔ بعدی جای مسئولِ شروع‌نکرده را گرفت. */
-      await tx.visitCrew.delete({ where: { id: cur.id } });
+      { await tx.visitCrew.delete({ where: { id: cur.id } }); wrote = true; }
     }
     rows = await load();
   }
@@ -78,12 +84,14 @@ export async function syncCrew(tx: any, visitId: number, opts: CrewSyncOpts = {}
       const actual = opts.times === 'actual';
       if (v.opStartTime && first.fromTime !== v.opStartTime && (actual || first.fromTime)) {
         await tx.visitCrew.update({ where: { id: first.id }, data: { fromTime: v.opStartTime } });
+        wrote = true;
       }
       /* پایان فقط روی آخرین عضو می‌نشیند — عضوِ میانی را تحویل بسته است. */
       if (v.opEndTime !== last.toTime && (actual ? (v.opEndTime || last.toTime) : (v.opEndTime && last.toTime))) {
         await tx.visitCrew.update({ where: { id: last.id }, data: { toTime: v.opEndTime } });
+        wrote = true;
       }
-      rows = await load();
+      if (wrote) rows = await load();
     } else {
       if (first.fromTime && first.fromTime !== v.opStartTime) patch.opStartTime = first.fromTime;
       /* آخرین عضو هنوز خارج نشده = مانیتورینگ تمام نشده. */
@@ -106,7 +114,8 @@ export async function syncCrew(tx: any, visitId: number, opts: CrewSyncOpts = {}
   if (!rows.length && v.techId === null) arrive = null;
   if (techId !== v.techId) patch.techId = techId;
   if (arrive !== v.techArriveTime) patch.techArriveTime = arrive;
-  if (Object.keys(patch).length) await tx.visit.update({ where: { id: visitId }, data: patch });
+  if (Object.keys(patch).length) { await tx.visit.update({ where: { id: visitId }, data: patch }); wrote = true; }
   /* شروعِ مانیتورینگ = دستگاه سرِ کار است: اگر حمل فقط یک دستگاه برده، همان دستگاهِ پرونده می‌شود. */
-  if (opts.times === 'actual' && (patch.opStartTime ?? v.opStartTime)) await autoDevice(tx, visitId);
+  if (opts.times === 'actual' && (patch.opStartTime ?? v.opStartTime) && await autoDevice(tx, visitId)) wrote = true;
+  return wrote;
 }

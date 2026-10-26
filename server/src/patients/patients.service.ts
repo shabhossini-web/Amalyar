@@ -1703,8 +1703,9 @@ export class PatientsService {
          (تصمیمِ مالک ۱۴۰۵/۰۶/۲۶). داخلِ همین تراکنش، تا انتساب و ردیفِ حضورش
          هرگز از هم جدا نیفتند. */
       /* کارشناسِ فرم روی تیمِ پرونده می‌نشیند و حضور/مسئولِ فعلی از تیم مشتق می‌شود (`crew-sync`). */
-      await syncCrew(tx, visit.id, { tech: { source: 'form' }, times: 'op' });
-      visit = await tx.visit.findUniqueOrThrow({ where: { id: visit.id }, include: INCLUDE_PATIENT });
+      if (await syncCrew(tx, visit.id, { tech: { source: 'form' }, times: 'op' })) {
+        visit = await tx.visit.findUniqueOrThrow({ where: { id: visit.id }, include: INCLUDE_PATIENT });
+      }
       await syncLinkDocuments(tx, { patientId, visitId: visit.id, fields: formFields as any, values: extraIn ?? {}, actorId: userId ?? null });
       /**
        * مبلغِ توافقی → **قلمِ خدمت**، نه ستونی روی مراجعه.
@@ -2012,14 +2013,14 @@ export class PatientsService {
          ساعتِ حضورش را هم ببرد، وگرنه ساعتِ یتیم روی کارت می‌ماند. همین کار
          رکوردهای واگرای قدیمی را هم با اولین ذخیره درست می‌کند. */
       /* حضور، مسئولِ فعلی و ساعت‌های تیم از تیمِ پرونده مشتق می‌شوند (`crew-sync`) — با مقادیرِ نهاییِ همین ویرایش. */
-      await tx.visit.update({ where: { id }, data: visitPatch });
-      await syncCrew(tx, id, {
+      const upd = await tx.visit.update({ where: { id }, data: visitPatch, include: INCLUDE_VISIT_FULL });
+      const crewWrote = await syncCrew(tx, id, {
         ...(visitPatch.techId !== undefined ? { tech: { source: 'form' as const } } : {}),
         ...(visitPatch.opStartTime !== undefined || visitPatch.opEndTime !== undefined ? { times: 'op' as const } : {}),
       });
       /* تاریخ یا بیمارستان عوض شد → حملِ هنوز نرفتهٔ همین مراجعه هم جابه‌جا می‌شود. */
       if (visitPatch.opDate !== undefined || visitPatch.hospitalId !== undefined) await followVisitMove(tx, id);
-      return tx.visit.findUniqueOrThrow({ where: { id }, include: INCLUDE_VISIT_FULL });
+      return crewWrote ? tx.visit.findUniqueOrThrow({ where: { id }, include: INCLUDE_VISIT_FULL }) : upd;
     });
     const kinds = await this.forms.kindMap();
     const result = enrich(updated, kinds, VISIT_FULL_NOTE_KINDS);
