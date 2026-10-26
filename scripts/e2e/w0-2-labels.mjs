@@ -107,7 +107,7 @@ try {
   await openOrder(order());
   ok((await count('.op-answer')) === 1 && (await count('.op-ok')) === 0, 'فرمِ پاسخ باز است و پیامی نیست');
   await page.locator('.op-answer textarea').fill('نتیجه نرمال بود');
-  await page.getByRole('button', { name: 'ثبتِ پاسخ', exact: true }).click();
+  await page.getByRole('button', { name: 'ارسالِ پاسخ', exact: true }).click();
   await page.locator('.op-ok').waitFor();
   const w = writes.find((x) => x.path === '/public/order/tok/answer');
   ok(w?.method === 'POST' && w?.body?.text === 'نتیجه نرمال بود', 'POST /public/order/tok/answer با همان بدنهٔ قبلی');
