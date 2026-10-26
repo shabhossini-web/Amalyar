@@ -47,6 +47,30 @@ try {
   await page.waitForTimeout(1200);
   ok(sql(`SELECT follow_up FROM form_defs WHERE id=${form.id}`) === 'general',
     '**انتخابِ «بخشِ عمومی» روی سرور نشست**');
+
+  /* گزارشِ مالک: «کلیدِ فرمِ پیگیری کاری نمی‌کند» — فرم خاموش بود و کلیدی برای روشن‌کردنش نبود. */
+  const ready = fuBox.locator('.fb-fu-ready');
+  await ready.waitFor({ timeout: 5000 }).catch(() => {});
+  ok(await ready.count() === 1, '**کارتِ آمادگیِ پیگیری (روشن/خاموش + روزها) دیده می‌شود**');
+  const sw = ready.locator('[role="switch"]');
+  const wasOn = (await sw.getAttribute('aria-checked')) === 'true';
+  await sw.click();
+  await page.waitForTimeout(1200);
+  ok(sql(`SELECT active FROM form_defs WHERE id=${form.id}`) === (wasOn ? 'f' : 't'), '**کلیدِ روشن/خاموش روی سرور نشست**');
+  if (process.env.E2E_SHOTS) {
+    for (const theme of ['dark', 'light']) {
+      await page.evaluate((t) => { document.documentElement.dataset.theme = t; }, theme);
+      await page.waitForTimeout(300);
+      await fuBox.screenshot({ path: `${process.env.E2E_SHOTS}/fu-ready-390-${theme}.png` });
+    }
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.waitForTimeout(500);
+    await fuBox.screenshot({ path: `${process.env.E2E_SHOTS}/fu-ready-1280-light.png` });
+    await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+    await page.waitForTimeout(300);
+    await fuBox.screenshot({ path: `${process.env.E2E_SHOTS}/fu-ready-1280-dark.png` });
+    await page.setViewportSize({ width: 390, height: 844 });
+  }
   await kindSel.selectOption('procedure');
   await page.waitForTimeout(600);
   ok(await fuBox.locator('select').count() === 2, 'با «اختصاصیِ عمل» انتخابگرِ نوعِ عمل باز می‌شود');

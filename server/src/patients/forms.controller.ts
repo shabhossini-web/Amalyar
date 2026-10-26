@@ -143,6 +143,10 @@ export class FormsController {
     return this.forms.byKey(key);
   }
 
+  @RequirePermissions('forms.read')
+  @Get('forms/:id/follow-up-status')
+  followUpStatus(@Param('id', ParseIntPipe) id: number) { return this.forms.followUpStatus(id); }
+
   @RequirePermissions('forms.manage')
   @Post('forms/install-followup')
   installFollowUp() { return this.forms.installFollowUp(); }

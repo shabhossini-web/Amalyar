@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { ORDER_KIND_LABELS, REMINDER_KIND_LABELS, REMINDER_LABELS } from './labels';
 import { BadRequestException, ConflictException, HttpException, HttpStatus, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
@@ -111,6 +112,40 @@ export class RemindersService {
    * cancel-then-create و نه ویرایش: تاریخچهٔ «قرار بود کی بفرستیم» می‌ماند.
    * خطا بلعیده می‌شود ولی لاگ می‌شود — ثبتِ مراجعه نباید قربانیِ یادآوری شود.
    */
+  /**
+   * هم‌گام‌سازیِ دوبارهٔ جراحی‌هایی که هنوز پیامِ «بعد از عمل» نگرفته‌اند — بعد از
+   * تغییری که برنامهٔ پیگیری را عوض می‌کند ولی به خودِ مراجعه دست نمی‌زند: روشن/خاموش
+   * یا نقشِ فرمِ پیگیری (فرم‌ساز) و روزهای پیگیریِ نوعِ عمل (تعریف‌های پایه).
+   *
+   * ⚠️ تا دیروز این تغییرها فقط روی مراجعه‌ای اثر داشت که **بعدش** ویرایش می‌شد؛ فرمِ
+   * پیگیریِ روشن‌شده برای عمل‌های ازپیش‌ثبت‌شده هیچ‌وقت نمی‌رفت و از بیرون «رهاشده»
+   * دیده می‌شد.
+   *
+   * ⚠️ عملی که پیامِ مراقبت یا پیگیری‌اش **رفته** کنار گذاشته می‌شود: لینکِ فرم جزوِ
+   * متنِ مراقبت است، پس روشن‌شدنِ فرم متن را عوض می‌کند و همان دستور دوباره می‌رفت.
+   */
+  async resyncUpcomingSurgeries(where: Prisma.VisitWhereInput = {}): Promise<number> {
+    const now = new Date();
+    const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const rows = await this.prisma.visit.findMany({
+      where: {
+        AND: [where, {
+          kind: 'surgery', opDate: { gte: today }, opStatus: { not: 'cancelled' },
+          patient: { deletedAt: null },
+          reminders: { none: {
+            kind: { in: ['post_op_care', 'follow_up'] },
+            status: { in: ['sent', 'simulated', 'sending', 'uncertain'] },
+          } },
+        }],
+      },
+      select: { id: true },
+      orderBy: { opDate: 'asc' },
+      take: 2000,
+    });
+    for (const r of rows) await this.syncNextVisit(r.id);
+    return rows.length;
+  }
+
   async syncNextVisit(visitId: number, strict = false) {
     try {
       const v = await this.prisma.visit.findUnique({

@@ -308,7 +308,7 @@ export default function FormBuilder() {
               try {
                 const installed = await api('/forms/install-followup', { method: 'POST', body: {} });
                 setForms(await api('/forms')); setScopeFilter('record'); setTab(installed.key);
-                setToast('فرم پیگیری آماده است؛ پس از بازبینی روشن کنید و روزهای ارسال را در نوع عمل تعریف کنید.');
+                setToast('فرمِ پیگیری آماده است؛ بازبینی کنید و از کادرِ «نقش در پیگیری» روشنش کنید.');
               } catch (e) { setToast(e.message); } finally { setBusy(false); }
             }}>آماده‌سازی فرم پیگیری خودکار</button>
             {/* دسته‌بندی «زبانه» است و فرم‌ها «فهرست» (surgery-25) — دو ردیفِ چیپِ هم‌شکل نمی‌گفتند کدام
@@ -361,7 +361,7 @@ export default function FormBuilder() {
                   <FollowUpPick form={form} busy={busy}
                     onPick={(body) => apply(
                       () => api(`/forms/${form.id}`, { method: 'PATCH', body }),
-                      'نقشِ پیگیری ذخیره شد ✓',
+                      body.active === undefined ? 'نقشِ پیگیری ذخیره شد' : body.active ? 'فرمِ پیگیری روشن شد؛ عمل‌های پیشِ‌رو زمان‌بندی شدند' : 'فرمِ پیگیری خاموش شد',
                     )} />
                 )}
                 {/* خدمتِ فرمِ ثبت‌نام — فقط شرکتِ دوخدمته (`ServicePick`). */}
@@ -788,6 +788,50 @@ function FollowUpPick({ form, busy, onPick }) {
         بخشِ اختصاصی هنگامِ ارسال، صفحهٔ بعدیِ فرمِ عمومی می‌شود — بیمار یک لینک
         می‌بیند. روزهای ارسال روی خودِ نوعِ عمل تنظیم می‌شود (تعریف‌های پایه).
       </small>
+      {form.followUp && <FollowUpReady form={form} busy={busy} onPick={onPick} />}
+    </div>
+  );
+}
+
+/**
+ * «چرا فرمِ پیگیری نمی‌رود؟» — سه شرط کنارِ هم: روشن‌بودنِ فرم، نقشِ پیگیری، و روزِ
+ * پیگیری روی نوعِ عمل. تا دیروز فرمِ نصب‌شده خاموش می‌ماند و در فرم‌ساز هیچ کلیدی برای
+ * روشن‌کردنش نبود؛ روزها هم در صفحهٔ دیگری بودند. نتیجه: «کلیدِ فرمِ پیگیری کاری نمی‌کند».
+ */
+function FollowUpReady({ form, busy, onPick }) {
+  const [st, setSt] = useState(null);
+  useEffect(() => {
+    let live = true;
+    api(`/forms/${form.id}/follow-up-status`).then((r) => { if (live) setSt(r); }).catch(() => { if (live) setSt(null); });
+    return () => { live = false; };
+  }, [form.id, form.active, form.followUp, form.procedureTypeId, form.diagnosisId]);
+  const daysFa = (days) => days.map((d) => (d === 0 ? 'بلافاصله' : `${toFa(d)} روز بعد`)).join('، ');
+  const noDays = st && st.procedures.length === 0;
+  const ok = form.active && st && !noDays;
+  return (
+    <div className={`fb-fu-ready${ok ? ' ok' : ' warn'}`} role="status">
+      <div className="fb-fu-head">
+        <b>{ok ? 'فرمِ پیگیری فعال است و خودکار می‌رود' : form.active ? 'روشن است ولی هنوز چیزی نمی‌رود' : 'خاموش — هیچ لینکی برای بیمار نمی‌رود'}</b>
+        <button type="button" className={`fb-fu-switch${form.active ? ' on' : ''}`} role="switch" aria-checked={!!form.active}
+          disabled={busy} onClick={() => onPick({ active: !form.active })}>
+          <span className="fb-fu-knob" aria-hidden="true" />
+          <span>{form.active ? 'روشن' : 'خاموش'}</span>
+        </button>
+      </div>
+      {st && (
+        <ul className="fb-fu-list">
+          {noDays ? (
+            <li className="bad">
+              هیچ نوعِ عملی روزِ پیگیری ندارد، پس پیامکی زمان‌بندی نمی‌شود.{' '}
+              <a href="/app/definitions?section=procedure-types">تعیینِ روزها در تعریف‌های پایه</a>
+            </li>
+          ) : (
+            st.procedures.slice(0, 6).map((p) => <li key={p.id}>{p.name}: {daysFa(p.days)}</li>)
+          )}
+          {st.procedures.length > 6 && <li>و {toFa(st.procedures.length - 6)} نوعِ عملِ دیگر</li>}
+          <li>{toFa(st.upcoming)} عملِ پیشِ‌رو · {toFa(st.scheduled)} پیامکِ پیگیریِ زمان‌بندی‌شده</li>
+        </ul>
+      )}
     </div>
   );
 }

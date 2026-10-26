@@ -1,4 +1,5 @@
-import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { RemindersService } from './reminders.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { toEnDigits } from '../common/identity';
 import { textSearchOr } from '../common/search';
@@ -33,7 +34,12 @@ const AUDITED_PERSON_FIELDS = ['iban', 'phone', 'nationalId'] as const;
  */
 @Injectable()
 export class DefinitionsService {
-  constructor(private prisma: PrismaService, private audit: AuditService) {}
+  constructor(
+    private prisma: PrismaService,
+    private audit: AuditService,
+    /* روزهای پیگیریِ نوعِ عمل برنامهٔ پیامکِ عمل‌های آیندهٔ همان نوع را عوض می‌کند. */
+    @Optional() private reminders?: RemindersService,
+  ) {}
 
   private async hospitalDupCheck(name: string, exceptId?: number) {
     const row = await this.prisma.hospital.findFirst({
@@ -490,7 +496,7 @@ export class DefinitionsService {
     const row = await this.prisma.procedureType.findUnique({ where: { id } });
     if (!row) throw new NotFoundException('نوعِ عمل یافت نشد');
     if (dto.name) await this.uniqueName('procedureType', 'name', dto.name, id);
-    return this.prisma.procedureType.update({
+    const updated = await this.prisma.procedureType.update({
       where: { id },
       data: {
         ...(dto.name ? { name: dto.name.trim() } : {}),
@@ -502,6 +508,13 @@ export class DefinitionsService {
         ...(dto.active !== undefined ? { active: dto.active } : {}),
       },
     });
+    /* ⚠️ تا دیروز روزِ پیگیریِ تازه فقط روی عملی اثر داشت که بعدش ویرایش می‌شد؛ عمل‌های
+       ازپیش‌ثبت‌شدهٔ این نوع هرگز فرمِ پیگیری نمی‌گرفتند. متنِ مراقبت هم جزوِ همان برنامه است. */
+    const careChanged = (dto.followUpDays !== undefined && (dto.followUpDays?.trim() || null) !== row.followUpDays)
+      || (dto.postOpCare !== undefined && (dto.postOpCare?.trim() || null) !== row.postOpCare)
+      || (dto.preOpCare !== undefined && (dto.preOpCare?.trim() || null) !== row.preOpCare);
+    if (careChanged) await this.reminders?.resyncUpcomingSurgeries({ procedureTypeId: id }).catch(() => 0);
+    return updated;
   }
 
   async deleteProcedureType(id: number) {

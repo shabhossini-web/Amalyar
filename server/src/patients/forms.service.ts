@@ -1,6 +1,7 @@
 import { JOB_ROLE_KEYS, jobRoleLabel, fieldRoles } from '../common/job-roles';
 import { CODING_TWIN_KEYS } from './visit-coding';
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { RemindersService } from './reminders.service';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '../config/config.service';
@@ -190,6 +191,9 @@ export class FormsService {
   constructor(
     private prisma: PrismaService,
     private config: ConfigService,
+    /* اختیاری: روشن/خاموش یا نقشِ فرمِ پیگیری برنامهٔ پیامکِ عمل‌های آینده را عوض می‌کند
+       (`resyncUpcomingSurgeries`). سوییت‌هایی که این سرویس را مستقیم می‌سازند بی‌آن کار می‌کنند. */
+    @Optional() private reminders?: RemindersService,
   ) {}
 
   // ── خواندن ────────────────────────────────────────────────────────────────
@@ -885,7 +889,14 @@ export class FormsService {
     const existing = await this.prisma.formDef.findFirst({ where: { scope: 'record', followUp: 'general' } });
     if (existing) return this.byKey(existing.key);
     const sameKey = await this.prisma.formDef.findUnique({ where: { key: POSTOP_FOLLOWUP.key } });
-    if (sameKey) return this.byKey(sameKey.key);
+    if (sameKey) {
+      /* همان فرمِ قبلی که نقشش برداشته شده بود: دکمهٔ «آماده‌سازی» نقشِ عمومی را برمی‌گرداند،
+         وگرنه دکمه بی‌اثر می‌ماند و فرم هرگز وارد زمان‌بندی نمی‌شد. روشن/خاموش دست نمی‌خورد. */
+      if (!sameKey.followUp && sameKey.scope === 'record') {
+        await this.prisma.formDef.update({ where: { id: sameKey.id }, data: { followUp: 'general', procedureTypeId: null, diagnosisId: null } });
+      }
+      return this.byKey(sameKey.key);
+    }
     await this.prisma.formDef.create({ data: {
       key: POSTOP_FOLLOWUP.key, title: POSTOP_FOLLOWUP.title, scope: 'record',
       hint: POSTOP_FOLLOWUP.hint, followUp: 'general', active: false,
@@ -997,7 +1008,55 @@ export class FormsService {
         ...followUpPatch,
       },
     });
+    /* فرمِ پیگیری که روشن/خاموش شد یا نقشش عوض شد ← عمل‌های آینده برنامهٔ تازه می‌گیرند. */
+    const fuTouched = row.scope === 'record' && (
+      (dto.active !== undefined && dto.active !== row.active && (row.followUp || followUpPatch.followUp))
+      || (dto.followUp !== undefined && (
+        (followUpPatch.followUp ?? null) !== row.followUp
+        || (followUpPatch.procedureTypeId ?? null) !== row.procedureTypeId
+        || (followUpPatch.diagnosisId ?? null) !== row.diagnosisId))
+    );
+    if (fuTouched) await this.reminders?.resyncUpcomingSurgeries().catch(() => 0);
     return this.byKey(row.key);
+  }
+
+  /**
+   * وضعیتِ آمادگیِ یک فرمِ پیگیری برای فرم‌ساز — «چرا نمی‌رود؟» بی‌حدس.
+   * پیامِ پیگیری سه شرط دارد: فرم روشن باشد، نقشِ پیگیری داشته باشد، و نوعِ عمل (یا
+   * خودِ مراجعه) روزِ پیگیری داشته باشد. سومی در تعریف‌های پایه است و از فرم‌ساز دیده
+   * نمی‌شد؛ نتیجه این بود که فرمِ روشن «کاری نمی‌کرد».
+   */
+  async followUpStatus(id: number) {
+    const row = await this.prisma.formDef.findUnique({ where: { id } });
+    if (!row) throw new NotFoundException('فرم پیدا نشد');
+    const procs = await this.prisma.procedureType.findMany({
+      where: { active: true, ...(row.followUp === 'procedure' && row.procedureTypeId ? { id: row.procedureTypeId } : {}) },
+      select: { id: true, name: true, followUpDays: true },
+      orderBy: { name: 'asc' },
+    });
+    const withDays = procs
+      .map((p) => ({ id: p.id, name: p.name, days: RemindersService.parseDays(p.followUpDays) }))
+      .filter((p) => p.days.length > 0);
+    const now = new Date();
+    const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+    const upcoming = await this.prisma.visit.count({
+      where: {
+        kind: 'surgery', opDate: { gte: today }, opStatus: { not: 'cancelled' }, patient: { deletedAt: null },
+        ...(row.followUp === 'procedure' && row.procedureTypeId ? { procedureTypeId: row.procedureTypeId } : {}),
+        ...(row.followUp === 'diagnosis' && row.diagnosisId ? { diagnosisId: row.diagnosisId } : {}),
+      },
+    });
+    const scheduled = await this.prisma.reminder.count({
+      where: { kind: 'follow_up', status: 'pending', dueAt: { gte: now } },
+    });
+    return {
+      active: row.active,
+      role: row.followUp,
+      procedures: withDays,
+      proceduresTotal: procs.length,
+      upcoming,
+      scheduled,
+    };
   }
 
   async addField(formId: number, dto: any) {

@@ -2110,11 +2110,14 @@ export class IntakeService {
   async unfollowed() {
     const fuForms = await this.prisma.formDef.findMany({
       where: { scope: 'record', followUp: { in: ['general', 'procedure', 'diagnosis'] } },
-      select: { id: true },
+      select: { id: true, active: true },
     });
     /* fail-soft (همان قرارِ نوبت‌دهی): نصبی که فرمِ پیگیری تعریف نکرده،
-       فهرستِ «همه پیگیری‌نشده» نمی‌گیرد — می‌گوید قابلیت روشن نیست. */
-    if (!fuForms.length) {
+       فهرستِ «همه پیگیری‌نشده» نمی‌گیرد — می‌گوید قابلیت روشن نیست.
+       ⚠️ فرمِ پیگیریِ **خاموش** هم «تعریف‌نشده» است: هیچ لینکی نمی‌فرستد، پس فهرستِ
+       «همه پیگیری‌نشده» بارِ تماسِ دروغ می‌ساخت. پاسخِ فرمِ خاموش‌شده ولی هنوز پاسخ است
+       و پایین (`fids`) شمرده می‌شود. */
+    if (!fuForms.some((f) => f.active)) {
       return { enabled: false, checked: 0, total: 0, capped: false, limit: UNFOLLOWED_LIMIT, followed: 0, waiting: 0, rows: [] };
     }
     const fids = fuForms.map((f) => f.id);
