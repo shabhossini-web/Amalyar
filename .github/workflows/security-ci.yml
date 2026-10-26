@@ -804,9 +804,9 @@ jobs:
           if (!/Feature\('tech'\)/.test(ctrl.split(\"@RequirePermissions('stock.consume')\")[0].split('/**').pop())) {
             console.error('برگهٔ مصرف باید زیرِ ماژولِ tech باشد وگرنه کارشناسِ سطح ۲ به آن نمی‌رسد'); process.exit(1);
           }
-          // ورودی «جمعِ مصرف‌شده» است نه دلتا — همان قاعدهٔ انبارگردانی.
-          const rec = svc.split('async recordUsage')[1].split(/\n  \/\*\*/)[0];
-          if (!/const delta = target - already/.test(rec)) {
+          // ورودی «جمعِ مصرف‌شدهٔ همین بیمار» است نه دلتا — همان قاعدهٔ انبارگردانی؛ و مصرف فقط از کارتِ بیمار (۱۴۰۵/۰۸/۰۴).
+          const rec = svc.split('async consumeFromTransfer')[1].split(/\n  \/\*\*/)[0];
+          if (!/const delta = target - mine/.test(rec) || !/visitId/.test(rec)) {
             console.error('برگهٔ مصرف باید جمع بگیرد و اختلاف را خودش حساب کند'); process.exit(1);
           }
           if (!/kind: \{ in: \['out', 'return'\] \}/.test(rec)) {

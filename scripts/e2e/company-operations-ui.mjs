@@ -111,8 +111,10 @@ try {
   pass('surgeon discovers personal financial statement in a separate tab');
   user = { ...user, level: 6 };
   await page.goto(`${base}/app/dispatch`);
-  await page.getByLabel('کارشناس بیمار تست').selectOption('2');
-  assert.equal((await waitWrite('/dispatch/roster/visits/1')).payload.techId, 2);
+  /* تیمِ بیمار روی تخته (۱۴۰۵/۰۸/۰۴): انتخاب از حاضرانِ همان بیمارستان و «افزودن». */
+  await page.getByLabel('افزودنِ کارشناس به تیمِ بیمار تست').selectOption('2');
+  await page.getByRole('group', { name: 'تیمِ بیمار تست' }).getByRole('button', { name: 'افزودن' }).click();
+  assert.equal((await waitWrite('/dispatch/roster/visits/1/crew')).payload.techId, 2);
   /* company-02: دکمهٔ اصلیِ درشتِ پایینِ روز — «ابلاغِ برنامهٔ روز» (اول پیش‌نمایش، بعد ارسال). */
   await page.getByRole('button', { name: 'ابلاغِ برنامهٔ روز' }).click();
   await page.getByText('برنامه تست؛ بیمار احتمالی').waitFor();
