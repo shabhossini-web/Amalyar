@@ -915,7 +915,7 @@ const usageSub = (l) => {
  * عدد «جمعِ این عمل» است نه «چقدر کم کن»؛ سرور تفاوت را می‌زند و تا بسته‌شدنِ حواله قابلِ اصلاح
  * است. پیش‌فرض‌ها در `/auth/prefs` می‌نشینند (همراهِ حساب، نه گوشی): یک لمس همهٔ عددها را می‌نشاند.
  */
-function ConsumeSheet({ visit, onClose, onToast, onDone }) {
+export function ConsumeSheet({ visit, onClose, onToast, onDone }) {
   const [sheet, setSheet] = useState(null);
   const [qty, setQty] = useState({});
   const [busy, setBusy] = useState(false);

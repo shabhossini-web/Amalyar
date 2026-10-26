@@ -65,6 +65,7 @@ model Account {
   sessions    Session[]
   credentials WebauthnCredential[]
   techVisits  Visit[]              @relation("VisitTech")
+  crewVisits  VisitCrew[]
   chatMemberships ChatMember[]
 
   /// نقشِ شغلی — doctor | secretary | nurse | assistant. جدا از `level`:
@@ -417,6 +418,8 @@ model StockLot {
   movements StockMovement[]
   shortages SetShortage[]
   counts    ConsignmentCount[]
+  /// مراجعه‌هایی که این دستگاه سرشان بوده (فرمِ خدمتِ شرکتی).
+  serviceVisits Visit[] @relation("VisitDevice")
 
   @@index([itemId])
   @@index([lotNo])
@@ -1338,6 +1341,12 @@ model Visit {
   hospitalId   Int?      @map("hospital_id")
   tech         Account?  @relation("VisitTech", fields: [techId], references: [id], onDelete: SetNull)
   techId       Int?      @map("tech_id") // کارشناسِ منتسب (از accounts)
+  /// تیمِ کارشناسیِ فرمِ خدمت (شرکتی): هر کارشناس با ساعتِ ورود/خروجِ خودش.
+  /// `techId` همیشه **اولینِ** همین فهرست است تا چینش، پنلِ کارشناسی و گزارش‌های قدیمی نشکنند.
+  crew         VisitCrew[]
+  /// دستگاهی که سرِ این خدمت بوده (لاتِ داراییِ انبار با `assetKind=device`).
+  deviceLot    StockLot? @relation("VisitDevice", fields: [deviceLotId], references: [id], onDelete: SetNull)
+  deviceLotId  Int?      @map("device_lot_id")
 
   /// عملِ **اصلی** (رتبهٔ ۱) — سایرِ عمل‌های همان جلسه در `visit_other_procedures`.
   procedureType   ProcedureType? @relation(fields: [procedureTypeId], references: [id], onDelete: SetNull)
@@ -1536,6 +1545,7 @@ model Visit {
   @@index([surgeonId]) // پورتالِ جراح: «مراجعه‌های من»
   @@index([procedureTypeId])
   @@index([diagnosisId])
+  @@index([deviceLotId])
   @@index([sourceRef])
   @@map("visits")
 
@@ -3140,4 +3150,22 @@ model EpisodeStep {
   @@index([episodeId, seq])
   @@index([status, dueAt])
   @@map("episode_steps")
+}
+
+/// یک کارشناس روی یک خدمت — «چه کسی، از چه ساعتی تا چه ساعتی سرِ عمل بود».
+/// ساعت‌ها متنِ «HH:MM» (همان قراردادِ `opStartTime`)؛ ترتیب = `sort`.
+model VisitCrew {
+  id        Int      @id @default(autoincrement())
+  visit     Visit    @relation(fields: [visitId], references: [id], onDelete: Cascade)
+  visitId   Int      @map("visit_id")
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  accountId Int      @map("account_id")
+  fromTime  String?  @map("from_time")
+  toTime    String?  @map("to_time")
+  sort      Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([visitId, accountId])
+  @@index([accountId])
+  @@map("visit_crew")
 }

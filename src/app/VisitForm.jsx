@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence } from 'framer-motion';
 import { Link } from 'react-router-dom';
@@ -31,6 +31,8 @@ import { AttachPicker, DecisionSelect, GrowthTrend, PhaseAttach, SubformCard, Vi
 import { togglePin, usePrefs } from './usePrefs.jsx';
 import { useAllowedTools } from './tools.jsx';
 import './dashboard.css';
+/* زبانهٔ «خدمت»ِ شرکتی — چانکِ جدا: مطب هرگز بارش نمی‌کند (و برگهٔ مصرفیِ پنلِ کارشناسی را با خودش می‌آورد). */
+const ServicePanel = lazy(() => import('./ServicePanel.jsx'));
 import './surgeon-portal.css'; // sp-card در فرمِ ویرایشِ مراجعه
 
 /**
@@ -228,6 +230,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     surgeonId: initial?.surgeonId ?? prefill?.surgeonId ?? null,
     hospitalId: initial?.hospitalId ?? prefill?.hospitalId ?? null,
     techId: initial?.techId ?? null,
+    /* تیمِ کارشناسیِ فرمِ خدمت (شرکتی) — از سرور پر می‌شود؛ تا آن موقع همان کارشناسِ تکی. */
+    crew: initial?.techId ? [{ accountId: initial.techId, fromTime: initial.opStartTime ?? '', toTime: initial.opEndTime ?? '' }] : [],
     /* ⚠️ فهرستِ **کامل** به ترتیبِ رتبه (بستهٔ ۷): `[0]` اصلی است (همان ستونِ
        `procedureTypeId`/`diagnosisId`)، بقیه «سایرین». یک آرایه و نه دو فیلد تا
        «اصلی کن» یک setState باشد و اصلی و سایرین هرگز از هم عقب نیفتند.
@@ -454,7 +458,10 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
      ثبتِ تازه روی «مشخصات» باز می‌شود (هسته هنوز خالی است و ذخیره همان را می‌خواهد)؛ ویرایش روی
      مرحلهٔ زمانی (عملِ امروز «حین»). `phase` مرحلهٔ **کاری** می‌ماند — آخرین مرحله‌ای که دیده شد —
      تا منتخب‌ها و «الصاقِ فرم»ِ سربرگ روی زبانهٔ «مشخصات» هم بدانند به کجا الصاق کنند. */
-  const [tab, setTab] = useState(() => (initial?.id ? phase : 'info'));
+  /* مراجعهٔ **شرکتی** فرمِ عمل (قبل/حین/بعد) ندارد؛ فرمِ خدمت دارد: «پرونده و مشخصات» + «خدمت»
+     (تصمیمِ مالک ۱۴۰۵/۰۸/۰۴ — «فرمِ عمل برای نورومانیتورینگ لود می‌شود»). ویرایش روی «خدمت» باز می‌شود. */
+  const [tab, setTab] = useState(() => (initial?.id ? (tenantKind === 'company' ? 'service' : phase) : 'info'));
+  const [crewDirty, setCrewDirty] = useState(false);
   const goTab = (k) => { setTab(k); if (k !== 'info') setPhase(k); };
   /* پیش‌فرض فقط تا وقتی کاربر خودش دست نزده — بعدش انتخابِ او حاکم است. */
   /* سفارش‌های همین مراجعه (آزمایش/عکس/مشاوره/ارجاع) — چیپِ تصمیم فقط
@@ -692,7 +699,10 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     return () => { alive = false; };
   }, [subLoaded, initial?.id]);
 
-  const isSurgery = f.kind === 'surgery';
+  /* شرکتی: **هر** فرمِ مراجعه فرمِ خدمت است — «نورومانیتورینگ»، «ایمپلنت» یا فرمِ خدمتی که در فرم‌ساز
+     ساخته شده (فرمِ تازه = نوعِ تازه). همه همان زبانهٔ «خدمت» را می‌گیرند. */
+  const isService = tenantKind === 'company';
+  const isSurgery = f.kind === 'surgery' && !isService;
   /* کلیدهای الصاق‌شده در یک مرحله — «الصاق شده»ِ پنجره و منتخب‌ها به‌ازای همان مرحله است. */
   const attachedIn = (ph) => new Set(subList.filter((x) => x.phase === (ph || '')).map((x) => x.key));
   /* کارتِ تازه یا منتخبِ زده‌شده دیده شود — اسکرول تا همان کارت بعد از رندر. */
@@ -1017,7 +1027,7 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     /* ستاره‌ی فیلدهای هسته‌ای هم این‌جا سنجیده می‌شود، نه فقط دلخواه‌ها. سرور هر دو را می‌سنجد؛
        این‌جا فقط زودتر و کنارِ خودِ فیلد گفته می‌شود. */
     const builtinVals = {
-      surgeonId: f.surgeonId, hospitalId: f.hospitalId, techId: f.techId,
+      surgeonId: f.surgeonId, hospitalId: f.hospitalId, techId: isService ? (f.crew[0]?.accountId ?? null) : f.techId,
       /* ستارهٔ فیلد روی **اصلی** است؛ چون فهرست هرگز بدونِ اصلی نمی‌ماند
          (پاک‌کردنِ اصلی، بعدی را بالا می‌آورد)، «اجباری» یعنی «دست‌کم یکی». */
       procedureTypeId: f.procedureTypeIds[0] ?? null, diagnosisId: f.diagnosisIds[0] ?? null, topicId: f.topicId,
@@ -1073,6 +1083,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     if (PATIENT_KEYS.includes(key)) { if (editing) setIdOpen(true); else setStep(1); }
     /* فرمِ عمل: فیلدِ حینِ عمل در زبانهٔ «حین»، «ویزیتِ بعدی» در زبانهٔ «بعد» (کنارِ مراقبتِ پس از عمل —
        بستهٔ FF، FF9)، بقیهٔ هسته در زبانهٔ «مشخصات» (surgery-10). */
+    /* فرمِ خدمتِ شرکتی: جراح/عمل/بیمارستان/ساعت‌ها و کارشناس در زبانهٔ «خدمت»، بقیه در «پرونده و مشخصات». */
+    else if (isService) setTab(['surgeonId', 'procedureTypeId', 'hospitalId', 'techId', ...INTRA_KEYS].includes(key) ? 'service' : 'info');
     else if (f.kind === 'surgery') goTab(INTRA_KEYS.includes(key) ? 'intra' : key === 'nextVisitDate' ? 'post' : 'info');
     revealSel(`[data-core="${key}"]`);
   };
@@ -1100,7 +1112,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
     setErrKeys([]);
     if (Object.keys(eCustom).length) {
       setFormErr(`${Object.values(eCustom)[0]}${Object.keys(eCustom).length > 1 ? ` — و ${faNum(Object.keys(eCustom).length - 1)} مورد دیگر` : ''}`);
-      if (f.kind === 'surgery') goTab('info'); // فیلدهای دلخواه در زبانهٔ «مشخصات»‌اند
+      if (isService) setTab('service'); // فرمِ خدمت: فیلدهای مخصوصِ خدمت در زبانهٔ «خدمت»‌اند
+      else if (f.kind === 'surgery') goTab('info'); // فیلدهای دلخواه در زبانهٔ «مشخصات»‌اند
       revealSel('.vf-extra .pf-field.bad, [data-field].bad');
       return;
     }
@@ -1157,7 +1170,9 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       service: pickService ? (f.service || (editing ? '' : undefined)) : undefined,
       surgeonId: f.surgeonId ?? (editing ? null : undefined),
       hospitalId: f.hospitalId ?? (editing ? null : undefined),
-      techId: f.techId ?? (editing ? null : undefined),
+      /* فرمِ خدمت: کارشناس از «تیم» می‌آید (`PUT …/service/crew` اولی را `techId` می‌کند)؛ فرستادنِ
+         `techId`ِ کهنه در این‌جا تیمِ تازه‌ثبت‌شده را بازنویسی می‌کرد. */
+      techId: isService ? (editing ? undefined : f.crew[0]?.accountId ?? undefined) : f.techId ?? (editing ? null : undefined),
       /* ── تشخیص‌ها و عمل‌ها (بستهٔ ۷): اصلی در کلیدِ همیشگی، سایرین در همزاد ──
          سه‌حالتیِ همزاد:
          - ساخت: فقط وقتی واقعاً سایری هست (مراجعهٔ تک‌موردی همان بدنهٔ دیروز).
@@ -1284,6 +1299,13 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
         api('/ai/feedback', { method: 'POST', body: { kind: 'care_pre', draft: fb.carePre.trim(), final: f.preOpCare.trim() } }).catch(() => {});
       }
       aiDraftsRef.current = {};
+      /* تیمِ کارشناسیِ فرمِ خدمت: پس از ساخت (یا ویرایشی که تیمش ذخیره نشده) همراهِ همین «ذخیره» می‌رود. */
+      if (isService && crewDirty && saved?.id && f.crew.every((c) => c.accountId)) {
+        try {
+          await api(`/visits/${saved.id}/service/crew`, { method: 'PUT', body: { crew: f.crew.map((c) => ({ accountId: c.accountId, fromTime: normTime(c.fromTime) || null, toTime: normTime(c.toTime) || null })) } });
+          setCrewDirty(false);
+        } catch (err) { onToast(`مراجعه ذخیره شد ولی تیمِ کارشناسی نه — ${err.message}`); }
+      }
       /* ⚠️ فرمِ عمل فقط وقتی باز می‌شود که تصمیم **در همین ذخیره تازه**
          گرفته شده باشد — وگرنه هر بار ویرایشِ یک ویزیتِ پره‌آپِ قدیمی هم
          یک فرمِ عملِ ناخواسته باز می‌کرد. */
@@ -2186,7 +2208,10 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       )}
     </>);
   };
-  const mainKeys = builtinOrder.filter((key) => !(f.kind === 'surgery' && INTRA_KEYS.includes(key)) && !SIDE_KEYS.includes(key));
+  /* فرمِ خدمت: جراح، عمل، بیمارستان و ساعت‌ها سرِ زبانهٔ «خدمت» می‌نشینند؛ کارشناس جایش را به «تیم» می‌دهد. */
+  const SERVICE_HEAD_KEYS = ['surgeonId', 'procedureTypeId', 'hospitalId', ...INTRA_KEYS];
+  const mainKeys = builtinOrder.filter((key) => !(f.kind === 'surgery' && INTRA_KEYS.includes(key)) && !SIDE_KEYS.includes(key)
+    && !(isService && (SERVICE_HEAD_KEYS.includes(key) || key === 'techId')));
   const sideKeys = SIDE_KEYS.filter((key) => builtinNodes[key]);
   /* بیمارِ همین ثبتِ تازه برای سربرگ — پروندهٔ انتخاب‌شده (با کد)، یا نامِ تایپ‌شدهٔ پروندهٔ تازه پس از گامِ ۱. */
   const typedName = `${f.firstName} ${f.lastName}`.trim();
@@ -2500,14 +2525,24 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
           items={[{ key: 'info', label: `مشخصاتِ ${t.surgery}` }, ...PHASE_ITEMS]}
         />
       )}
-      {editing && (!isSurgery || tab === 'info') && serviceEl}
+      {isService && (
+        <Tabs
+          variant="inset"
+          className="db-phasetabs vf-sectabs vf-svctabs"
+          label={`بخش‌های فرمِ ${visitTitle}`}
+          value={tab === 'service' ? 'service' : 'info'}
+          onChange={setTab}
+          items={[{ key: 'info', label: 'پرونده و مشخصات' }, { key: 'service', label: `خدمتِ ${visitTitle}` }]}
+        />
+      )}
+      {editing && (!isSurgery || tab === 'info') && (!isService || tab !== 'service') && serviceEl}
       {/* کارتِ خودِ فرم: زمینهٔ جدا + لبهٔ رنگیِ فرمِ انتخاب‌شده. فرمِ عمل: همین کارت زبانهٔ «مشخصات» است —
           پنهان می‌شود نه unmount، تا انتخابگرها و کادرهای نیمه‌تایپ‌شدهٔ هسته با رفت‌وآمدِ زبانه از
           نو ساخته نشوند (و فهرست‌هایشان دوباره از سرور خوانده نشود). */}
       <div
         className="db-formcard"
         style={kindMeta?.color ? { '--k': `var(--kind-${kindMeta.color})` } : undefined}
-        hidden={isSurgery && tab !== 'info'}
+        hidden={(isSurgery && tab !== 'info') || (isService && tab === 'service')}
         {...(isSurgery ? { role: 'tabpanel', 'aria-label': `مشخصاتِ ${t.surgery}`, 'data-tab': 'info' } : {})}
       >
       {/* فرمِ عمل ستونِ زیرفرم ندارد (کارت‌ها در تبِ مرحلهٔ خودشان‌اند) و ستونِ کناری‌اش فقط «مبلغ» و
@@ -2527,8 +2562,8 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
             </label>
           )}
 
-          {/* فیلدهای دلخواهِ سوپرادمین — بی جعبه و عنوانِ جدا، زیرِ هسته. */}
-          {restFields.length > 0 && (
+          {/* فیلدهای دلخواهِ سوپرادمین — بی جعبه و عنوانِ جدا، زیرِ هسته. (فرمِ خدمت: در زبانهٔ «خدمت».) */}
+          {!isService && restFields.length > 0 && (
             <div className="db-extra vf-extra">
               <DynForm assistance
                 fields={restFields}
@@ -2573,6 +2608,35 @@ export default function VisitForm({ initial, prefill, defs, onDefsChanged, onClo
       {/* ── زبانه‌های مرحلهٔ عمل (قبل / حین / بعد) — فقط زبانهٔ فعال رندر می‌شود؛ مقدارها در `f` می‌مانند،
           پس «ذخیره» هر سه را با هم می‌فرستد. «برنامهٔ مراقبت و پیگیری» از بالای زبانه‌ها به درونِ «بعد از
           عمل» آمد (surgery-10): مراقبتِ قبل از عمل در زبانهٔ خودش، و برنامهٔ پس از عمل با خلاصه‌اش. */}
+      {isService && tab === 'service' && (
+        <div className="db-phase" data-phase="service" role="tabpanel" aria-label={`خدمتِ ${visitTitle}`}>
+          <Suspense fallback={<p className="db-decide-hint">در حالِ بارگذاری…</p>}>
+            <ServicePanel
+              visitId={initial?.id ?? null}
+              patientName={editing ? `${f.firstName} ${f.lastName}`.trim() : (picked?.fullName ?? `${f.firstName} ${f.lastName}`.trim())}
+              visitCode={initial?.code ?? ''}
+              crew={f.crew}
+              onCrew={(crew, fromServer) => { setF((s2) => ({ ...s2, crew })); if (!fromServer) setCrewDirty(true); }}
+              crewDirty={crewDirty}
+              onCrewSaved={() => setCrewDirty(false)}
+              techs={defs.techs ?? []}
+              head={<>
+                <div className="db-grid2 db-builtins">{SERVICE_HEAD_KEYS.map(cell)}</div>
+                {/* فیلدهای مخصوصِ همین خدمت (فرم‌ساز) — کنارِ بقیهٔ بخش‌های خدمت، نه در «پرونده». */}
+                {restFields.length > 0 && (
+                  <div className="db-extra vf-extra">
+                    <DynForm assistance fields={restFields} values={extra} errors={extraErr} onChange={setExtra}
+                      disabled={busy} myRole={myRole} onVoice={onVoice} voiceUrl={voiceUrl} />
+                  </div>
+                )}
+              </>}
+              onToast={onToast}
+              disabled={busy}
+            />
+          </Suspense>
+        </div>
+      )}
+
       {isSurgery && tab === 'pre' && (
       <div className="db-phase" data-phase="pre" role="tabpanel" aria-label={PHASE_FA.pre}>
         {decidedCard}

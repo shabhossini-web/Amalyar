@@ -55,6 +55,8 @@ import { RoutesController } from './routes.controller';
 import { RoutesService } from './routes.service';
 import { TransportBoardService } from './transport-board.service';
 import { AssetsService } from './assets.service';
+import { ServiceCrewService } from './service-crew.service';
+import { ServiceCrewController } from './service-crew.controller';
 import { CalendarController } from './calendar.controller';
 import { CalendarService } from './calendar.service';
 import { AvailabilityController } from './availability.controller';
@@ -90,6 +92,7 @@ import { WaitlistService } from './waitlist.service';
     WaitlistController,
     VitalsController,
     HospitalDutiesController,
+    ServiceCrewController,
     PatientsController, BillingController, InvoicesController, SurgeonPortalController, VisitStockController, ServiceCodesController,
     RecordController, InventoryController, SettlementController, LedgerController, TreasuryController, ReportsController, AssetsController, RoutesController, NameMergeController,
     CalendarController, AvailabilityController, AppointmentsController, DispatchController, DefinitionsController, TechController, TransportController, PlacesController, IntakeController, PublicIntakeController, FormsController, SurveyController, PublicSurveyController,
@@ -105,7 +108,7 @@ import { WaitlistService } from './waitlist.service';
     WaitlistService,
     VitalsService,
     PatientsService, DefinitionsService, RecordService, BillingService, InvoicesService, SurgeonPortalService,
-    ServiceCodesService, InventoryService, SetStockService, VisitUsageService, SettlementService, LedgerService, TreasuryService, ReportsService, AssetsService, RoutesService, TransportBoardService, NameMergeService,
+    ServiceCodesService, InventoryService, SetStockService, VisitUsageService, SettlementService, LedgerService, TreasuryService, ReportsService, AssetsService, ServiceCrewService, RoutesService, TransportBoardService, NameMergeService,
     CalendarService, AvailabilityService, AppointmentsService, DispatchService, TechService, TransportService, PlacesService, IntakeService, FormsService, SurveyService, SummaryService, RemindersService, PortalService, LettersService, OrdersService, RepairService, RateLimitService, PermissionGuard,
   ],
   /* برای دستیارِ AI (پیشنهادِ کد از شرح) — کتابِ ارزش نسبی در همین سرویس است. */

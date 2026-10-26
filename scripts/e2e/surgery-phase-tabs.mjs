@@ -30,6 +30,12 @@ const ok = (n, c, d = '') => {
 const sql = (q) => execSync(`psql "${DB}" -qtA -v ON_ERROR_STOP=1`, { input: q }).toString().trim().split('\n')[0];
 const plusD = (n) => new Date(Date.now() + n * 864e5);
 
+/* ⚠️ ۱۴۰۵/۰۸/۰۴: زبانه‌های قبل/حین/بعدِ فرمِ عمل فقط مالِ **مطب** است — شرکتی فرمِ خدمت می‌گیرد
+   (`company-service-panel.mjs`). دیتابیسِ آزمون پیش‌فرض نورومانیتورینگ است، پس این سوییت مطب می‌شود. */
+if (process.env.E2E_DB) {
+  (await import('node:child_process')).execSync(`psql "${process.env.E2E_DB}" -qtA`, { input: "INSERT INTO settings (key, value, updated_at) VALUES ('vertical','clinic', now()) ON CONFLICT (key) DO UPDATE SET value='clinic', updated_at=now(); INSERT INTO settings (key, value, updated_at) VALUES ('services','[]', now()) ON CONFLICT (key) DO UPDATE SET value='[]', updated_at=now();" });
+}
+
 const login = await fetch(API + '/auth/login', {
   method: 'POST', headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ identifier: process.env.E2E_USER ?? 'admin', password: process.env.E2E_PASS ?? 'test1234' }),
@@ -93,12 +99,25 @@ try {
   ok('تبِ قبل: مراقبتِ قبل از عمل + درخواست‌های پیش از عمل', (await pre.innerText()).includes('مراقبت‌های قبل از عمل') && (await pre.innerText()).includes('درخواست‌های پیش از عمل'));
   ok('**درخواستِ آزمایش/تصویربرداری از خودِ فرمِ عمل ممکن است**', (await pre.locator('.db-orders .db-daychip').count()) === 4);
   ok('**شرحِ عمل دیگر در کارتِ بالا نیست**', (await page.locator('.db-formcard .db-report').count()) === 0);
-  await pre.locator('.db-careblock').first().locator('textarea').fill(`ناشتاییِ ${tag}`);
+  /* مطب: مراقبت پیش‌نما + پاپ‌آپ است (`CareEditor`)، نه کادرِ متنِ مستقیم. */
+  const fillCare = async (block, text) => {
+    await block.locator('[data-care-open]').first().click();
+    const area = page.locator('[data-care-sheet] textarea').first();
+    await area.fill(text);
+    await page.locator('[data-care-sheet]').locator('xpath=ancestor::*[contains(@class,"db-sheet")][1]').locator('.db-x').first().click();
+    await page.locator('[data-care-sheet]').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
+  };
+  const careText = (block) => block.locator('.db-report-text').first().innerText().catch(() => '');
+  await fillCare(pre.locator('.db-careblock').first(), `ناشتاییِ ${tag}`);
 
   await tab('حین عمل');
   const intra = sect.locator('.db-phase[data-phase="intra"]');
-  ok('تبِ حین: شرحِ عمل و ساعت‌ها', (await intra.locator('.db-report textarea').count()) === 1 && (await intra.innerText()).includes('ساعتِ شروع'));
-  await intra.locator('.db-report textarea').fill(`یافتهٔ حینِ عمل ${tag}`);
+  ok('تبِ حین: شرحِ عمل و ساعت‌ها', (await intra.locator('[data-report-open]').count()) === 1 && (await intra.innerText()).includes('ساعتِ شروع'));
+  /* مطب: شرحِ عمل هم پیش‌نما + پاپ‌آپ است. */
+  await intra.locator('[data-report-open]').click();
+  await page.locator('[data-report-sheet] textarea').fill(`یافتهٔ حینِ عمل ${tag}`);
+  await page.locator('[data-act="report-done"]').click();
+  await page.locator('[data-report-sheet]').waitFor({ state: 'detached', timeout: 5000 }).catch(() => {});
 
   await tab('بعد از عمل');
   const post = sect.locator('.db-phase[data-phase="post"]');
@@ -116,7 +135,7 @@ try {
   ok('خطِ خلاصهٔ برنامه ته‌ِ همان بخش است (هر سه مرحله را خلاصه می‌کند)', (await sect.locator('.db-postop-plan').count()) === 1 && planTxt.includes('پیگیری') && planTxt.includes('مراقبتِ بعد') && planTxt.includes('مراقبتِ قبل'), planTxt.slice(0, 120));
 
   await tab('قبل از عمل');
-  ok('**جابه‌جایی بین تب‌ها مقدار را پاک نمی‌کند**', (await pre.locator('.db-careblock').first().locator('textarea').inputValue()) === `ناشتاییِ ${tag}`);
+  ok('**جابه‌جایی بین تب‌ها مقدار را پاک نمی‌کند**', (await careText(pre.locator('.db-careblock').first())).includes(`ناشتاییِ ${tag}`));
   await page.locator('.db-submit').click();
   await page.locator('.db-sheet').waitFor({ state: 'detached', timeout: 10000 });
   const saved = (await send(`/visits/${future.id}`)).json;

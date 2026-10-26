@@ -1034,6 +1034,8 @@ function FieldSheet({ formId, field, pages = 1, ftype = null, onClose, onSaved }
  * کجای برنامه استفاده می‌شود. فرمی که ساختش ده فیلد بخواهد، ساخته نمی‌شود.
  */
 function NewFormSheet({ onClose, onCreated, scope = 'visit' }) {
+  /* شرکتی: «مراجعه» یعنی **خدمت** — هر فرمِ مراجعه با زبانهٔ «خدمت» (تیم، دستگاه، مصرفی، گزارش) باز می‌شود. */
+  const company = useConfig().kind === 'company';
   const [form, setForm] = useState({ title: '', key: '', scope, hint: '', color: '' });
   const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
@@ -1080,7 +1082,7 @@ function NewFormSheet({ onClose, onCreated, scope = 'visit' }) {
             این‌جا با توضیح انتخاب می‌شود، نه با یک انتخابگرِ خشک. */}
         {fld('scope', 'این فرم چیست', (
           <select value={form.scope} onChange={set('scope')} disabled={busy}>
-            <option value="visit">مراجعه — پرشدنش یک مراجعهٔ تازه می‌سازد</option>
+            <option value="visit">{company ? 'فرمِ خدمت — مثلِ نورومانیتورینگ یا ایمپلنت، یک خدمتِ تازه می‌سازد' : 'مراجعه — پرشدنش یک مراجعهٔ تازه می‌سازد'}</option>
             <option value="subform">زیرفرمِ مراجعه — روی یک مراجعه الصاق می‌شود</option>
             <option value="record">زیرپرونده — به پروندهٔ بیمار می‌چسبد</option>
             <option value="intake">ثبت‌نام — پروندهٔ تازه باز می‌کند</option>
@@ -1112,7 +1114,13 @@ function NewFormSheet({ onClose, onCreated, scope = 'visit' }) {
           </span>
         ), 'در فهرستِ بیماران کارتِ این فرم با همین رنگ دیده می‌شود.')}
 
-        {form.scope === 'visit' && (
+        {form.scope === 'visit' && company && (
+          <p className="fb-note">
+            یک <b>فرمِ خدمتِ تازه</b> ساخته می‌شود. بخش‌های ثابتِ خدمت — جراح و بیمارستان، تیمِ کارشناسی با ساعت،
+            دستگاه، مصرفی‌ها و گزارش — خودکار در زبانهٔ «خدمت» هستند؛ فیلدهای مخصوصِ همین خدمت را این‌جا اضافه کنید.
+          </p>
+        )}
+        {form.scope === 'visit' && !company && (
           <p className="fb-note">
             یک نوعِ تازه‌ی مراجعه ساخته می‌شود با یک فیلدِ <b>تاریخ</b>. بقیه‌ی
             فیلدها را همین‌جا اضافه کنید. <b>ترتیبِ مسیر جایی تعریف نمی‌شود</b> —

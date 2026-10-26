@@ -49,7 +49,9 @@ export const reportTitle = (service?: string | null) =>
  * می‌خواهد `user?.id` در آن باشد — یعنی دامنه از توکن می‌آید نه از ورودی. شاخهٔ
  * سوپرادمین هم هیچ شناسه‌ای از ورودی نمی‌گیرد.
  */
-const visitScope = (user: any) => (isUnrestricted(user) ? { patient: { deletedAt: null } } : { techId: user?.id ?? -1 });
+/* عضوِ تیمِ کارشناسیِ فرمِ خدمت هم این عمل را در پنلش می‌بیند (نه فقط کارشناسِ اول). */
+const visitScope = (user: any) => (isUnrestricted(user) ? { patient: { deletedAt: null } }
+  : { OR: [{ techId: user?.id ?? -1 }, { crew: { some: { accountId: user?.id ?? -1 } } }] });
 
 /** نمای پروجکت‌شدهٔ هر عمل — همان چیزی که `shape` می‌شناسد، و نه یک فیلدِ بیشتر. */
 const VISIT_SELECT = {

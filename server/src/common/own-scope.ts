@@ -35,7 +35,8 @@ export const isUnrestricted = (user: any) => (user?.level ?? 0) >= LEVEL.SUPER_A
 
 /** شرطِ «مراجعهٔ منتسب به این کاربر» — برای جدولِ `visit`. */
 export function ownVisitWhere(user: any): Record<string, any> {
-  const own: Record<string, any>[] = [{ techId: user?.id ?? -1 }];
+  /* عضوِ تیمِ کارشناسیِ فرمِ خدمت (`VisitCrew`) هم «مالِ خودش» است، نه فقط کارشناسِ اول. */
+  const own: Record<string, any>[] = [{ techId: user?.id ?? -1 }, { crew: { some: { accountId: user?.id ?? -1 } } }];
   if (Number.isInteger(user?.surgeonId) && user.surgeonId > 0) own.push({ surgeonId: user.surgeonId });
   return own.length === 1 ? own[0] : { OR: own };
 }

@@ -197,19 +197,20 @@ try {
     ok(await pin.evaluate((b) => b.classList.contains('is-attached')), 'ستاره حالا «الصاق شده» است');
   });
 
+  /* ۱۴۰۵/۰۸/۰۴: شرکتی فرمِ خدمت دارد — فیلدهای مخصوصِ خدمت در زبانهٔ «خدمت»، نه «مشخصات». */
   await scene('\n۷) FF7 — لینکِ نامعتبرِ زبانهٔ پنهان ذخیره را بی‌صدا نمی‌بندد (شرکت)', async () => {
     const o = { company: true, custom: [{ key: 'refs', label: 'لینک‌های آزمونی', type: 'links', active: true }] };
     const { page } = await openForm(o);
-    await page.getByRole('tab', { name: /مشخصات/ }).click();
+    await page.locator('.vf-svctabs').getByRole('tab', { name: /^خدمت/ }).click();
     /* دکمه لبهٔ پایینِ شیت است و نوارِ چسبانِ «ذخیره» رویش می‌افتد — اول وسطِ دید. */
     const add = page.locator('.db-sheet .dyn-links .dyn-img-pick').first();
     await add.evaluate((b) => b.scrollIntoView({ block: 'center' }));
     await add.click();
     await page.locator('.db-sheet input[type="url"]').first().fill('example.com/بی‌پروتکل');
-    await page.getByRole('tab', { name: 'حین عمل' }).click();
+    await page.locator('.vf-svctabs').getByRole('tab', { name: 'پرونده و مشخصات' }).click();
     await page.locator('.db-sheet .db-submit').last().click();
-    await page.waitForFunction(() => document.querySelector('.db-sheet [data-tab="info"]')?.hidden === false, null, { timeout: 5000 }).catch(() => {});
-    ok(await page.locator('.db-sheet [data-tab="info"]').evaluate((e) => !e.hidden), '**باید بیفتد:** فرم به زبانهٔ «مشخصات» رفت');
+    await page.waitForFunction(() => !!document.querySelector('.db-sheet [data-phase="service"]'), null, { timeout: 5000 }).catch(() => {});
+    ok(await page.locator('.db-sheet [data-phase="service"]').count() === 1, '**باید بیفتد:** فرم به زبانهٔ «خدمت» (جای همان فیلد) رفت');
     const err = await page.locator('.db-sheet').innerText();
     ok(/http/.test(err) && err.includes('لینک‌های آزمونی'), 'خطای «نشانی باید با http شروع شود» دیده می‌شود');
     ok(!(o.patches ?? []).length, 'چیزی ذخیره نشد');

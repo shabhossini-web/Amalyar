@@ -147,6 +147,7 @@ superadmin-portals
 superadmin-today
 company-service-flow
 company-flow-ui
+company-service-panel
 p89-clinical
 waitlist
 p89-ui

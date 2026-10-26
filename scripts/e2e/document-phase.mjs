@@ -25,6 +25,12 @@ const ok = (n, c, d = '') => {
   if (c) { pass++; console.log('  ✔ ' + n); } else { fails.push(n + (d ? ' — ' + d : '')); console.log('  ✘ ' + n + (d ? ' — ' + d : '')); }
 };
 
+/* ⚠️ ۱۴۰۵/۰۸/۰۴: زبانه‌های قبل/حین/بعدِ فرمِ عمل فقط مالِ **مطب** است — شرکتی فرمِ خدمت می‌گیرد
+   (`company-service-panel.mjs`). دیتابیسِ آزمون پیش‌فرض نورومانیتورینگ است، پس این سوییت مطب می‌شود. */
+if (process.env.E2E_DB) {
+  (await import('node:child_process')).execSync(`psql "${process.env.E2E_DB}" -qtA`, { input: "INSERT INTO settings (key, value, updated_at) VALUES ('vertical','clinic', now()) ON CONFLICT (key) DO UPDATE SET value='clinic', updated_at=now(); INSERT INTO settings (key, value, updated_at) VALUES ('services','[]', now()) ON CONFLICT (key) DO UPDATE SET value='[]', updated_at=now();" });
+}
+
 const login = await fetch(API + '/auth/login', {
   method: 'POST', headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ identifier: process.env.E2E_USER ?? 'admin', password: process.env.E2E_PASS ?? 'test1234' }),
