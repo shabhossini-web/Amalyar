@@ -1,7 +1,7 @@
 <!-- claim:begin -->
 agent: claude-fable
 status: idle
-branch: claude/postop-sms-filter
+branch: claude/voice-lab
 since: 2026-10-27
 paths: []
 note: >-

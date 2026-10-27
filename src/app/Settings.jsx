@@ -13,6 +13,7 @@ import './definitions.css';
 import './settings.css';
 import { Check } from '../ui/icons.jsx';
 import PageHeader from '../ui/PageHeader.jsx';
+import VoiceLab from './VoiceLab.jsx';
 import Toast, { useToast } from '../ui/Toast.jsx';
 
 
@@ -424,6 +425,7 @@ function Knobs({ onToast, onSaved, org, brand, onGroups }) {
             {g.hint && <small>{g.hint}</small>}
           </div>
           {g.key === 'ai' && <AiGuide org={org} />}
+          {g.key === 'ai' && <VoiceLab onToast={onToast} />}
           <div className="st-knobs">
             {g.items.map((it) => {
               const v = valueOf(it);

@@ -1,12 +1,14 @@
 import { Module } from '@nestjs/common';
 import { AiService } from './ai.service';
 import { AiController } from './ai.controller';
+import { VoiceLabController } from './voice-lab.controller';
+import { VoiceLabService } from './voice-lab.service';
 import { TenantConfigModule } from '../config/config.module';
 import { PatientsModule } from '../patients/patients.module';
 
 @Module({
   imports: [TenantConfigModule, PatientsModule],
-  controllers: [AiController],
-  providers: [AiService],
+  controllers: [AiController, VoiceLabController],
+  providers: [AiService, VoiceLabService],
 })
 export class AiModule {}

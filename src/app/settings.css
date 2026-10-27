@@ -79,3 +79,33 @@
 .st-sms-body { margin: 0; font-size: 13px; line-height: 1.9; color: var(--text1); white-space: pre-wrap; overflow-wrap: anywhere; }
 .st-sms-preview small { font-size: 11px; color: var(--text2); }
 
+
+/* ── آزمایشگاهِ صدای منشی — داخلِ گروهِ AI ── */
+.vl { margin: 0 0 12px; }
+.vl-body {
+  margin-top: 8px; padding: 14px; border-radius: 14px; display: grid; gap: 12px;
+  background: rgba(var(--veil-rgb), .04); border: 1px solid rgba(var(--veil-rgb), .09);
+}
+.vl-note { margin: 0; font-size: 12.5px; line-height: 2; color: var(--text2); }
+.vl-hint { display: block; margin-top: -6px; font-size: 11px; color: var(--text3); }
+.vl-warn { margin: 0; font-size: 12px; line-height: 1.9; color: var(--amber-text); }
+.vl-mode { display: inline-flex; gap: 4px; padding: 4px; border-radius: 12px; width: fit-content; max-width: 100%;
+  background: var(--well-bg); border: 1px solid rgba(var(--veil-rgb), .1); }
+.vl-mode button {
+  min-height: 40px; padding: 6px 14px; border-radius: 9px; border: 0; cursor: pointer; font: inherit;
+  font-size: 12.5px; font-weight: 700; color: var(--text2); background: transparent;
+}
+.vl-mode button.on { color: var(--brand-text); background: rgba(var(--brand-rgb), .16); }
+.vl-mode button:focus-visible, .vl-link:focus-visible, .vl-dl:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.vl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.vl-body .pf-field input[type=range] { height: 36px; padding: 0; border: 0; background: none; accent-color: var(--brand-2); }
+.vl-body .pf-field textarea { min-height: 0; }
+.vl-link { padding: 0; border: 0; background: none; cursor: pointer; font: inherit; color: var(--brand-text); text-decoration: underline; }
+.vl-acts { display: flex; gap: 8px; }
+.vl-acts .df-save { min-height: 44px; padding: 0 20px; border: 0; border-radius: 12px; cursor: pointer; font: inherit; font-weight: 800; }
+.vl-out { display: grid; gap: 10px; padding: 12px; border-radius: 12px; border: 1px solid rgba(var(--brand-2-rgb), .3); background: rgba(var(--brand-rgb), .06); }
+.vl-out audio { width: 100%; }
+.vl-said { margin: 0; font-size: 13px; line-height: 2; color: var(--text1); }
+.vl-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.vl-meta small { font-size: 11px; color: var(--text3); }
+.vl-dl { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; border-radius: 11px; text-decoration: none; font-size: 12.5px; font-weight: 700; }

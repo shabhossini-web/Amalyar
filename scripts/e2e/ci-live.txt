@@ -9,6 +9,7 @@ ai-assistant2
 ai-central
 ai-notes-query
 ai-suggest
+voice-lab
 appointments-day
 approve-kind
 availability
