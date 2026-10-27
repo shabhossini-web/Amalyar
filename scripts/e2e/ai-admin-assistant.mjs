@@ -210,6 +210,9 @@ try {
     const link = bubble.locator('a.as-link');
     ok(await link.count() === 1 && (await link.getAttribute('href')) === '/app/intake',
       '**مسیرِ /app/intake در جواب لینکِ کلیک‌شدنی شد**');
+    /* بی‌جداسازی، اسلشِ اولِ مسیر در متنِ راست‌به‌چپ به تهش می‌پرید («app/intake/»). */
+    ok(await link.evaluate((a) => getComputedStyle(a).direction === 'ltr' && getComputedStyle(a).unicodeBidi === 'isolate'),
+      'مسیرِ لینک چپ‌به‌راست و جدا از متنِ فارسی نوشته می‌شود');
     await page.fill('.as-inputbar input', 'مرسی');
     await page.locator('.as-inputbar button[type="submit"]').click();
     await page.waitForTimeout(2200);

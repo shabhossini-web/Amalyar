@@ -36,13 +36,17 @@ const startersFor = (kind, services = []) => (STARTERS[kind] ?? STARTERS.company
   .slice(0, 6)
   .map((x) => x.text);
 
-/** مسیرهای داخلی در جوابِ دستیار لینکِ کلیک‌شدنی می‌شوند — راه‌بردنِ واقعی، نه فقط حرف. */
+/**
+ * مسیرهای داخلی در جوابِ دستیار لینکِ کلیک‌شدنی می‌شوند — راه‌بردنِ واقعی، نه فقط حرف.
+ * `dir="ltr"` لازم است: در متنِ راست‌به‌چپ اسلشِ اولِ مسیر به تهِ آن می‌پرید
+ * و «/app/patients/19» به‌شکلِ «app/patients/19/» دیده می‌شد.
+ */
 function Linkified({ text }) {
   const parts = String(text).split(/(\/app\/[a-z0-9/-]+)/g);
   return (
     <>
       {parts.map((p, i) => (p.startsWith('/app/')
-        ? <Link key={i} className="as-link" to={p}>{p}</Link>
+        ? <Link key={i} className="as-link" to={p} dir="ltr">{p}</Link>
         : <Fragment key={i}>{p}</Fragment>))}
     </>
   );
