@@ -2,7 +2,7 @@
 agent: claude-fable
 status: idle
 branch: claude/postop-sms-filter
-since: 2026-10-26
+since: 2026-10-27
 paths: []
 note: >-
   پروندهٔ واحد (شرکتی/نورومانیتورینگ): تیمِ پرونده (`visit_crew`) تنها منبعِ «چه کسی سرِ بیمار است» — چینش، پذیرش،
@@ -347,6 +347,9 @@ ok('follow-up links distinct per visit/day and stable after completion');
 
 ## اخیراً لند شد
 
+- ۱۴۰۵/۰۸/۰۵ · `claude/postop-sms-filter` · **لینکِ مسیر در جوابِ دستیار چپ‌به‌راست** — `dir="ltr"` روی لینکِ
+  `Linkified` (`src/app/Assistant.jsx`)؛ در حبابِ راست‌به‌چپ `/app/patients/19` به‌شکلِ `app/patients/19/` دیده می‌شد.
+  سنجه: بندِ تازه در `ai-admin-assistant.mjs`. حینِ ساختِ موشن‌گرافیِ نسخهٔ مطب پیدا شد (ویدئو بیرون از مخزن).
 - ۱۴۰۵/۰۷/۰۳ · `claude/surgery-subform-phases` · **فرمِ عمل: زیرفرم به‌ازای مرحله** (`visit_subforms.phase`،
   علائمِ حیاتی از کادرِ ثابتِ تب‌ها به الصاق)، **مراقبتِ قبل/بعدِ پاپ‌آپی** (`CareEditor.jsx`، مطب)،
   **دستیار با بافتارِ نوعِ عمل و تشخیص** (`src/ui/ai-context.js`، `/ai/care-draft` قبل و بعد) و
