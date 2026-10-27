@@ -1,7 +1,7 @@
 
 /* راهنمای دستیارِ هوشمند — تاشو داخلِ گروهِ AI. */
 .st-aiguide { margin: 4px 0 12px; }
-.st-aiguide-btn {
+.st-aiguide-btn, .vl-btn {
   padding: 8px 14px; cursor: pointer; font: inherit; font-size: 12px; font-weight: 700; color: var(--brand-2);
   background: rgba(var(--brand-rgb), .08); border: 1px dashed rgba(var(--brand-2-rgb), .4); border-radius: 11px;
 }
@@ -96,7 +96,7 @@
   font-size: 12.5px; font-weight: 700; color: var(--text2); background: transparent;
 }
 .vl-mode button.on { color: var(--brand-text); background: rgba(var(--brand-rgb), .16); }
-.vl-mode button:focus-visible, .vl-link:focus-visible, .vl-dl:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.vl-btn:focus-visible, .vl-mode button:focus-visible, .vl-link:focus-visible, .vl-dl:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
 .vl-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
 .vl-body .pf-field input[type=range] { height: 36px; padding: 0; border: 0; background: none; accent-color: var(--brand-2); }
 .vl-body .pf-field textarea { min-height: 0; }

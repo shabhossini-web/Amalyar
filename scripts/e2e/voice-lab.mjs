@@ -132,7 +132,7 @@ try {
       page.on('pageerror', (e) => errors.push(String(e)));
       await browserLogin(page, login.accessToken, { ui: UI });
       await page.goto(UI + '/app/settings');
-      const btn = page.locator('.vl > .st-aiguide-btn');
+      const btn = page.locator('.vl-btn');
       await btn.waitFor({ timeout: 15000 });
       await btn.scrollIntoViewIfNeeded();
       await btn.click();

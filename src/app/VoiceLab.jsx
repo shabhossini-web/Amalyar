@@ -75,7 +75,7 @@ export default function VoiceLab({ onToast }) {
 
   return (
     <div className="vl">
-      <button type="button" className="st-aiguide-btn" aria-expanded={open} onClick={() => setOpen(!open)}>
+      <button type="button" className="vl-btn" aria-expanded={open} onClick={() => setOpen(!open)}>
         آزمایشگاهِ صدای منشی — {open ? 'بستن' : 'بازکردن'}
       </button>
       {open && (
