@@ -1,6 +1,6 @@
 <!-- claim:begin -->
 agent: claude-opus
-status: active
+status: idle
 branch: claude/deploy-speed
 since: 2026-10-21
 paths:
@@ -11,6 +11,9 @@ note: >-
   کوتاه‌کردنِ زمانِ دیپلویِ Coolify (کشِ npm با cache mount). ریشه‌یابی در docs/CLAUDE_HANDOFF.md
   بخشِ «سرعتِ دیپلوی در Coolify — 2026-10-21».
 <!-- claim:end -->
+
+> ۱۴۰۵/۰۸/۱۵ — claude-fable به خواستِ صریحِ مالک این کلیم را idle کرد: از ۲۰۲۶-۱۰-۲۱ فعال مانده بود و نگهبانِ
+> «کلیمِ بیات» (`verify-claims.js`) CIِ همه را قرمز می‌کرد. اگر کارِ سرعتِ دیپلوی هنوز باز است، دوباره active کن.
 
 ## قراردادهایی که شکستم
 
