@@ -47,6 +47,15 @@ for (const loc of ['/_seo/head', '/robots.txt', '/sitemap.xml']) {
   if (block.includes('@seo_static') && block.indexOf('set $seo_file') > block.indexOf('rewrite ^'))
     die('مسیرِ ' + loc + ' باید پیش از rewrite مقدارِ $seo_file را ست کند');
 }
+/* بدنهٔ خطای زیردرخواستِ SSI (۵۰۳ِ nginx، ۴۰۴ِ JSONِ بک‌اند) وسطِ <head> می‌نشست و
+   گوگل همان را عنوانِ صفحه ایندکس کرد — `ssi_silent_errors` جلویش را نمی‌گیرد. */
+{
+  const i = ngx.indexOf('location = /_seo/head');
+  const head = ngx.slice(i, ngx.indexOf('\n  }', i));
+  if (!head.includes('proxy_intercept_errors on;') || !['404', '502', '503'].every((c) => new RegExp('error_page[^;]*\\b' + c + '\\b[^;]*= @seo_empty;').test(head)))
+    die('مسیرِ /_seo/head باید هر پاسخِ خطا را به قطعهٔ خالی (@seo_empty) ببرد');
+  if (!/location @seo_empty \{\s*return 204;/.test(ngx)) die('location @seo_empty باید بی‌بدنه (۲۰۴) باشد');
+}
 const fallback = ngx.slice(ngx.indexOf('location @seo_static'), ngx.indexOf('\n  }', ngx.indexOf('location @seo_static')));
 if (/try_files\s+\$uri/.test(fallback))
   die('fallbackِ ایستا نباید به $uri تکیه کند — rewrite عوضش کرده؛ از $seo_file استفاده کن');
