@@ -69,6 +69,18 @@ server {
     proxy_ssl_server_name on;
     proxy_connect_timeout 2s;
     proxy_read_timeout 3s;
+    # ⚠️ `ssi_silent_errors` فقط خطای **خودِ SSI** را می‌پوشاند، نه بدنهٔ پاسخِ
+    # غیرِ ۲۰۰: nginx بدنهٔ زیردرخواست را هر کدی که داشت در صفحه می‌گذارد. باگِ
+    # واقعی (۱۴۰۵/۰۸/۱۵): روی amalyar.com صفحهٔ «503 Service Temporarily
+    # Unavailable · nginx» و روی میزبانِ بی‌شرکت JSONِ «شرکت برای این دامنه یافت
+    # نشد» وسطِ <head> نشست، بالای صفحه چاپ شد، و گوگل همان «503» را عنوانِ
+    # amalyar.com ایندکس کرد (اولین <title> برنده است). پس هر پاسخِ خطا = قطعهٔ خالی.
+    proxy_intercept_errors on;
+    error_page 400 401 403 404 405 408 429 500 502 503 504 = @seo_empty;
+  }
+
+  location @seo_empty {
+    return 204;
   }
 
   # robots و sitemap از همان بک‌اند می‌آیند تا per-tenant باشند؛ اگر بک‌اند
