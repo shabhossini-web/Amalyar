@@ -12,7 +12,7 @@
     radial-gradient(60% 45% at 85% -10%, rgba(245, 158, 11, .34), transparent 70%),
     radial-gradient(50% 40% at -10% 110%, rgba(var(--brand-rgb), .3), transparent 70%);
 }
-.dp > *:not(.dp-bg) { position: relative; }
+.dp > *:not(.dp-bg):not([class*="overlay"]) { position: relative; } /* پرده‌ها fixed بمانند — inventory.css */
 
 .dp-gapnote { font-style: normal; color: var(--amber-text); }
 .dp-err { max-width: var(--page-w); margin: 0 auto 14px; padding: 12px; border-radius: 13px; font-size: 12.5px; color: var(--red-text); background: rgba(248, 113, 113, .1); border: 1px solid rgba(248, 113, 113, .28); }

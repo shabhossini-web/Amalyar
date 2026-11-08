@@ -167,3 +167,4 @@ tenant-profile-create
 lost-documents
 sms-filter-ui
 sms-filter-probe
+visit-delete-release

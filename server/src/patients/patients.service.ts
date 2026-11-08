@@ -32,6 +32,7 @@ import { vitalsRowsFor } from './vitals';
 import { DOCUMENT_PHASE_FA } from './document-categories';
 import { actorName } from '../common/person';
 import { summarize, withPayState } from './billing.service';
+import { releaseVisitStock, VisitStockRelease } from './visit-stock-release';
 import { todayRangeUtc } from '../common/clinic-day';
 import {
   CODING_TWIN, CODING_TWIN_KEYS, EMPTY_CODING, OTHER_DX, OTHER_PX, assertCodingRefs, codingSearchOr, currentCoding,
@@ -2196,10 +2197,16 @@ export class PatientsService {
       },
     });
     if (!v) throw new NotFoundException('مراجعه پیدا نشد');
+    let stock: VisitStockRelease | null = null;
     await this.prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM visits WHERE id = ${id} FOR UPDATE`;
       if (await tx.invoiceDocument.count({ where: { visitId: id } })) {
         throw new BadRequestException('برای این مراجعه فاکتور صادر شده است؛ برای حفظ سوابق مالی، مراجعه را لغو کنید');
+      }
+      /* ست و دستگاهِ این مراجعه پیش از حذف آزاد می‌شوند — وگرنه «بیرون» می‌ماندند (visit-stock-release.ts). */
+      stock = await releaseVisitStock(tx, id, user?.id ?? null);
+      for (const tid of stock.closed) {
+        await this.events.emit({ type: 'transfer.closed', visitId: null, refType: 'stock_transfer', refId: tid, actorId: user?.id ?? null }, tx);
       }
       await tx.visit.delete({ where: { id } });
       const left = await tx.visit.count({ where: { patientId: v.patientId } });
@@ -2210,8 +2217,8 @@ export class PatientsService {
         });
       }
     });
-    await this.audit.record({ actorId: user?.id, action: 'visit.delete', entityType: 'visit', entityId: id, before: v });
-    return { ok: true };
+    await this.audit.record({ actorId: user?.id, action: 'visit.delete', entityType: 'visit', entityId: id, before: v, after: { stock } });
+    return { ok: true, stock };
   }
 }
 

@@ -12,7 +12,7 @@
     radial-gradient(60% 45% at 85% -10%, rgba(var(--brand-rgb), .5), transparent 70%),
     radial-gradient(50% 40% at -10% 110%, rgba(0, 212, 255, .18), transparent 70%);
 }
-.ac > *:not(.ac-bg) { position: relative; }
+.ac > *:not(.ac-bg):not([class*="overlay"]) { position: relative; } /* پرده‌ها fixed بمانند — inventory.css */
 
 .ac-toolbar {
   display: flex; flex-wrap: wrap; align-items: center; gap: 9px;

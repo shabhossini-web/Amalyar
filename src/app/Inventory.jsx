@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '../lib/api.js';
-import { faDate, jStr, jStrToIso, jToday, toEnDigits } from '../lib/jalali.js';
+import { faDate, isoToJStr, jStr, jStrToIso, jToday, toEnDigits } from '../lib/jalali.js';
 import JDate from './JDate.jsx';
 import './inventory.css';
 import { Alert, Box, Boxes, Close, Pencil, Plus, Route, Tag, Trash, Wave } from '../ui/icons.jsx';
@@ -43,6 +43,7 @@ export default function Inventory() {
   const [adding, setAdding] = useState(false);
   const [moving, setMoving] = useState(null); // {lot, mode}
   const [tracing, setTracing] = useState(null);
+  const [editingLot, setEditingLot] = useState(null);
   /* پیوندِ مستقیم به یک تب (‎?tab=items از تعاریفِ پایه) — کالاها تبِ اول است (مالک، ۱۴۰۵/۰۷/۱۱). */
   const [tab, setTab] = useState(() => {
     const key = new URLSearchParams(window.location.search).get('tab');
@@ -184,6 +185,9 @@ export default function Inventory() {
               <button type="button" onClick={() => setMoving({ lot, mode: 'out' })} disabled={lot.quantity <= 0}>مصرف</button>
               <button type="button" onClick={() => setMoving({ lot, mode: 'adjust' })}>شمارش</button>
               <button type="button" onClick={() => setMoving({ lot, mode: 'damage' })} disabled={lot.available <= 0}>خرابی</button>
+              <button type="button" className="iv-trace" title="ویرایشِ لات" aria-label={`ویرایشِ لاتِ ${lot.itemName}`} onClick={() => setEditingLot(lot)}>
+                <Pencil width="14" height="14" />
+              </button>
               <button type="button" className="iv-trace" title="ردیابی" onClick={() => setTracing(lot.id)}>
                 <Route width="15" height="15" />
               </button>
@@ -216,6 +220,16 @@ export default function Inventory() {
       </AnimatePresence>
       <AnimatePresence>
         {tracing && <TraceSheet lotId={tracing} onClose={() => setTracing(null)} onError={setToast} />}
+      </AnimatePresence>
+      <AnimatePresence>
+        {editingLot && (
+          <LotEditSheet
+            lot={editingLot}
+            onClose={() => setEditingLot(null)}
+            onSaved={async (msg) => { setEditingLot(null); setToast(msg); await load(); }}
+            onError={setToast}
+          />
+        )}
       </AnimatePresence>
 
       {toast && <div className="iv-toast" role="status">{toast}</div>}
@@ -1673,6 +1687,64 @@ function printTransfer(t) {
 }
 
 /** ثبتِ لاتِ تازه‌رسیده. کالا از کاتالوگ انتخاب می‌شود — تایپِ آزاد نداریم. */
+/**
+ * ویرایشِ لات — شماره، سریال، انقضا، محل و یادداشت (`PATCH /stock/lots/:id`).
+ *
+ * تعداد عمداً این‌جا نیست: موجودی جمعِ دفترِ حرکت‌هاست و فقط با «ورود / مصرف / شمارش / خرابی» عوض می‌شود تا
+ * ردِ هر تغییر بماند. سرور با عوض‌شدنِ سریالِ یک ست، محتویاتش را هم به محلِ تازه می‌برد.
+ */
+function LotEditSheet({ lot, onClose, onSaved, onError }) {
+  const [form, setForm] = useState({
+    lotNo: lot.lotNo ?? '', serialNo: lot.serialNo ?? '', location: lot.location ?? '', notes: lot.notes ?? '',
+    expiresJ: lot.expiresAt ? isoToJStr(lot.expiresAt) : '',
+  });
+  const [busy, setBusy] = useState(false);
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const submit = async () => {
+    if (busy) return;
+    let expiresAt = '';
+    if (form.expiresJ.trim()) {
+      expiresAt = jStrToIso(form.expiresJ);
+      if (!expiresAt) { onError('تاریخِ انقضا نامعتبر است (مثال: ۱۴۰۶/۰۷/۳۰)'); return; }
+    }
+    setBusy(true);
+    try {
+      await api(`/stock/lots/${lot.id}`, {
+        method: 'PATCH',
+        body: { lotNo: form.lotNo.trim(), serialNo: form.serialNo.trim(), location: form.location.trim(), notes: form.notes.trim(), expiresAt },
+      });
+      await onSaved('لات ویرایش شد');
+    } catch (e) { onError(e.message); } finally { setBusy(false); }
+  };
+  return (
+    <TitledSheet onClose={() => !busy && onClose()} title="ویرایشِ لات">
+      <div className="iv-form">
+        <div className="iv-picked">
+          <b>{lot.itemName}{lot.itemSize ? ` — ${lot.itemSize}` : ''}</b>
+          <small>موجودیِ فعلی: {num(lot.quantity)} {lot.unit} — تعداد با «ورود / شمارش / خرابی» عوض می‌شود</small>
+        </div>
+        <div className="iv-grid2">
+          <label className="iv-field"><span>شمارهٔ لات</span>
+            <input dir="ltr" value={form.lotNo} onChange={set('lotNo')} placeholder="A-4471" />
+          </label>
+          <label className="iv-field"><span>شمارهٔ سریال</span>
+            <input dir="ltr" value={form.serialNo} onChange={set('serialNo')} placeholder="فقط اگر تک‌تک ردیابی می‌شود" />
+          </label>
+          <JDate className="iv-field" label="تاریخِ انقضا (شمسی)" value={form.expiresJ}
+            onChange={(v) => setForm((s) => ({ ...s, expiresJ: v }))} placeholder="خالی = بدونِ انقضا" />
+          <label className="iv-field"><span>محلِ نگه‌داری</span>
+            <input value={form.location} onChange={set('location')} placeholder="خالی = انبارِ اصلی" />
+          </label>
+        </div>
+        <label className="iv-field"><span>یادداشت</span>
+          <input value={form.notes} onChange={set('notes')} placeholder="اختیاری" />
+        </label>
+      </div>
+      <Foot busy={busy} onClose={onClose} onSubmit={submit} />
+    </TitledSheet>
+  );
+}
+
 function LotSheet({ onClose, onSaved, onError }) {
   const [itemQ, setItemQ] = useState('');
   const [hits, setHits] = useState([]);

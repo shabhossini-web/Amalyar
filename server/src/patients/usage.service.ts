@@ -149,6 +149,9 @@ export class VisitUsageService {
             });
           setBlocks.push({ transferId: t.id, code: t.code, setLotId: set.lotId, serialNo: set.serialNo ?? null, name: set.itemName, location: set.location, lines });
         } else {
+          /* دستگاه و ستِ بی‌سریال «مصرفی» نیستند — شمارندهٔ «چندبارمصرف» برایشان فقط گیج می‌کرد (نقدِ پنلِ
+             کارشناسی، ۱۴۰۵/۰۸/۱۷). جای دستگاه بلوکِ «دستگاه» است. */
+          if (item.assetKind === 'device' || item.assetKind === 'set') continue;
           if (!usedOf) {
             /* مصرفِ همین بیمار و مصرفِ همه از همین حواله — ستِ عمومیِ بیمارستان بینِ چند بیمار است. */
             const agg = await this.prisma.stockMovement.groupBy({

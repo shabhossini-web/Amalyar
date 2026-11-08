@@ -20,7 +20,7 @@
     radial-gradient(60% 45% at 85% -10%, rgba(var(--brand-rgb), .5), transparent 70%),
     radial-gradient(50% 40% at -10% 110%, rgba(0, 212, 255, .18), transparent 70%);
 }
-.cal > *:not(.cal-bg) { position: relative; }
+.cal > *:not(.cal-bg):not([class*="overlay"]) { position: relative; } /* پرده‌ها fixed بمانند — inventory.css */
 
 .cal-list { display: grid; gap: 9px; max-width: var(--page-w); margin: 0 auto; }
 .cal-empty {
