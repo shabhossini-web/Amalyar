@@ -50,6 +50,11 @@ export default function Inventory() {
     return ['items', 'lots', 'sets', 'transfers', 'assets'].includes(key) ? key : 'items';
   });
   const [openTransfers, setOpenTransfers] = useState(0);
+  /* کلیک روی یک ست در «موجودی» یا «کاتالوگ» → تبِ «ست‌ها» با همان ست (الف-۳). */
+  const [setFocus, setSetFocus] = useState('');
+  const openSet = (serial) => { setSetFocus(serial ?? ''); setTab('sets'); };
+  /* «کالا ذخیره شد → موجودیِ اولیه؟» (الف-۱) */
+  const [stockFor, setStockFor] = useState(null);
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -95,8 +100,8 @@ export default function Inventory() {
         value={tab}
         onChange={setTab}
         items={[
-          { key: 'items', label: 'کالاها', icon: Tag },
-          { key: 'lots', label: 'لات‌ها', icon: Box },
+          { key: 'items', label: 'کاتالوگ', icon: Tag },
+          { key: 'lots', label: 'موجودی', icon: Box },
           { key: 'sets', label: 'ست‌ها', icon: Boxes },
           { key: 'transfers', label: 'حواله‌ها', icon: Route, badge: openTransfers ? num(openTransfers) : null },
           { key: 'assets', label: 'دارایی‌ها', icon: Wave },
@@ -104,9 +109,9 @@ export default function Inventory() {
       />
 
       {tab === 'items' ? (
-        <Items onToast={setToast} />
+        <Items onToast={setToast} onOpenSet={openSet} onStock={setStockFor} />
       ) : tab === 'sets' ? (
-        <Sets onToast={setToast} />
+        <Sets onToast={setToast} focus={setFocus} />
       ) : tab === 'assets' ? (
         <Assets onToast={setToast} />
       ) : tab === 'transfers' ? (
@@ -136,7 +141,7 @@ export default function Inventory() {
           ))}
         </div>
         <button type="button" className="iv-add" onClick={() => setAdding(true)}>
-          <Plus width="16" height="16" /> لاتِ جدید
+          <Plus width="16" height="16" /> ورودِ موجودی
         </button>
       </div>
 
@@ -144,7 +149,7 @@ export default function Inventory() {
         {loading && <div className="iv-empty">در حال بارگذاری…</div>}
         {!loading && rows.length === 0 && (
           <div className="iv-empty">
-            {q.trim() || filter !== 'all' ? 'موردی با این فیلتر نیست' : 'هنوز لاتی ثبت نشده — با «لاتِ جدید» کالای رسیده را وارد کنید'}
+            {q.trim() || filter !== 'all' ? 'موردی با این فیلتر نیست' : 'هنوز موجودی‌ای ثبت نشده — اول کالا را در «کاتالوگ» تعریف کنید، بعد با «ورودِ موجودی» تعدادش را بزنید'}
           </div>
         )}
         {!loading && rows.map((lot, i) => (
@@ -181,10 +186,15 @@ export default function Inventory() {
               )}
             </div>
             <div className="iv-acts">
+              {lot.isSet ? (
+                /* ست جعبه‌ای از موجودی است (مالک، ۱۴۰۵/۰۸/۱۷): شمارش و خرابی روی اقلامِ داخلِ آن است، نه روی خودِ جعبه. */
+                <button type="button" className="iv-mini" onClick={() => openSet(lot.serialNo)}>محتویاتِ ست</button>
+              ) : (<>
               <button type="button" onClick={() => setMoving({ lot, mode: 'in' })}>ورود</button>
               <button type="button" onClick={() => setMoving({ lot, mode: 'out' })} disabled={lot.quantity <= 0}>مصرف</button>
               <button type="button" onClick={() => setMoving({ lot, mode: 'adjust' })}>شمارش</button>
               <button type="button" onClick={() => setMoving({ lot, mode: 'damage' })} disabled={lot.available <= 0}>خرابی</button>
+              </>)}
               <button type="button" className="iv-trace" title="ویرایشِ لات" aria-label={`ویرایشِ لاتِ ${lot.itemName}`} onClick={() => setEditingLot(lot)}>
                 <Pencil width="14" height="14" />
               </button>
@@ -199,10 +209,11 @@ export default function Inventory() {
       )}
 
       <AnimatePresence>
-        {adding && (
+        {(adding || stockFor) && (
           <LotSheet
-            onClose={() => setAdding(false)}
-            onSaved={async (msg) => { setAdding(false); setToast(msg); await load(); }}
+            initialItem={stockFor}
+            onClose={() => { setAdding(false); setStockFor(null); }}
+            onSaved={async (msg) => { setAdding(false); setStockFor(null); setToast(msg); await load(); }}
             onError={setToast}
           />
         )}
@@ -248,9 +259,9 @@ const STATE_TONE = { free: 'ok', booked: 'warn', out: 'out', service: 'bad', con
 const COUNT_TONE = { overdue: 'bad', due_soon: 'warn', ok: 'ok', none: '' };
 
 const KINDS = [
-  { v: 'consumable', l: 'مصرفی — یک‌بار می‌رود' },
-  { v: 'set', l: 'ست — برمی‌گردد' },
+  { v: 'consumable', l: 'مصرفی' },
   { v: 'device', l: 'دستگاه — برمی‌گردد' },
+  { v: 'set', l: 'ست — از تبِ «ست‌ها» ساخته می‌شود' },
 ];
 
 /**
@@ -259,7 +270,7 @@ const KINDS = [
  * همان جدولِ تعاریف است (تک‌منبع)؛ فقط درِ ورودش انبار شد تا انباردار (سطح ۳) بی‌دسترسیِ مدیریتی
  * کالا تعریف کند. دو تیکِ تازه: «نمایش در پنلِ کارشناسی» و «چندبارمصرف».
  */
-function Items({ onToast }) {
+function Items({ onToast, onOpenSet, onStock }) {
   const row = useStagger();
   const [rows, setRows] = useState([]);
   const [q, setQ] = useState('');
@@ -268,6 +279,7 @@ function Items({ onToast }) {
   const [parts, setParts] = useState(null);
   const [deleting, setDeleting] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [ask, setAsk] = useState(null); // کالای تازه‌ای که منتظرِ «موجودیِ اولیه؟» است
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -306,7 +318,7 @@ function Items({ onToast }) {
         <input className="iv-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="جستجو: نام، برند، کد یا دسته" aria-label="جستجو در کالاها" />
         <button type="button" className="iv-add" onClick={() => setEditing({})}><Plus width="16" height="16" /> کالای جدید</button>
       </div>
-      <p className="iv-note iv-tabnote">کاتالوگِ کالاست، نه موجودی. «نوع» می‌گوید برمی‌گردد یا نه؛ «چندبارمصرف» می‌گوید با مصرف از موجودی کم شود یا فقط دفعاتِ استفاده شمرده شود (و فقط با خرابی کم شود).</p>
+      <p className="iv-note iv-tabnote">ترتیبِ کار: اول کالا را این‌جا تعریف کنید، بعد با «ورودِ موجودی» تعدادش را بزنید، و در تبِ «ست‌ها» از همین موجودی ست بسازید. عددِ بزرگ «آماده در انبار» است؛ آنچه داخلِ ست‌هاست زیرِ هر کالا جدا آمده.</p>
 
       <div className="iv-list">
         {loading && <div className="iv-empty">در حال بارگذاری…</div>}
@@ -315,7 +327,7 @@ function Items({ onToast }) {
         )}
         {!loading && rows.map((it, i) => (
           <motion.article key={it.id} {...row(i)} className={`iv-row iv-item${it.active ? '' : ' zero'}`}>
-            <div className="iv-qty"><b>{num(it.available)}</b><span>{it.unit}</span></div>
+            <div className="iv-qty"><b>{num(it.available)}</b><span>{it.assetKind === 'set' ? 'آماده' : it.unit}</span></div>
             <div className="iv-row-main">
               <b>{it.name}{it.size ? ` — ${it.size}` : ''}{!it.active && <i className="iv-off"> (غیرفعال)</i>}</b>
               <small>{[it.assetLabel, it.brand, it.sku, it.category].filter(Boolean).join(' · ')}</small>
@@ -325,9 +337,22 @@ function Items({ onToast }) {
                 {it.assetKind !== 'consumable' && <span className="iv-chip">{num(it.contentCount)} قلم در قالب</span>}
                 <span className="iv-chip">{num(it.lotCount)} لات</span>
               </small>
+              {it.inSets?.length > 0 && (
+                /* داخلِ ست جزوِ موجودیِ ماست ولی آماده نیست — «۹۸۰ انبار · ۲۰ در ست SE-07». */
+                <small className="iv-out iv-insets">
+                  <span>در ست‌ها:</span>
+                  {it.inSets.map((x) => (
+                    <button type="button" key={x.location} onClick={() => onOpenSet(x.serialNo)}>
+                      <bdi dir="ltr">{x.serialNo}</bdi> {num(x.quantity)}
+                    </button>
+                  ))}
+                </small>
+              )}
             </div>
             <div className="iv-acts">
-              {it.assetKind !== 'consumable' && <button type="button" onClick={() => setParts(it)}>محتویات</button>}
+              {it.assetKind === 'set'
+                ? <button type="button" onClick={() => setParts(it)}>محتویات</button>
+                : it.active && <button type="button" onClick={() => onStock(it)}>ورودِ موجودی</button>}
               <button type="button" aria-label={`ویرایشِ ${it.name}`} onClick={() => setEditing(it)}><Pencil width="14" height="14" /></button>
               <button type="button" aria-label={`حذفِ ${it.name}`} className="iv-acts-del" onClick={() => setDeleting(it)}><Trash width="14" height="14" /></button>
             </div>
@@ -337,11 +362,33 @@ function Items({ onToast }) {
 
       <AnimatePresence>
         {editing && (
-          <ItemSheet row={editing} onClose={() => setEditing(null)} onSaved={async (m) => { setEditing(null); onToast(m); await load(); }} onError={onToast} />
+          <ItemSheet
+            row={editing}
+            onClose={() => setEditing(null)}
+            onSaved={async (m, fresh) => {
+              setEditing(null); onToast(m); await load();
+              /* الف-۱: کالای تازه → همان لحظه «موجودیِ اولیه را هم ثبت کنیم؟» */
+              if (fresh) setAsk(fresh);
+            }}
+            onError={onToast}
+          />
         )}
       </AnimatePresence>
       <AnimatePresence>
         {parts && <SetContents item={parts} onClose={() => setParts(null)} onToast={onToast} onChanged={load} />}
+      </AnimatePresence>
+      <AnimatePresence>
+        {ask && (
+          <ConfirmDialog
+            title={`«${ask.name}» تعریف شد`}
+            text="موجودیِ اولیه‌اش را هم همین الان ثبت کنیم؟ کالا تا موجودی نداشته باشد در هیچ ستی و هیچ مصرفی نمی‌آید."
+            confirmLabel="ثبتِ موجودی"
+            cancelLabel="بعداً"
+            tone="primary"
+            onConfirm={() => { const it = ask; setAsk(null); onStock(it); }}
+            onCancel={() => setAsk(null)}
+          />
+        )}
       </AnimatePresence>
       <AnimatePresence>
         {deleting && (
@@ -386,8 +433,8 @@ function ItemSheet({ row, onClose, onSaved, onError }) {
         showInTechPanel: f.showInTechPanel,
         usageMode: returnable ? 'multi' : f.usageMode,
       };
-      await api(isNew ? '/stock/items' : `/stock/items/${row.id}`, { method: isNew ? 'POST' : 'PATCH', body });
-      await onSaved(isNew ? 'کالا تعریف شد' : 'کالا ویرایش شد');
+      const saved = await api(isNew ? '/stock/items' : `/stock/items/${row.id}`, { method: isNew ? 'POST' : 'PATCH', body });
+      await onSaved(isNew ? 'کالا تعریف شد' : 'کالا ویرایش شد', isNew && saved?.assetKind !== 'set' ? saved : null);
     } catch (e) { onError(e.message); } finally { setBusy(false); }
   };
 
@@ -400,7 +447,7 @@ function ItemSheet({ row, onClose, onSaved, onError }) {
         <div className="iv-grid2">
           <label className="iv-field"><span>نوع *</span>
             <select value={f.assetKind} onChange={set('assetKind')}>
-              {KINDS.map((k) => <option key={k.v} value={k.v}>{k.l}</option>)}
+              {KINDS.filter((k) => k.v !== 'set' || f.assetKind === 'set').map((k) => <option key={k.v} value={k.v}>{k.l}</option>)}
             </select>
           </label>
           <label className="iv-field"><span>واحد</span>
@@ -532,12 +579,13 @@ function SetContents({ item, onClose, onToast, onChanged }) {
  * «استاندارد» از قالب، «داخلِ ست» از دفتر، «کسری» حساب‌شده. تکمیل از انبار (FEFO)، خرابی به
  * «خرابی‌ها»، برداشت به انبار — همه حرکتِ دفتری. پایینِ صفحه «خرابی‌ها» است: اسقاط یا تعمیر.
  */
-function Sets({ onToast }) {
+function Sets({ onToast, focus = '' }) {
   const row = useStagger();
   const [rows, setRows] = useState(null);
   const [damaged, setDamaged] = useState([]);
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(focus);
   const [busy, setBusy] = useState(null); // شناسهٔ ستِ در حالِ تکمیل
+  const [building, setBuilding] = useState(null); // null | {} (تازه) | { name, lines } (یکی دیگر مثلِ همین)
   const [move, setMove] = useState(null); // { set, line, mode: 'damage' | 'withdraw' }
   const [decide, setDecide] = useState(null); // { row, mode: 'scrap' | 'repair' }
   const [report, setReport] = useState(false);
@@ -579,13 +627,14 @@ function Sets({ onToast }) {
       <div className="iv-toolbar">
         <input className="iv-search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="جستجو: سریال یا نامِ ست" aria-label="جستجو در ست‌ها" />
         <button type="button" className="iv-ghost" onClick={() => setReport(true)}>گزارشِ کسری</button>
+        <button type="button" className="iv-add" onClick={() => setBuilding({})}><Plus width="16" height="16" /> ست بساز</button>
       </div>
-      <p className="iv-note iv-tabnote">فقط ستی که سریال دارد محتویاتِ ردیابی‌شده دارد: هر ست یک محل در دفترِ انبار است و قلمی که داخلِ آن است در انبار «در دسترس» نیست.</p>
+      <p className="iv-note iv-tabnote">ست جعبه‌ای از موجودیِ خودتان است: اقلامش از انبار به ست منتقل می‌شوند و همچنان جزوِ موجودیِ کل‌اند، فقط «آماده» نیستند. شمارش و خرابی روی اقلامِ داخلِ ست انجام می‌شود.</p>
 
       <div className="iv-list">
         {rows === null && <div className="iv-empty">در حال بارگذاری…</div>}
         {rows !== null && rows.length === 0 && (
-          <div className="iv-empty">{q.trim() ? 'ستی با این نام نیست' : 'هنوز ستِ سریالی ثبت نشده — در تبِ «لات‌ها» برای کالای نوعِ «ست» لاتی با شمارهٔ سریال بسازید'}</div>
+          <div className="iv-empty">{q.trim() ? 'ستی با این نام یا شماره نیست' : 'هنوز ستی ساخته نشده — با «ست بساز» اقلامش را از موجودی انتخاب کنید'}</div>
         )}
         {rows !== null && rows.map((s, i) => (
           <motion.article key={s.lotId} {...row(i)} className={`iv-set${s.totals.complete ? ' ok' : s.totals.shortage ? ' warn' : ''}`}>
@@ -597,7 +646,7 @@ function Sets({ onToast }) {
               <small>{s.consignedTo ? `امانیِ ${s.consignedTo}` : s.atHome ? 'در انبار' : `الان در: ${s.at ?? '—'}`}</small>
             </header>
             {s.totals.lines === 0 ? (
-              <p className="iv-note">قالبِ محتویات تعریف نشده — در تبِ «کالاها» روی «محتویات» بزنید.</p>
+              <p className="iv-note">محتویاتِ این ست تعریف نشده — با «تکمیل» یا «یکی دیگر مثلِ همین» نمی‌شود ساختش؛ یک ستِ تازه با «ست بساز» بسازید.</p>
             ) : (
               <div className="iv-settbl">
                 <div className="iv-setrow head"><span>قلم</span><span>استاندارد</span><span>داخلِ ست</span><span>کسری</span><span /></div>
@@ -630,6 +679,11 @@ function Sets({ onToast }) {
               <button type="button" className="iv-mini" disabled={busy === s.lotId || !s.totals.shortage} onClick={() => fill(s)}>
                 {busy === s.lotId ? 'در حال تکمیل…' : 'تکمیل از انبار'}
               </button>
+              {s.totals.lines > 0 && (
+                <button type="button" className="iv-ghost" onClick={() => setBuilding({ name: s.itemName, lines: s.contents.filter((c) => c.tracked).map((c) => ({ partId: c.partId, label: c.label, quantity: c.standard })) })}>
+                  یکی دیگر مثلِ همین
+                </button>
+              )}
               {s.totals.untracked > 0 && <small className="iv-none">{num(s.totals.untracked)} قلمِ فقط‌نام — برای ردیابی، در «محتویات» به کالای تعریف‌شده وصلش کنید</small>}
             </footer>
           </motion.article>
@@ -661,13 +715,15 @@ function Sets({ onToast }) {
         {move && (
           <QtySheet
             title={move.mode === 'damage' ? `خرابی — ${move.line.label}` : `برداشت به انبار — ${move.line.label}`}
-            hint={move.mode === 'damage' ? `از ${move.set.location} به «خرابی‌ها»` : `از ${move.set.location} به ${move.set.home}`}
+            hint={move.mode === 'damage'
+              ? (move.line.multi ? `از ${move.set.location} به «خرابی‌ها» — آن‌جا اسقاط یا تعمیر می‌شود` : `از ${move.set.location} و از کلِ موجودی کم می‌شود`)
+              : `از ${move.set.location} به ${move.set.home}`}
             max={move.line.inside}
             lots={move.line.lots}
             onClose={() => setMove(null)}
             onSubmit={async ({ quantity, lotId, note }) => {
-              await api(`/stock/sets/${move.set.lotId}/${move.mode}`, { method: 'POST', body: { partLotId: lotId, quantity, note } });
-              onToast(move.mode === 'damage' ? 'به «خرابی‌ها» منتقل شد' : 'به انبار برگشت');
+              const r = await api(`/stock/sets/${move.set.lotId}/${move.mode}`, { method: 'POST', body: { partLotId: lotId, quantity, note } });
+              onToast(move.mode === 'damage' ? (r?.writtenOff ? 'از ست و از کلِ موجودی کم شد' : 'به «خرابی‌ها» منتقل شد') : 'به انبار برگشت');
               setMove(null); await load();
             }}
             onError={onToast}
@@ -693,7 +749,132 @@ function Sets({ onToast }) {
       <AnimatePresence>
         {report && <ShortageReport onClose={() => setReport(false)} onError={onToast} />}
       </AnimatePresence>
+      <AnimatePresence>
+        {building && (
+          <BuildSetSheet
+            preset={building}
+            onClose={() => setBuilding(null)}
+            onSaved={async (set) => { setBuilding(null); onToast(`ستِ ${set.serialNo} ساخته شد`); setQ(''); await load(); }}
+            onError={onToast}
+          />
+        )}
+      </AnimatePresence>
     </>
+  );
+}
+
+/**
+ * «ست بساز» — جعبه‌ای از موجودیِ خودمان (مالک، ۱۴۰۵/۰۸/۱۷).
+ *
+ * اقلام از کاتالوگ با «آماده در انبار» انتخاب می‌شوند و با ذخیره از انبار به ست منتقل می‌شوند.
+ * نامِ تکراری = همان نوعِ ست (الگو)؛ نامِ تازه = نوعِ تازه با همین محتویات به‌عنوانِ استاندارد.
+ */
+function BuildSetSheet({ preset, onClose, onSaved, onError }) {
+  const [name, setName] = useState(preset.name ?? '');
+  const [serial, setSerial] = useState('');
+  const [lines, setLines] = useState(preset.lines ?? []);
+  const [catalog, setCatalog] = useState([]);
+  const [q, setQ] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api('/stock/sets/next-serial').then((r) => setSerial((cur) => cur || r.serialNo)).catch(() => {});
+    api('/stock/items').then((r) => setCatalog(r.filter((i) => i.active))).catch((e) => onError(e.message));
+  }, [onError]);
+
+  const types = catalog.filter((i) => i.assetKind === 'set');
+  const parts = catalog.filter((i) => i.assetKind !== 'set');
+  const availOf = (id) => parts.find((p) => p.id === id)?.available ?? 0;
+  const unitOf = (id) => parts.find((p) => p.id === id)?.unit ?? 'عدد';
+  const term = q.trim();
+  const hits = term.length >= 1
+    ? parts.filter((p) => !lines.some((l) => l.partId === p.id) && [p.name, p.size, p.brand, p.sku].filter(Boolean).join(' ').includes(term)).slice(0, 8)
+    : [];
+
+  /* نامِ یک ستِ موجود را که بنویسید و هنوز قلمی نزده‌اید، محتویاتِ همان الگو پر می‌شود. ⚠️ اثر است نه
+     onChange: کاتالوگ async می‌آید و نامی که پیش از رسیدنش تایپ شده هم باید الگو را بگیرد. */
+  const typeId = types.find((x) => x.name === name.trim())?.id ?? null;
+  const empty = lines.length === 0;
+  useEffect(() => {
+    if (!typeId || !empty) return undefined;
+    let alive = true;
+    api(`/assets/items/${typeId}/contents`)
+      .then((comps) => { if (alive) setLines((ls) => (ls.length ? ls : comps.filter((c) => c.partId).map((c) => ({ partId: c.partId, label: c.label, quantity: c.quantity })))); })
+      .catch(() => { /* الگو نیامد — دستی پر می‌شود */ });
+    return () => { alive = false; };
+  }, [typeId, empty]);
+  const pickType = (value) => setName(value);
+
+  const add = (p) => { setLines((ls) => [...ls, { partId: p.id, label: [p.name, p.size].filter(Boolean).join(' '), quantity: 1 }]); setQ(''); };
+  const setQty = (i, v) => setLines((ls) => ls.map((l, j) => (j === i ? { ...l, quantity: int(v) } : l)));
+  const drop = (i) => setLines((ls) => ls.filter((_, j) => j !== i));
+  const short = lines.filter((l) => l.quantity > availOf(l.partId));
+
+  const submit = async () => {
+    if (busy) return;
+    if (name.trim().length < 2) { onError('نامِ ست را بنویسید'); return; }
+    if (!lines.length) { onError('دستِ‌کم یک قلم به ست اضافه کنید'); return; }
+    if (lines.some((l) => !l.quantity)) { onError('تعدادِ هر قلم باید دستِ‌کم ۱ باشد'); return; }
+    setBusy(true);
+    try {
+      const set = await api('/stock/sets/build', { method: 'POST', body: { name: name.trim(), serialNo: serial.trim() || undefined, lines: lines.map((l) => ({ partId: l.partId, quantity: l.quantity })) } });
+      await onSaved(set);
+    } catch (e) { onError(e.message); } finally { setBusy(false); }
+  };
+
+  return (
+    <TitledSheet onClose={() => !busy && onClose()} title={preset.name ? `ستِ دیگری مثلِ «${preset.name}»` : 'ست بساز'}>
+      <div className="iv-form">
+        <div className="iv-grid2">
+          <label className="iv-field"><span>نامِ ست *</span>
+            <input value={name} onChange={(e) => pickType(e.target.value)} list="iv-set-types" placeholder="ستِ کامل ۲۰تایی" autoFocus={!preset.name} />
+            <datalist id="iv-set-types">{types.map((t) => <option key={t.id} value={t.name} />)}</datalist>
+          </label>
+          <label className="iv-field"><span>شمارهٔ ست</span>
+            <input dir="ltr" value={serial} onChange={(e) => setSerial(e.target.value)} placeholder="SE-01" />
+          </label>
+        </div>
+        <p className="iv-hint">شماره خودکار پیشنهاد می‌شود؛ اگر برچسبی روی خودِ جعبه دارید همان را بنویسید.</p>
+
+        <div className="iv-field iv-picker">
+          <span>محتویات — از موجودی</span>
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="نامِ قلم را بنویسید: سوزن، الکترود، کابل…" aria-label="جستجوی قلم برای ست" />
+          {hits.length > 0 && (
+            <div className="iv-hits">
+              {hits.map((p) => (
+                <button type="button" key={p.id} onClick={() => add(p)}>
+                  <b>{[p.name, p.size].filter(Boolean).join(' ')}</b>
+                  <span>{num(p.available)} {p.unit} آماده در انبار</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {term && hits.length === 0 && <div className="iv-nohit"><span>قلمی با «{term}» در کاتالوگ نیست — اول در «کاتالوگ» تعریفش کنید و موجودی بزنید.</span></div>}
+        </div>
+
+        <div className="iv-list iv-parts">
+          {lines.length === 0 && <div className="iv-empty">هنوز قلمی اضافه نشده</div>}
+          {lines.map((l, i) => {
+            const avail = availOf(l.partId);
+            const over = l.quantity > avail;
+            return (
+              <article key={l.partId} className={`iv-row sm${over ? ' exp' : ''}`}>
+                <div className="iv-row-main">
+                  <b>{l.label}</b>
+                  <small className={over ? 'iv-expired' : ''}>{num(avail)} {unitOf(l.partId)} آماده در انبار{over ? ' — کم است' : ''}</small>
+                </div>
+                <label className="iv-field iv-qtyin"><span className="iv-sr">تعدادِ {l.label}</span>
+                  <input dir="ltr" inputMode="numeric" value={l.quantity || ''} onChange={(e) => setQty(i, e.target.value)} />
+                </label>
+                <button type="button" className="iv-del" aria-label={`برداشتنِ ${l.label}`} onClick={() => drop(i)}><Trash width="14" height="14" /></button>
+              </article>
+            );
+          })}
+        </div>
+        {short.length > 0 && <p className="iv-hint iv-hint-warn" role="alert">انبار برای {short.map((l) => l.label).join('، ')} کم دارد؛ تا موجودی نزنید ست ساخته نمی‌شود.</p>}
+      </div>
+      <Foot busy={busy} disabled={!lines.length || short.length > 0} onClose={onClose} onSubmit={submit} label="ساختِ ست" />
+    </TitledSheet>
   );
 }
 
@@ -1745,10 +1926,10 @@ function LotEditSheet({ lot, onClose, onSaved, onError }) {
   );
 }
 
-function LotSheet({ onClose, onSaved, onError }) {
+function LotSheet({ initialItem, onClose, onSaved, onError }) {
   const [itemQ, setItemQ] = useState('');
   const [hits, setHits] = useState([]);
-  const [item, setItem] = useState(null);
+  const [item, setItem] = useState(initialItem ?? null);
   const [searched, setSearched] = useState(false);   // «جست‌وجو شد و چیزی نبود»
   const [making, setMaking] = useState(false);
   const [form, setForm] = useState({ lotNo: '', serialNo: '', expiresJ: '', location: '', quantity: '1', reference: '' });
@@ -1808,12 +1989,12 @@ function LotSheet({ onClose, onSaved, onError }) {
           expiresAt,
         },
       });
-      await onSaved('لات ثبت شد');
+      await onSaved('موجودی ثبت شد');
     } catch (e) { onError(e.message); } finally { setBusy(false); }
   };
 
   return (
-    <TitledSheet onClose={() => !busy && onClose()} title="ثبتِ لاتِ جدید">
+    <TitledSheet onClose={() => !busy && onClose()} title="ورودِ موجودی">
       <div className="iv-form">
         {/* ⚠️ div است نه label: در label، مرورگر کلیکِ روی نتیجه را به اولین
             کنترلِ داخلِ همان label می‌فرستد. با انتخابِ کالا، input جای خودش را
@@ -1884,7 +2065,7 @@ const MOVE_META = {
   out: { title: 'مصرف / خروج', label: 'تعدادِ مصرفی', path: 'consume', ok: 'مصرف ثبت شد' },
   adjust: { title: 'اصلاحِ شمارش', label: 'چند عدد شمردید؟', path: 'adjust', ok: 'موجودی اصلاح شد' },
   /* خرابی در خودِ انبار: به «خرابی‌ها» می‌رود تا همان‌جا اسقاط یا تعمیر شود (بستهٔ ب). */
-  damage: { title: 'ثبتِ خرابی', label: 'چند عدد خراب شد؟', path: 'damage', ok: 'به «خرابی‌ها» منتقل شد' },
+  damage: { title: 'ثبتِ خرابی', label: 'چند عدد خراب شد؟', path: 'damage', ok: 'به «خرابی‌ها» منتقل شد' }, // یک‌بارمصرف: «از موجودی کم شد»
 };
 
 function MoveSheet({ lot, mode, onClose, onSaved, onError }) {
@@ -1899,7 +2080,7 @@ function MoveSheet({ lot, mode, onClose, onSaved, onError }) {
     if (mode !== 'adjust' && n <= 0) { onError('تعداد را وارد کنید'); return; }
     setBusy(true);
     try {
-      await api(`/stock/lots/${lot.id}/${meta.path}`, {
+      const r = await api(`/stock/lots/${lot.id}/${meta.path}`, {
         method: 'POST',
         body: mode === 'adjust'
           ? { counted: n, reason: reason.trim() || undefined }
@@ -1907,7 +2088,8 @@ function MoveSheet({ lot, mode, onClose, onSaved, onError }) {
             ? { quantity: n, note: reason.trim() || undefined }
             : { quantity: n, reason: reason.trim() || undefined },
       });
-      await onSaved(meta.ok);
+      /* یک‌بارمصرفِ خراب از کل کم می‌شود، چندبارمصرف به «خرابی‌ها» می‌رود (مالک، ۱۴۰۵/۰۸/۱۷). */
+      await onSaved(mode === 'damage' && r?.writtenOff ? 'از موجودی کم شد' : meta.ok);
     } catch (e) { onError(e.message); } finally { setBusy(false); }
   };
 
@@ -2006,11 +2188,11 @@ function TitledSheet({ title, children, onClose }) {
   );
 }
 
-function Foot({ busy, onClose, onSubmit, label = 'ذخیره' }) {
+function Foot({ busy, disabled = false, onClose, onSubmit, label = 'ذخیره' }) {
   return (
     <footer className="iv-foot">
       <button type="button" className="iv-ghost" onClick={onClose} disabled={busy}>انصراف</button>
-      <button type="button" className="iv-save" onClick={onSubmit} disabled={busy}>{busy ? '…' : label}</button>
+      <button type="button" className="iv-save" onClick={onSubmit} disabled={busy || disabled}>{busy ? '…' : label}</button>
     </footer>
   );
 }

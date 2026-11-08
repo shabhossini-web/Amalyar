@@ -63,7 +63,7 @@ export class SetStockService {
     const [comps, inside, setMoves] = await Promise.all([
       this.prisma.itemComponent.findMany({
         where: { setId: { in: [...new Set(lots.map((l) => l.itemId))] } },
-        include: { part: { select: { id: true, name: true, size: true, unit: true } } },
+        include: { part: { select: { id: true, name: true, size: true, unit: true, assetKind: true, usageMode: true } } },
         orderBy: { id: 'asc' },
       }),
       this.prisma.stockMovement.groupBy({ by: ['lotId', 'location'], where: { location: { in: locations } }, _sum: { quantity: true } }),
@@ -107,6 +107,8 @@ export class SetStockService {
           unit: c.part?.unit ?? 'عدد',
           standard: c.quantity,
           tracked: !!c.partId,
+          /// چندبارمصرف (کابل، پروب) خرابش به «خرابی‌ها» می‌رود؛ یک‌بارمصرف همان لحظه از کل کم می‌شود.
+          multi: !!c.part && (c.part.assetKind !== 'consumable' || c.part.usageMode === 'multi'),
           inside: insideQ,
           shortage: insideQ == null ? null : Math.max(0, c.quantity - insideQ),
           extra: insideQ == null ? 0 : Math.max(0, insideQ - c.quantity),
@@ -199,13 +201,101 @@ export class SetStockService {
     return { set: await this.setOrThrow(lotId), filled, short };
   }
 
-  /** یک قلمِ داخلِ ست خراب شد → «خرابی‌ها» (چندبارمصرفِ خراب از موجودی کم می‌شود، همین‌جا). */
+  /**
+   * شمارهٔ پیشنهادیِ ستِ بعدی — «SE-01»، «SE-02»… (مالک، ۱۴۰۵/۰۸/۱۷: «اسم + شمارهٔ خودکار»).
+   * از بزرگ‌ترین شمارهٔ همین الگو یکی جلوتر، تا شماره‌ای که کاربر دستی داده تکرار نشود.
+   */
+  async nextSerial(): Promise<string> {
+    const rows = await this.prisma.stockLot.findMany({ where: { serialNo: { startsWith: 'SE-' } }, select: { serialNo: true } });
+    let max = 0;
+    for (const r of rows) {
+      const m = /^SE-(\d+)$/.exec(r.serialNo ?? '');
+      if (m) max = Math.max(max, Number(m[1]));
+    }
+    return `SE-${String(max + 1).padStart(2, '0')}`;
+  }
+
+  /**
+   * «ست بساز» — ست جعبه‌ای است از **موجودیِ خودمان** (مالک، ۱۴۰۵/۰۸/۱۷).
+   *
+   * «یه سوزن تعریف می‌کنیم و ۱۰۰۰ تا موجود می‌کنیم، بعد ستی می‌سازیم که ۲۰ تاش توشه: موجودی ۱۰۰۰
+   * است، ۹۸۰ بیرونِ ست و ۲۰ داخلِ ست.» پس ساختنِ ست یعنی انتقالِ دفتری از انبار به محلِ همان ست،
+   * نه کالای تازه. پشتِ صحنه یک کالای نوعِ «ست» با همین نام و قالبِ محتویات ساخته (یا با همان نام
+   * دوباره استفاده) می‌شود تا «تکمیل» بداند ست باید به چه برگردد؛ کاربر آن را جدا تعریف نمی‌کند.
+   *
+   * ⚠️ همه‌چیز اول سنجیده می‌شود: اگر انبار برای یک قلم کم بیاورد، هیچ ستی ساخته نمی‌شود —
+   * ستِ نیمه‌ساخته با جعبه‌ای که «کامل» برچسب خورده ولی خالی است بدتر از خطاست.
+   */
+  async build(dto: { name: string; serialNo?: string; lines: { partId: number; quantity: number }[] }, user: any) {
+    const name = String(dto.name ?? '').trim();
+    if (name.length < 2) throw new BadRequestException('نامِ ست را بنویسید');
+    const merged = new Map<number, number>();
+    for (const l of dto.lines ?? []) {
+      const partId = Number(l.partId);
+      const q = Math.trunc(Number(l.quantity));
+      if (!Number.isInteger(partId) || partId <= 0) throw new BadRequestException('کالای قلم نامعتبر است');
+      if (!Number.isInteger(q) || q <= 0) throw new BadRequestException('تعداد باید عددِ صحیحِ مثبت باشد');
+      merged.set(partId, (merged.get(partId) ?? 0) + q);
+    }
+    if (!merged.size) throw new BadRequestException('دستِ‌کم یک قلم به ست اضافه کنید');
+
+    const parts = await this.prisma.item.findMany({ where: { id: { in: [...merged.keys()] } }, select: { id: true, name: true, size: true, assetKind: true, active: true } });
+    for (const id of merged.keys()) {
+      const p = parts.find((x) => x.id === id);
+      if (!p) throw new BadRequestException('یکی از اقلام در کاتالوگ نیست');
+      if (p.assetKind === 'set') throw new BadRequestException(`«${p.name}» خودش ست است و داخلِ ستِ دیگر نمی‌رود`);
+    }
+    const label = (id: number) => { const p = parts.find((x) => x.id === id)!; return [p.name, p.size].filter(Boolean).join(' '); };
+
+    /* موجودیِ در دسترس (همان تعریفِ «در دسترس»ِ فهرست‌ها، بی‌منقضی). */
+    const avail = new Map((await this.inventory.availability([...merged.keys()])).map((a) => [a.itemId, a.available]));
+    const short = [...merged.entries()].filter(([id, q]) => (avail.get(id) ?? 0) < q);
+    if (short.length) {
+      throw new BadRequestException(`انبار کم دارد: ${short.map(([id, q]) => `${label(id)} (لازم ${q}، در انبار ${avail.get(id) ?? 0})`).join('، ')}`);
+    }
+
+    const serialNo = String(dto.serialNo ?? '').trim() || (await this.nextSerial());
+    if (await this.prisma.stockLot.findUnique({ where: { serialNo } })) throw new BadRequestException(`شمارهٔ «${serialNo}» قبلاً برای ستِ دیگری ثبت شده است`);
+
+    /* نوعِ ست: همان نام دوباره استفاده می‌شود («یکی دیگر مثلِ همین»)؛ قالب فقط اگر خالی است نوشته می‌شود. */
+    let type = await this.prisma.item.findFirst({ where: { assetKind: 'set', name: { equals: name, mode: 'insensitive' } }, include: { _count: { select: { contents: true } } } });
+    if (!type) {
+      const created = await this.prisma.item.create({ data: { name, assetKind: 'set', usageMode: 'multi', unit: 'ست' } });
+      type = { ...created, _count: { contents: 0 } } as any;
+    }
+    if (!type!._count.contents) {
+      await this.prisma.itemComponent.createMany({
+        data: [...merged.entries()].map(([partId, quantity]) => ({ setId: type!.id, partId, label: label(partId), quantity })),
+      });
+    }
+
+    const lot = await this.inventory.createLot({ itemId: type!.id, serialNo, quantity: 1, reason: 'ساختِ ست' }, user);
+    const r = await this.fill(lot.id, { lines: [...merged.entries()].map(([partId, quantity]) => ({ partId, quantity })) }, user);
+    await this.audit.record({ actorId: user?.id, action: 'stock.set.build', entityType: 'stock_lot', entityId: lot.id, after: { name, serialNo, lines: [...merged.entries()] } });
+    return r.set;
+  }
+
+  /**
+   * قلمِ یک‌بارمصرفِ خراب **همان لحظه از کلِ موجودی کم می‌شود**؛ چندبارمصرف (کابل، پروب، دستگاه)
+   * به «خرابی‌ها» می‌رود تا اسقاط یا تعمیر شود (تصمیمِ مالک، ۱۴۰۵/۰۸/۱۷).
+   */
+  private async singleUse(lotId: number): Promise<boolean> {
+    const lot = await this.prisma.stockLot.findUnique({ where: { id: lotId }, select: { item: { select: { assetKind: true, usageMode: true } } } });
+    if (!lot) throw new NotFoundException('لات یافت نشد');
+    return lot.item.assetKind === 'consumable' && lot.item.usageMode !== 'multi';
+  }
+
+  /** یک قلمِ داخلِ ست خراب شد: یک‌بارمصرف ← خروجِ قطعی؛ چندبارمصرف ← «خرابی‌ها». */
   async damage(lotId: number, dto: { partLotId: number; quantity: number; note?: string }, user: any) {
     const set = await this.setOrThrow(lotId);
     const qty = Math.trunc(Number(dto.quantity));
-    await this.inventory.relocate(Number(dto.partLotId), qty, set.location, DAMAGED_LOCATION, { reason: text(dto.note) ?? `خرابی در ${set.location}` }, user);
-    await this.audit.record({ actorId: user?.id, action: 'stock.set.damage', entityType: 'stock_lot', entityId: lotId, after: { partLotId: dto.partLotId, quantity: qty, note: dto.note ?? null } });
-    return this.setOrThrow(lotId);
+    const partLotId = Number(dto.partLotId);
+    const writtenOff = await this.singleUse(partLotId);
+    const reason = text(dto.note) ?? `خرابی در ${set.location}`;
+    if (writtenOff) await this.inventory.writeOff(partLotId, qty, set.location, { reason }, user);
+    else await this.inventory.relocate(partLotId, qty, set.location, DAMAGED_LOCATION, { reason }, user);
+    await this.audit.record({ actorId: user?.id, action: 'stock.set.damage', entityType: 'stock_lot', entityId: lotId, after: { partLotId, quantity: qty, writtenOff, note: dto.note ?? null } });
+    return { ...(await this.setOrThrow(lotId)), writtenOff };
   }
 
   /** برداشتِ یک قلم از ست به انبار — ستی که کم‌تر از استاندارد می‌رود یا باز می‌شود. */
@@ -223,9 +313,12 @@ export class SetStockService {
     if (!lot) throw new NotFoundException('لات یافت نشد');
     const home = lot.location ?? (await this.home());
     const qty = Math.trunc(Number(dto.quantity));
-    const row = await this.inventory.relocate(lotId, qty, home, DAMAGED_LOCATION, { reason: text(dto.note) ?? 'خرابی' }, user);
-    await this.audit.record({ actorId: user?.id, action: 'stock.lot.damage', entityType: 'stock_lot', entityId: lotId, after: { quantity: qty, note: dto.note ?? null } });
-    return row;
+    const writtenOff = await this.singleUse(lotId);
+    const reason = text(dto.note) ?? 'خرابی';
+    if (writtenOff) await this.inventory.writeOff(lotId, qty, home, { reason }, user);
+    else await this.inventory.relocate(lotId, qty, home, DAMAGED_LOCATION, { reason }, user);
+    await this.audit.record({ actorId: user?.id, action: 'stock.lot.damage', entityType: 'stock_lot', entityId: lotId, after: { quantity: qty, writtenOff, note: dto.note ?? null } });
+    return { ...(await this.inventory.lot(lotId)), writtenOff };
   }
 
   // ───────────────────────── خرابی‌ها ─────────────────────────
@@ -323,7 +416,9 @@ export class SetStockService {
         for (const pl of c.lots) {
           if (need <= 0) break;
           const q = Math.min(pl.quantity, need);
-          if (to) await this.inventory.relocate(pl.lotId, q, set.location, to, { reason, transferId }, user);
+          /* یک‌بارمصرفِ خراب به «خرابی‌ها» نمی‌رود، همان لحظه خارج می‌شود (مالک، ۱۴۰۵/۰۸/۱۷). */
+          if (to === DAMAGED_LOCATION && (await this.singleUse(pl.lotId))) await this.inventory.writeOff(pl.lotId, q, set.location, { reason, transferId, visitId: t.visitId }, user);
+          else if (to) await this.inventory.relocate(pl.lotId, q, set.location, to, { reason, transferId }, user);
           else await this.inventory.writeOff(pl.lotId, q, set.location, { reason, transferId, visitId: t.visitId }, user);
           pl.quantity -= q;
           need -= q;

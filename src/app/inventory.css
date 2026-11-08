@@ -429,3 +429,18 @@
 .iv-dmg h2 { display: flex; align-items: center; gap: 7px; margin: 0; font-size: 14px; }
 .iv-dmg h2 svg { color: var(--amber-text); }
 .iv-byvisit { display: block; margin-top: 3px; font-size: 11.5px; color: var(--text2); }
+
+/* «در ست‌ها: SE-07 ۲۰» زیرِ هر کالا — دکمه است چون به همان ست می‌برد (الف-۳). */
+.iv-insets { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.iv-insets button {
+  font: inherit; font-size: 12px; min-height: 28px; padding: 2px 10px; border-radius: 999px;
+  border: 1px solid rgba(var(--brand-rgb), .35); background: rgba(var(--brand-rgb), .1); color: var(--brand-text); cursor: pointer;
+}
+.iv-insets button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+
+/* ردیفِ قلم در «ست بساز»: نام · تعداد · حذف */
+.iv-parts .iv-row.sm { align-items: center; }
+.iv-qtyin { width: 84px; margin: 0; }
+.iv-qtyin input { text-align: center; min-height: 44px; }
+.iv-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.iv-hint.iv-hint-warn { border-color: rgba(251, 191, 36, .45); background: rgba(251, 191, 36, .1); color: var(--amber-text); }

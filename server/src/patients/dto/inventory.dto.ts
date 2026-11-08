@@ -187,6 +187,27 @@ export class SetFillDto {
   lines?: SetFillLineDto[];
 }
 
+/** یک قلمِ ستِ تازه — از کاتالوگ، با تعداد. */
+export class SetBuildLineDto {
+  @Type(() => Number) @IsInt({ message: 'کالای قلم نامعتبر است' }) @Min(1, { message: 'کالای قلم نامعتبر است' })
+  partId!: number;
+
+  @Type(() => Number) @IsInt({ message: 'تعداد باید عدد باشد' }) @Min(1, { message: 'تعداد باید دستِ‌کم ۱ باشد' })
+  quantity!: number;
+}
+
+/** «ست بساز» — جعبه‌ای از موجودی (مالک، ۱۴۰۵/۰۸/۱۷). */
+export class SetBuildDto {
+  @IsString({ message: 'نامِ ست را بنویسید' }) @MinLength(2, { message: 'نامِ ست را بنویسید' }) @MaxLength(80, { message: 'نامِ ست طولانی است' })
+  name!: string;
+
+  @IsOptional() @IsString() @MaxLength(60, { message: 'شمارهٔ ست طولانی است' })
+  serialNo?: string;
+
+  @IsArray() @ArrayMinSize(1, { message: 'دستِ‌کم یک قلم به ست اضافه کنید' }) @ValidateNested({ each: true }) @Type(() => SetBuildLineDto)
+  lines!: SetBuildLineDto[];
+}
+
 /** خرابی یا برداشتِ یک قلمِ داخلِ ست — از کدام لات، چند تا. */
 export class SetMoveDto {
   @Type(() => Number) @IsInt({ message: 'لاتِ قلم نامعتبر است' }) @Min(1)

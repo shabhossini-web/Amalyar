@@ -394,10 +394,11 @@ export function UnsavedPrompt({ onSave, onDiscard, onCancel, busy = false, title
  * لمس و بی‌پرسش انجام می‌شد. عنوان **نامِ خودِ مورد** را می‌گوید و متن **پیامدش** را — «مطمئنید؟» به
  * کسی نمی‌گوید چه اتفاقی می‌افتد (همان قاعدهٔ «بازگرداندن به قالب»ِ فرم‌ساز).
  */
-export function ConfirmDialog({ title, text, confirmLabel = 'حذف', cancelLabel = 'انصراف', busy = false, onConfirm, onCancel }) {
+export function ConfirmDialog({ title, text, confirmLabel = 'حذف', cancelLabel = 'انصراف', busy = false, onConfirm, onCancel, tone = 'danger' }) {
   return (
     <Ask title={title} text={text} busy={busy} onCancel={onCancel}>
-      <button type="button" className="ov-ask-btn is-danger" data-confirm="yes" onClick={onConfirm} disabled={busy}>
+      {/* `tone="primary"` برای پرسشِ غیرِ برگشت‌ناپذیر («موجودیِ اولیه را هم ثبت کنیم؟») — قرمز آن‌جا دروغ است. */}
+      <button type="button" className={`ov-ask-btn ${tone === 'primary' ? 'is-primary' : 'is-danger'}`} data-confirm="yes" onClick={onConfirm} disabled={busy}>
         {busy ? 'در حالِ انجام…' : confirmLabel}
       </button>
       <button type="button" className="ov-ask-btn" data-confirm="no" onClick={onCancel} disabled={busy}>{cancelLabel}</button>

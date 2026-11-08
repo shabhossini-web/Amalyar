@@ -84,7 +84,7 @@ try {
   await browserLogin(page, sessK.accessToken, { ui: UI });
   await page.goto(UI + '/app/inventory', { waitUntil: 'networkidle' });
   await page.waitForSelector('.iv-list', { timeout: 15000 });
-  ok((await page.locator('[role=tab][aria-selected="true"]').first().innerText()).includes('کالاها'), 'تبِ اول و فعالِ انبار «کالاها» است');
+  ok((await page.locator('[role=tab][aria-selected="true"]').first().innerText()).includes('کاتالوگ'), 'تبِ اول و فعالِ انبار «کاتالوگ» است');
   await page.locator('.iv-add', { hasText: 'کالای جدید' }).click();
   await page.waitForSelector('.iv-sheet', { timeout: 5000 });
   await page.locator('.iv-sheet .iv-field input').first().fill(`الکترود SDN ${tag}`);
@@ -98,6 +98,11 @@ try {
   await page.locator('.iv-sheet .iv-save').click();
   await page.waitForFunction(() => /کالا تعریف شد/.test(document.querySelector('.iv-toast')?.textContent ?? ''), null, { timeout: 8000 });
   await page.waitForSelector('.iv-sheet', { state: 'detached', timeout: 8000 });
+  /* الف-۱: کالای تازه → «موجودیِ اولیه را هم ثبت کنیم؟» — این‌جا «بعداً»؛ موجودی در بخشِ ۳ از API می‌آید. */
+  await page.waitForSelector('[data-confirm="no"]', { timeout: 5000 });
+  ok((await page.locator('[data-confirm="yes"]').innerText()).includes('ثبتِ موجودی'), 'پس از تعریفِ کالا پرسیده می‌شود «موجودیِ اولیه؟»');
+  await page.locator('[data-confirm="no"]').click();
+  await page.waitForSelector('[data-confirm="no"]', { state: 'detached', timeout: 5000 });
   const elId = num(`SELECT id FROM items WHERE name='الکترود SDN ${tag}'`);
   ok(elId > 0 && sql(`SELECT usage_mode || '/' || show_in_tech_panel FROM items WHERE id=${elId}`) === 'multi/true', 'کالا با هر دو تیک در دیتابیس نشست');
   trash.items.push(elId);

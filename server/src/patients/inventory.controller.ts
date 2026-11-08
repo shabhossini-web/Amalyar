@@ -6,7 +6,7 @@ import { PermissionGuard } from '../auth/permission.guard';
 import { RequirePermissions } from '../auth/permission.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { InventoryService } from './inventory.service';
-import { AdjustDto, LotCreateDto, LotPatchDto, MovementDto, QuantityNoteDto, ReleaseDto, ReturnCountDto, SetFillDto, SetMoveDto, TransferReceiptDto, TransferReceiveDto, TransferSendDto, TransferUsageDto, VisitUsageDto } from './dto/inventory.dto';
+import { AdjustDto, LotCreateDto, LotPatchDto, MovementDto, QuantityNoteDto, ReleaseDto, ReturnCountDto, SetBuildDto, SetFillDto, SetMoveDto, TransferReceiptDto, TransferReceiveDto, TransferSendDto, TransferUsageDto, VisitUsageDto } from './dto/inventory.dto';
 import { SetStockService } from './set-stock.service';
 import { VisitUsageService } from './usage.service';
 import { DefinitionsService } from './definitions.service';
@@ -60,6 +60,20 @@ export class InventoryController {
   @Get('sets')
   setsList(@Query('q') q?: string) {
     return this.sets.sets({ q });
+  }
+
+  /// شمارهٔ پیشنهادیِ ستِ بعدی (SE-01، SE-02، …).
+  @RequirePermissions('inventory.read')
+  @Get('sets/next-serial')
+  async nextSerial() {
+    return { serialNo: await this.sets.nextSerial() };
+  }
+
+  /// «ست بساز»: اقلام از موجودیِ انبار به جعبهٔ تازه منتقل می‌شوند.
+  @RequirePermissions('inventory.write')
+  @Post('sets/build')
+  setBuild(@Body() dto: SetBuildDto, @CurrentUser() user: any) {
+    return this.sets.build(dto, user);
   }
 
   @RequirePermissions('inventory.read')

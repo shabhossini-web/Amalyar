@@ -106,7 +106,7 @@ try {
       page.on('pageerror', (e) => errors.push(String(e)));
       await browserLogin(page, login.accessToken, { ui: UI });
       await page.goto(UI + '/app/inventory');
-      await page.locator('[role="tab"]', { hasText: 'لات‌ها' }).first().click();
+      await page.locator('[role="tab"]', { hasText: 'موجودی' }).first().click();
       await page.locator('.iv-search').first().fill(tag);
       const edit = page.locator(`button[aria-label="ویرایشِ لاتِ ژل ${tag}"]`);
       await edit.waitFor({ timeout: 15000 });
@@ -135,7 +135,7 @@ try {
       }
       /* کاتالوگ: «کالای جدید» هم پنجره است. */
       const tabs = page.locator('[role="tab"]');
-      const catTab = tabs.filter({ hasText: 'کالاها' }).first();
+      const catTab = tabs.filter({ hasText: 'کاتالوگ' }).first();
       if (await catTab.count()) {
         await catTab.click();
         const add = page.locator('button', { hasText: 'کالای جدید' }).first();

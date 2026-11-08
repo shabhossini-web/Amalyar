@@ -118,7 +118,7 @@ export class InventoryService {
 
     const lots = await this.prisma.stockLot.findMany({
       where,
-      include: { item: { select: { id: true, name: true, brand: true, size: true, sku: true, unit: true, price: true } } },
+      include: { item: { select: { id: true, name: true, brand: true, size: true, sku: true, unit: true, price: true, assetKind: true } } },
       orderBy: [{ expiresAt: 'asc' }, { id: 'desc' }],
       take: 300,
     });
@@ -291,7 +291,7 @@ export class InventoryService {
   async lot(id: number) {
     const row = await this.prisma.stockLot.findUnique({
       where: { id },
-      include: { item: { select: { id: true, name: true, brand: true, size: true, sku: true, unit: true, price: true } } },
+      include: { item: { select: { id: true, name: true, brand: true, size: true, sku: true, unit: true, price: true, assetKind: true } } },
     });
     if (!row) throw new NotFoundException('لات یافت نشد');
     const rows = await this.prisma.stockMovement.findMany({ where: { lotId: id }, select: { quantity: true, location: true } });
@@ -318,6 +318,7 @@ export class InventoryService {
     for (let i = 0; i < items.length; i += 100) {
       for (const a of await this.availability(items.slice(i, i + 100).map((x) => x.id))) available.set(a.itemId, a.available);
     }
+    const inSets = await this.inSetsBreakdown(items.map((x) => x.id));
     return items.map((r) => ({
       id: r.id, name: r.name, sku: r.sku, irc: r.irc, brand: r.brand, size: r.size,
       category: r.category, unit: r.unit, price: r.price, notes: r.notes, active: r.active,
@@ -329,7 +330,36 @@ export class InventoryService {
       usageLabel: ['set', 'device'].includes(r.assetKind) || r.usageMode === 'multi' ? 'چندبارمصرف' : 'یک‌بارمصرف',
       lotCount: r._count.lots, contentCount: r._count.contents,
       available: available.get(r.id) ?? 0,
+      /* «۹۸۰ انبار · ۲۰ در ست SE-07» — داخلِ ست جزوِ موجودیِ ماست ولی در دسترس نیست (مالک، ۱۴۰۵/۰۸/۱۷). */
+      inSets: inSets.get(r.id) ?? [],
     }));
+  }
+
+  /** موجودیِ هر کالا داخلِ ست‌های سریالی، به تفکیکِ ست — `[{ serialNo, location, quantity }]`. */
+  private async inSetsBreakdown(itemIds: number[]) {
+    const out = new Map<number, { serialNo: string | null; location: string; quantity: number }[]>();
+    if (!itemIds.length) return out;
+    const setLots = await this.prisma.stockLot.findMany({ where: { serialNo: { not: null }, item: { assetKind: 'set' } }, select: { id: true, serialNo: true, lotNo: true } });
+    if (!setLots.length) return out;
+    const serialOf = new Map(setLots.map((l) => [setLocationOf(l), l.serialNo]));
+    const sums = await this.prisma.stockMovement.groupBy({
+      by: ['lotId', 'location'],
+      where: { location: { in: [...serialOf.keys()] }, lot: { itemId: { in: itemIds } } },
+      _sum: { quantity: true },
+    });
+    if (!sums.length) return out;
+    const itemOf = new Map((await this.prisma.stockLot.findMany({ where: { id: { in: [...new Set(sums.map((x) => x.lotId))] } }, select: { id: true, itemId: true } })).map((l) => [l.id, l.itemId]));
+    for (const x of sums) {
+      const q = x._sum.quantity ?? 0;
+      const itemId = itemOf.get(x.lotId);
+      if (q <= 0 || !itemId || !x.location) continue;
+      const list = out.get(itemId) ?? [];
+      const cur = list.find((e) => e.location === x.location);
+      if (cur) cur.quantity += q;
+      else list.push({ serialNo: serialOf.get(x.location) ?? null, location: x.location, quantity: q });
+      out.set(itemId, list);
+    }
+    return out;
   }
 
   // ───────────────────────── حرکت ─────────────────────────
@@ -1273,6 +1303,8 @@ export class InventoryService {
       itemSku: lot.item?.sku ?? null,
       itemPrice: lot.item?.price ?? null,
       unit: lot.item?.unit ?? 'عدد',
+      /// جعبهٔ ستِ سریالی — رابط شمارش/خرابی را روی اقلامِ داخلش می‌برد، نه روی خودِ جعبه.
+      isSet: lot.item?.assetKind === 'set' && !!lot.serialNo,
       lotNo: lot.lotNo,
       serialNo: lot.serialNo,
       expiresAt: lot.expiresAt,
