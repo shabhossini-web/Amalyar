@@ -1,11 +1,13 @@
 import { withSharedTransfers } from './shared-transfers';
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { EventsService } from '../work/events.service';
 import { InventoryService } from './inventory.service';
 import { SetStockService } from './set-stock.service';
 import { isUnrestricted } from '../common/own-scope';
+import { LEVEL } from '../common/levels';
+import { SettingsService } from '../config/settings.service';
 import { balanceByLocation } from './stock-math';
 import { deliveryState } from './handover';
 
@@ -48,7 +50,12 @@ export interface UsageLine {
   quantity: number;
   /** چندبارمصرف: «تا امروز N بار» — جمعِ همهٔ عمل‌ها. */
   usesTotal: number;
+  /** پیش‌فرضِ شرکت برای این قلم (ب-۳) — فقط وقتی هنوز چیزی برای این بیمار ثبت نشده؛ پیشنهاد است، نه ثبت. */
+  suggested?: number;
 }
+
+/** کاربرِ شرکت (سوپروایزر به بالا) مصرفیِ هر بیمار را می‌بیند، اصلاح و تأیید می‌کند (ب-۲، مالک ۱۴۰۵/۰۸/۱۸). */
+const isCompanyStaff = (user: any) => (user?.level ?? 0) >= LEVEL.SUPERVISOR;
 
 /** کلیدِ یکتای ردیف — منبع:لنگر:کالا (لنگر = لاتِ ست یا لاتِ ارسالی؛ انبار لنگر ندارد). */
 export const usageKey = (source: UsageSource, anchor: number | null | undefined, itemId: number) => `${source}:${anchor ?? 0}:${itemId}`;
@@ -76,12 +83,27 @@ export class VisitUsageService {
     private events: EventsService,
     private inventory: InventoryService,
     private sets: SetStockService,
+    private settings: SettingsService,
   ) {}
+
+  /** «مصرفیِ پیش‌فرضِ هر بیمار» از تنظیماتِ شرکت — همان فهرستِ پیش‌فرضِ فاکتورِ نورو، فقط ردیف‌های وصل به کالا. */
+  private async companyDefaults(): Promise<Map<number, number>> {
+    const raw = (await this.settings.text('invoice_neuro_consumables')).trim();
+    const out = new Map<number, number>();
+    if (!raw.startsWith('[')) return out; // قالبِ قدیمیِ متنی به کالای انبار وصل نیست
+    try {
+      for (const r of JSON.parse(raw)) {
+        const id = Number(r?.itemId), q = Math.trunc(Number(r?.qty));
+        if (Number.isInteger(id) && id > 0 && Number.isInteger(q) && q > 0) out.set(id, (out.get(id) ?? 0) + q);
+      }
+    } catch { /* تنظیمِ خراب = بی‌پیش‌فرض */ }
+    return out;
+  }
 
   /** همان دامنهٔ پنلِ کارشناسی: عملِ خودِ کارشناس؛ سوپرادمین همه (قانونِ ۲۹). */
   private scope(user: any) {
     /* عضوِ تیمِ پرونده (نه فقط مسئولِ فعلی) هم مصرفی ثبت می‌کند — همان دامنهٔ پنل (`crew-sync`). */
-    return isUnrestricted(user) ? { patient: { deletedAt: null } }
+    return isUnrestricted(user) || isCompanyStaff(user) ? { patient: { deletedAt: null } }
       : { OR: [{ techId: user?.id ?? -1 }, { crew: { some: { accountId: user?.id ?? -1 } } }] };
   }
 
@@ -89,7 +111,8 @@ export class VisitUsageService {
     const v = await this.prisma.visit.findFirst({
       where: { id: visitId, ...this.scope(user) },
       select: {
-        id: true, seq: true, opStatus: true, hospitalId: true, opDate: true,
+        id: true, seq: true, opStatus: true, hospitalId: true, opDate: true, usageConfirmedAt: true, usageConfirmedById: true,
+        invoices: { where: { supersededAt: null }, select: { number: true }, take: 1 },
         patient: { select: { code: true, firstName: true, lastName: true } },
         stockTransfers: {
           orderBy: { id: 'asc' },
@@ -98,7 +121,7 @@ export class VisitUsageService {
         usages: { select: { key: true, quantity: true, mode: true, updatedAt: true } },
       },
     });
-    if (!v) throw new NotFoundException(isUnrestricted(user) ? 'مراجعه یافت نشد' : 'این عمل در کارهای شما نیست');
+    if (!v) throw new NotFoundException(isUnrestricted(user) || isCompanyStaff(user) ? 'مراجعه یافت نشد' : 'این عمل در کارهای شما نیست');
     /* ستِ عمومیِ همان بیمارستان و روز هم منبعِ مصرفِ همین بیمار است. */
     await withSharedTransfers(this.prisma, [v], { select: USAGE_TRANSFER_SELECT, orderBy: { id: 'asc' } });
     return v;
@@ -184,8 +207,9 @@ export class VisitUsageService {
     }
 
     /* کالاهای تیک‌خوردهٔ «نمایش در پنلِ کارشناسی» که در ست/حوالهٔ همین عمل نیستند — از کیف/انبار. */
+    const defaults = v.usages.length ? new Map<number, number>() : await this.companyDefaults();
     const flagged = await this.prisma.item.findMany({
-      where: { showInTechPanel: true, active: true, id: { notIn: [...seen] } },
+      where: { active: true, id: { notIn: [...seen] }, OR: [{ showInTechPanel: true }, { id: { in: [...defaults.keys()] } }], assetKind: 'consumable' },
       orderBy: { name: 'asc' },
       select: {
         id: true, name: true, size: true, unit: true, usageMode: true,
@@ -218,14 +242,37 @@ export class VisitUsageService {
       for (const l of all) if (l.mode === 'use') l.usesTotal = of.get(l.itemId) ?? 0;
     }
 
+    /* ب-۳: پیش‌فرضِ شرکت فقط برای بیمارِ بی‌ثبت؛ ستِ همراه اول، بعد کیف/انبار — هر قلم یک‌بار. */
+    if (defaults.size) {
+      const placed = new Set<number>();
+      for (const l of all) {
+        const q = defaults.get(l.itemId);
+        if (!q || placed.has(l.itemId)) continue;
+        l.suggested = l.limit !== null ? Math.min(l.limit, q) : q;
+        placed.add(l.itemId);
+      }
+    }
+
     const recordedAt = v.usages.reduce<Date | null>((m, u) => (!m || u.updatedAt > m ? u.updatedAt : m), null);
+    /* ب-۲: تأییدِ نهایی و فاکتور. فاکتورِ صادرشده = قفل برای همه (فاکتور نباید با فهرستِ بعدی فرق کند). */
+    const invoiced = v.invoices[0]?.number ?? null;
+    const confirmedBy = v.usageConfirmedById
+      ? await this.prisma.account.findUnique({ where: { id: v.usageConfirmedById }, select: { person: { select: { firstName: true, lastName: true } } } })
+      : null;
+    const staff = isCompanyStaff(user);
+    const history = await this.history(v.id);
     return {
       visitId: v.id,
       code: `${v.patient.code}-V${v.seq}`,
       patientName: [v.patient.firstName, v.patient.lastName].filter(Boolean).join(' '),
-      editable,
+      editable: editable && !invoiced && (staff || !v.usageConfirmedAt),
       awaiting,
       canRecord: !awaiting,
+      invoiced,
+      confirmed: v.usageConfirmedAt ? { at: v.usageConfirmedAt, by: confirmedBy ? [confirmedBy.person?.firstName, confirmedBy.person?.lastName].filter(Boolean).join(' ') : null } : null,
+      canConfirm: staff && editable && !invoiced,
+      suggested: defaults.size > 0 && all.some((l) => l.suggested),
+      history,
       recordedAt,
       home,
       sets: setBlocks,
@@ -236,6 +283,8 @@ export class VisitUsageService {
 
   async save(visitId: number, dto: { lines: { source: UsageSource; itemId: number; setLotId?: number; lotId?: number; quantity: number }[] }, user: any) {
     const sheet = await this.sheet(visitId, user);
+    if (sheet.invoiced) throw new BadRequestException(`برای این بیمار فاکتورِ ${sheet.invoiced} صادر شده؛ مصرفی دیگر قابلِ تغییر نیست`);
+    if (sheet.confirmed && !isCompanyStaff(user)) throw new ForbiddenException('مصرفیِ این بیمار تأییدِ نهایی شده؛ برای اصلاح به شرکت خبر دهید');
     if (!sheet.editable) throw new BadRequestException('حوالهٔ این عمل بسته شده و مصرفش دیگر قابلِ تغییر نیست');
     if (sheet.awaiting) throw new BadRequestException('اول تحویلِ ست را تأیید کنید («تحویل گرفتم» یا «با مغایرت»)، بعد مصرفی ثبت کنید');
     const all = [...sheet.sets.flatMap((b) => b.lines), ...sheet.transfers.flatMap((b) => b.lines), ...sheet.warehouse];
@@ -327,6 +376,100 @@ export class VisitUsageService {
     } else {
       await this.giveBack(visitId, code, line.itemId, home, -delta, null, user);
     }
+  }
+
+  /**
+   * «مصرفیِ پیش‌فرضِ هر بیمار» (ب-۳، مالک ۱۴۰۵/۰۸/۱۸): **یک** فهرست برای کلِ خدمت (نه برای MEP/SEP جدا)، در
+   * تعاریفِ پایه. همان تنظیمِ `invoice_neuro_consumables` است تا فاکتورِ نورو تا ج-۲ همان را بخواند؛ ردیف‌های
+   * قدیمیِ بی‌کالا (فقط نام) دست نمی‌خورند.
+   */
+  async defaults() {
+    const raw = (await this.settings.text('invoice_neuro_consumables')).trim();
+    let rows: any[] = [];
+    if (raw.startsWith('[')) { try { rows = JSON.parse(raw); } catch { rows = []; } }
+    const ids = rows.map((r) => Number(r?.itemId)).filter((n) => Number.isInteger(n) && n > 0);
+    const items = ids.length ? await this.prisma.item.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, size: true, unit: true, active: true } }) : [];
+    const byId = new Map(items.map((i) => [i.id, i]));
+    return {
+      lines: rows.filter((r) => byId.has(Number(r?.itemId))).map((r) => {
+        const it = byId.get(Number(r.itemId))!;
+        return { itemId: it.id, name: labelOf(it), unit: it.unit ?? 'عدد', quantity: Number(r.qty) || 1, active: it.active };
+      }),
+      legacy: rows.filter((r) => !byId.has(Number(r?.itemId))).map((r) => String(r?.name ?? '')).filter(Boolean),
+    };
+  }
+
+  async saveDefaults(lines: { itemId: number; quantity: number }[], user: any) {
+    const ids = [...new Set(lines.map((l) => Number(l.itemId)))];
+    const items = ids.length ? await this.prisma.item.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, size: true, irc: true, assetKind: true } }) : [];
+    const byId = new Map(items.map((i) => [i.id, i]));
+    for (const l of lines) {
+      const it = byId.get(Number(l.itemId));
+      if (!it) throw new BadRequestException('یکی از اقلام در کاتالوگ نیست');
+      if (it.assetKind !== 'consumable') throw new BadRequestException(`«${it.name}» مصرفی نیست`);
+      if (!Number.isInteger(Number(l.quantity)) || l.quantity < 1 || l.quantity > 999) throw new BadRequestException(`تعدادِ «${it.name}» باید ۱ تا ۹۹۹ باشد`);
+    }
+    const raw = (await this.settings.text('invoice_neuro_consumables')).trim();
+    let old: any[] = [];
+    if (raw.startsWith('[')) { try { old = JSON.parse(raw); } catch { old = []; } }
+    const prevOf = new Map(old.filter((r) => r?.itemId).map((r) => [Number(r.itemId), r]));
+    const legacy = old.filter((r) => !r?.itemId);
+    const next = [
+      ...lines.map((l) => {
+        const it = byId.get(Number(l.itemId))!;
+        const prev = prevOf.get(it.id);
+        return { name: labelOf(it), irc: (it.irc ?? prev?.irc ?? '').replace(/\D/g, ''), qty: Number(l.quantity), itemId: it.id, stockEffect: prev?.stockEffect ?? 'virtual' };
+      }),
+      ...legacy,
+    ];
+    await this.settings.update({ invoice_neuro_consumables: JSON.stringify(next) }, user);
+    return this.defaults();
+  }
+
+  /** «تأییدِ نهایی» / برداشتنِ آن — فقط کاربرِ شرکت (سوپروایزر+). */
+  async confirm(visitId: number, confirmed: boolean, user: any) {
+    if (!isCompanyStaff(user)) throw new ForbiddenException('تأییدِ مصرفی با کاربرِ شرکت (سوپروایزر به بالا) است');
+    const sheet = await this.sheet(visitId, user);
+    if (sheet.invoiced) throw new BadRequestException(`برای این بیمار فاکتورِ ${sheet.invoiced} صادر شده`);
+    await this.prisma.visit.update({ where: { id: visitId }, data: confirmed ? { usageConfirmedAt: new Date(), usageConfirmedById: user?.id ?? null } : { usageConfirmedAt: null, usageConfirmedById: null } });
+    await this.audit.record({ actorId: user?.id, action: confirmed ? 'stock.visit.usage_confirm' : 'stock.visit.usage_unconfirm', entityType: 'visit', entityId: visitId });
+    return this.sheet(visitId, user);
+  }
+
+  /**
+   * «خراب شد»ِ قلمِ چندبارمصرفِ داخلِ ست از پنلِ کارشناس (ب-۱) — همان قاعدهٔ الف-۳: چندبارمصرف به «خرابی‌ها»،
+   * یک‌بارمصرف از کل. دامنه همان دامنهٔ برگه است، پس کارشناس فقط ستِ همراهِ عملِ خودش را.
+   */
+  async damage(visitId: number, dto: { setLotId: number; itemId: number; quantity: number; note?: string }, user: any) {
+    const sheet = await this.sheet(visitId, user);
+    if (!sheet.editable) throw new BadRequestException('مصرفیِ این بیمار دیگر قابلِ تغییر نیست');
+    const block = sheet.sets.find((b) => b.setLotId === Number(dto.setLotId));
+    if (!block || !block.lines.some((l) => l.itemId === Number(dto.itemId))) throw new BadRequestException('این قلم در ستِ همراهِ این عمل نیست');
+    const [set] = await this.sets.sets({ lotId: block.setLotId });
+    const c = set?.contents.find((x: any) => Number(x.partId) === Number(dto.itemId));
+    const lot = (c?.lots as { lotId: number; quantity: number }[] | undefined)?.find((l) => l.quantity > 0);
+    if (!lot) throw new BadRequestException('این قلم الان داخلِ ست نیست');
+    const qty = Math.trunc(Number(dto.quantity));
+    if (!Number.isInteger(qty) || qty <= 0 || qty > lot.quantity) throw new BadRequestException(`تعداد باید بینِ ۱ و ${lot.quantity} باشد`);
+    const r = await this.sets.damage(block.setLotId, { partLotId: lot.lotId, quantity: qty, note: dto.note || `خرابی سرِ عمل — ${sheet.code}` }, user);
+    return { ...(await this.sheet(visitId, user)), writtenOff: (r as any).writtenOff };
+  }
+
+  /** سابقهٔ ثبت و اصلاحِ مصرفیِ همین بیمار — چه کسی، کِی، چه چیزی (ب-۲). */
+  private async history(visitId: number) {
+    const rows = await this.prisma.auditEvent.findMany({
+      where: { entityType: 'visit', entityId: String(visitId), action: { in: ['stock.visit.usage', 'stock.visit.usage_confirm', 'stock.visit.usage_unconfirm'] } },
+      orderBy: { id: 'desc' }, take: 12, select: { action: true, actorId: true, afterJson: true, createdAt: true },
+    });
+    const ids = [...new Set(rows.map((r) => r.actorId).filter((x): x is number => !!x))];
+    const people = ids.length ? await this.prisma.account.findMany({ where: { id: { in: ids } }, select: { id: true, person: { select: { firstName: true, lastName: true } } } }) : [];
+    const nameOf = new Map(people.map((a) => [a.id, [a.person?.firstName, a.person?.lastName].filter(Boolean).join(' ')]));
+    return rows.map((r) => ({
+      at: r.createdAt,
+      by: r.actorId ? nameOf.get(r.actorId) ?? null : null,
+      kind: r.action === 'stock.visit.usage' ? 'edit' : r.action.endsWith('_confirm') ? 'confirm' : 'unconfirm',
+      changes: ((r.afterJson as any)?.changes ?? []).map((c: any) => ({ name: c.name, from: c.from, to: c.to })),
+    }));
   }
 
   /** اصلاحِ رو به پایین: به همان لات‌هایی برمی‌گردد که همین عمل از آن‌ها مصرف کرده بود (تازه‌ترین اول). */

@@ -361,3 +361,25 @@
 @media (prefers-reduced-motion: reduce) { .tk-mon-t, .tk-pick-i { transition: none; } }
 .tk-dev-row bdi { white-space: nowrap; }
 .tk-byvisit { flex-basis: 100%; font-size: 11.5px; color: var(--text2); }
+
+/* ── برگهٔ مصرفی (ب-۱/ب-۲) ── */
+.tk-uline2 { flex-wrap: wrap; }
+.tk-broke { min-height: 40px; color: var(--amber-text); border-color: rgba(251, 191, 36, .4); }
+.tk-search {
+  width: 100%; min-height: 44px; padding: 8px 12px; border-radius: 10px; font: inherit;
+  border: 1px solid var(--card-border); background: var(--field-bg); color: var(--text1);
+}
+.tk-search:focus-visible { outline: 2px solid var(--cyan); outline-offset: 1px; }
+.tk-uhist { font-size: 13px; color: var(--text2); border: 1px solid var(--card-border); border-radius: 12px; padding: 8px 12px; }
+.tk-uhist summary { cursor: pointer; min-height: 32px; display: flex; align-items: center; }
+.tk-uhist summary:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.tk-uhist ul { margin: 6px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; }
+.tk-uhist small { display: block; color: var(--text3); }
+.tk-uconfirm { min-height: 44px; }
+/* نوارِ ثبتِ چسبان — پایینِ برگهٔ اسکرول‌شونده می‌ماند تا روی گوشی گم نشود. */
+.tk-savebar {
+  position: sticky; bottom: 0; z-index: 2; display: grid; gap: 6px; padding: 10px 0 2px;
+  background: linear-gradient(to top, var(--bg2) 75%, transparent);
+}
+.tk-savebar small { color: var(--text2); font-size: 12px; overflow-wrap: anywhere; }
+.tk-savebar .tk-save { min-height: 48px; }

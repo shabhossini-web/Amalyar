@@ -163,6 +163,9 @@ try {
   const groupTexts = await groups.allInnerTexts();
   ok(groupTexts.some((t) => t.includes('پیش‌فرض‌های من')) && groupTexts.some((t) => t.includes(`از ستِ SE-${tag}`)) && groupTexts.some((t) => t.includes(`ارسالیِ حوالهٔ ${tCode}`)) && groupTexts.some((t) => t.includes('از کیف/انبار')), 'چهار گروه: پیش‌فرض‌ها، از ست، ارسالیِ حواله، از کیف/انبار');
   const line = (name) => sheet.locator('.tk-uline2', { hasText: name });
+  /* ب-۱: اقلامِ کیف/انبارِ بی‌عدد پشتِ «+ قلمِ دیگر» می‌روند تا برگه شلوغ نشود. */
+  ok(await line(`ژلِ هادی ${tag}`).count() === 0, 'ژلِ بی‌عدد پیش از «+ قلمِ دیگر» دیده نمی‌شود');
+  await sheet.locator('.tk-chip.dash', { hasText: 'قلمِ دیگر' }).click();
   ok((await line(`الکترود ${tag}`).innerText()).includes('۲۰ در ست') && (await line(`کابلِ رابط ${tag}`).innerText()).includes('چندبارمصرف') && (await line(`ژلِ هادی ${tag}`).innerText()).includes('۳ در انبار') && (await line(`گازِ استریل ${tag}`).innerText()).includes('۱۰ ارسالی'), 'زیرنویسِ هر قلم: سقف و منبعش');
   ok(await sheet.locator('.tk-uline2', { hasText: `پیچ` }).count() === 0, 'کالای بی‌تیک در برگه نیست');
   const more = async (name, n) => { for (let i = 0; i < n; i++) await line(name).locator(`button[aria-label^="بیشتر"]`).click(); };
@@ -177,7 +180,7 @@ try {
 
   console.log('\n۳) پیش‌فرضِ شخصی — ذخیره، سپس ثبت');
   await toastGone(pageA);
-  await sheet.locator('.tk-chip.dash').click();
+  await sheet.locator('.tk-chip.dash', { hasText: 'ذخیرهٔ این ترکیب' }).click();
   await sheet.locator('.tk-preset-name input').fill(`ستونِ فقرات ${tag}`);
   await sheet.locator('.tk-preset-name .tk-ghost', { hasText: 'ذخیره' }).click();
   await pageA.waitForFunction(() => /پیش‌فرضِ «.+» ذخیره شد/.test(document.querySelector('.tk-toast.on')?.textContent ?? ''), null, { timeout: 8000 });

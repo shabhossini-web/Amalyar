@@ -282,3 +282,36 @@ export class StockAssistantDto {
   @IsArray({ message: 'پیام‌ها نامعتبرند' }) @ArrayMinSize(1, { message: 'پیامی برای دستیار نیست' }) @ArrayMaxSize(60, { message: 'گفتگو طولانی است؛ از نو شروع کنید' })
   messages!: any[];
 }
+
+export class UsageConfirmDto {
+  @IsBoolean({ message: 'وضعیتِ تأیید نامعتبر است' })
+  confirmed!: boolean;
+}
+
+export class UsageDamageDto {
+  @Type(() => Number) @IsInt({ message: 'ست نامعتبر است' }) @Min(1)
+  setLotId!: number;
+
+  @Type(() => Number) @IsInt({ message: 'قلم نامعتبر است' }) @Min(1)
+  itemId!: number;
+
+  @Type(() => Number) @IsInt({ message: 'تعداد باید عدد باشد' }) @Min(1, { message: 'تعداد باید دستِ‌کم ۱ باشد' })
+  quantity!: number;
+
+  @IsOptional() @IsString() @MaxLength(200, { message: 'یادداشت طولانی است' })
+  note?: string;
+}
+
+export class UsageDefaultLineDto {
+  @Type(() => Number) @IsInt({ message: 'کالا نامعتبر است' }) @Min(1)
+  itemId!: number;
+
+  @Type(() => Number) @IsInt({ message: 'تعداد باید عدد باشد' }) @Min(1, { message: 'تعداد باید دستِ‌کم ۱ باشد' })
+  quantity!: number;
+}
+
+/** «مصرفیِ پیش‌فرضِ هر بیمار» — فهرستِ خالی یعنی «پیش‌فرض ندارد». */
+export class UsageDefaultsDto {
+  @IsArray({ message: 'فهرست نامعتبر است' }) @ArrayMaxSize(50, { message: 'حداکثر ۵۰ قلم' }) @ValidateNested({ each: true }) @Type(() => UsageDefaultLineDto)
+  lines!: UsageDefaultLineDto[];
+}

@@ -43,7 +43,7 @@ try {
   const routes = new (cls('patients/routes.service', 'RoutesService'))(prisma, audit, {}, {}, settings, places, { queueStaffNotice: async () => ({}), sweep: async () => ({ sent: 0 }) });
   const inventory = new (cls('patients/inventory.service', 'InventoryService'))(prisma, audit, noConflict, settings, places, events, routes);
   const sets = new (cls('patients/set-stock.service', 'SetStockService'))(prisma, audit, settings, inventory);
-  const usage = new (cls('patients/usage.service', 'VisitUsageService'))(prisma, audit, events, inventory, sets);
+  const usage = new (cls('patients/usage.service', 'VisitUsageService'))(prisma, audit, events, inventory, sets, settings);
   const board = new (cls('patients/transport-board.service', 'TransportBoardService'))(prisma, audit, inventory, routes);
   const transport = new (cls('patients/transport.service', 'TransportService'))(prisma, audit, places, routes, inventory);
   const tech = new (cls('patients/tech.service', 'TechService'))(prisma, {}, {}, {}, events, routes);
@@ -191,6 +191,29 @@ try {
   await rejects(() => usage.sheet(visit.id, otherUser), /در کارهای شما نیست/, 'another tech');
   assert.equal((await usage.sheet(visit.id, { id: admin.id, level: 6 })).sets.length, 1, 'the super admin reads every sheet');
   pass('limits are the set, the waybill and the warehouse; strangers and unflagged items are refused in Persian');
+
+  // ── 5b) ب-۱/ب-۲: خرابیِ قلمِ چندبارمصرفِ ست از برگه، کاربرِ شرکت، تأییدِ نهایی، سابقه ──
+  sh = await usage.damage(visit.id, { setLotId: setLot.id, itemId: cable.id, quantity: 1 }, techUser);
+  assert.equal(sh.writtenOff, false, 'a multi-use part goes to «خرابی‌ها», not out of stock');
+  assert.equal(await at(cableLot.id, setLoc), 1);
+  assert.equal(await at(cableLot.id, 'خرابی‌ها'), 1);
+  await rejects(() => usage.damage(visit.id, { setLotId: setLot.id, itemId: hidden.id, quantity: 1 }, techUser), /در ستِ همراهِ این عمل نیست/, 'only parts of this surgery\'s set');
+  await rejects(() => usage.damage(visit.id, { setLotId: setLot.id, itemId: cable.id, quantity: 1 }, otherUser), /در کارهای شما نیست/, 'another tech cannot');
+  const supervisor = { id: admin.id, level: 4 };
+  assert.equal((await usage.sheet(visit.id, supervisor)).canConfirm, true, 'a company user (supervisor) reads and may confirm');
+  await rejects(() => usage.confirm(visit.id, true, techUser), /سوپروایزر/, 'a tech cannot confirm');
+  sh = await usage.confirm(visit.id, true, supervisor);
+  assert.ok(sh.confirmed?.at);
+  const techView = await usage.sheet(visit.id, techUser);
+  assert.equal(techView.editable, false, 'after confirmation the tech only reads');
+  await rejects(() => usage.save(visit.id, { lines: [{ source: 'set', itemId: electrode.id, setLotId: setLot.id, quantity: 2 }] }, techUser), /تأییدِ نهایی/, 'a tech cannot edit a confirmed sheet');
+  sh = await usage.save(visit.id, { lines: [{ source: 'set', itemId: electrode.id, setLotId: setLot.id, quantity: 2 }] }, supervisor);
+  assert.equal(sh.sets[0].lines.find(l => l.itemId === electrode.id).quantity, 2, 'the company user edits a confirmed sheet');
+  assert.ok(sh.history.some(h => h.kind === 'confirm') && sh.history.some(h => h.kind === 'edit' && h.changes.some(c => c.from === 1 && c.to === 2)), 'history: who confirmed and what changed');
+  sh = await usage.confirm(visit.id, false, supervisor);
+  assert.equal(sh.confirmed, null);
+  assert.equal((await usage.sheet(visit.id, techUser)).editable, true, 'unconfirmed → the tech edits again');
+  pass('ب: multi-use damage from the sheet, company user edits and confirms, the tech is locked out after confirmation, history');
 
   // ── 6) the driver counts packages at pickup: expected = sent − used ──
   await inventory.releaseTransfer(t.id, { pickupAt: '17:00', leftAt: 'CSR' }, techUser);

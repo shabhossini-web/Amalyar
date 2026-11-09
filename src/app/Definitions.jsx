@@ -1,4 +1,5 @@
 import HospitalDirectory from './HospitalDirectory.jsx';
+import UsageDefaults from './UsageDefaults.jsx';
 import AssistedTextarea from '../ui/AssistedTextarea.jsx';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
@@ -150,6 +151,17 @@ const SECTIONS = [
     fields: [],
   },
   {
+    /* ب-۳ (مالک، ۱۴۰۵/۰۸/۱۸): یک فهرستِ مصرفیِ پیش‌فرض برای هر بیمارِ نورومانیتورینگ — برگهٔ مصرفی با آن پر می‌شود. */
+    key: 'usage-defaults',
+    label: 'مصرفیِ پیش‌فرض',
+    path: '/stock/usage-defaults',
+    custom: true,
+    title: () => '',
+    sub: () => '',
+    empty: '',
+    fields: [],
+  },
+  {
     key: 'delivery-places',
     label: 'محل‌های تحویل',
     path: '/delivery-places',
@@ -216,6 +228,8 @@ const SECTION_NEEDS = {
   items: (on, implant) => on('inventory') || implant,
   // چیپ‌های محلِ تحویل در سه صفحه‌اند: حمل‌ونقل، چینش و پنلِ کارشناسی.
   'delivery-places': (on) => on('inventory') || on('transport') || on('dispatch') || on('tech'),
+  // مصرفیِ پیش‌فرض به کالاهای انبار وصل است و برگهٔ مصرفیِ پنلِ کارشناسی را پر می‌کند.
+  'usage-defaults': (on) => on('inventory') && on('tech'),
 };
 /** مطب: پرکاربردها جلو (بقیه به همان ترتیبِ `SECTIONS` پشتِ این‌ها). */
 const CLINIC_ORDER = ['surgeons', 'procedure-types', 'diagnoses', 'visit-topics', 'note-templates', 'internal-codes', 'hospitals'];
@@ -313,7 +327,7 @@ export default function Definitions() {
     try {
       // بعضی بخش‌ها برای فهرستِ مدیریتی مسیرِ متفاوت می‌خواهند (مثلاً محل‌های
       // تحویل که غیرفعال‌ها هم باید دیده شوند تا بشود دوباره فعالشان کرد).
-      setRows(await api(section.listPath ?? section.path));
+      setRows(section.custom ? [] : await api(section.listPath ?? section.path));
     } catch (e) {
       setToast(e.message);
       setRows([]);
@@ -366,7 +380,7 @@ export default function Definitions() {
         ]}
       />
 
-      {merging ? <NameMerge onToast={setToast} /> : section.movedTo ? (
+      {merging ? <NameMerge onToast={setToast} /> : section.custom ? <UsageDefaults onToast={setToast} /> : section.movedTo ? (
         <div className="df-moved">
           <b>کالاها به کاشیِ «انبار» منتقل شد</b>
           <p>تعریفِ کالا، نوع و محتویاتِ ست حالا در انبار است تا انباردار هم بی‌دسترسیِ مدیریتی بسازد. همان کاتالوگ است، فقط جایش عوض شده.</p>

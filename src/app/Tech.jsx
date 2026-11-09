@@ -975,7 +975,8 @@ function UsageBlock({ visit: v, onOpen }) {
 
 const allUsageLines = (sheet) => [...sheet.sets.flatMap((b) => b.lines), ...sheet.transfers.flatMap((b) => b.lines), ...sheet.warehouse];
 const usageSub = (l) => {
-  if (l.mode === 'use') return `چندبارمصرف · تا امروز ${num(l.usesTotal)} بار — فقط شمرده می‌شود`;
+  /* سوزنِ منگنه چند بار مصرف و هر بار استریل می‌شود — «هر بار شمرده می‌شود» (مالک، ۱۴۰۵/۰۸/۱۸). */
+  if (l.mode === 'use') return `چندبارمصرف · این بار شمرده می‌شود، از موجودی کم نمی‌شود · تا امروز ${num(l.usesTotal)} بار`;
   if (l.source === 'set') return `${num(l.limit)} در ست · یک‌بارمصرف — از ست کم می‌شود`;
   if (l.source === 'transfer') return `${num(l.limit)} ارسالی · یک‌بارمصرف — از حواله کم می‌شود`;
   return `${num(l.limit)} در انبار · یک‌بارمصرف — از موجودیِ انبار کم می‌شود`;
@@ -993,12 +994,16 @@ export function ConsumeSheet({ visit, onClose, onToast, onDone }) {
   const [busy, setBusy] = useState(false);
   const [naming, setNaming] = useState(false);
   const [presetName, setPresetName] = useState('');
+  const [more, setMore] = useState(false);       // «+ قلمِ دیگر از کیف»
+  const [moreQ, setMoreQ] = useState('');
+  const [damaging, setDamaging] = useState(null); // { line, setLotId, n }
   const { prefs, save: savePrefs } = usePrefs();
   const presets = prefs.usagePresets ?? [];
 
   useEffect(() => {
     api(`/stock/visits/${visit.id}/usage`)
-      .then((sh) => { setSheet(sh); setQty(Object.fromEntries(allUsageLines(sh).map((l) => [l.key, l.quantity]))); })
+      /* ب-۳: بیمارِ بی‌ثبت با «مصرفیِ پیش‌فرض» پر می‌شود؛ پیشنهاد است و تا «ثبت» چیزی از انبار کم نمی‌شود. */
+      .then((sh) => { setSheet(sh); setQty(Object.fromEntries(allUsageLines(sh).map((l) => [l.key, l.quantity || l.suggested || 0]))); })
       .catch((e) => onToast(e.message));
   }, [visit.id, onToast]);
 
@@ -1032,6 +1037,21 @@ export function ConsumeSheet({ visit, onClose, onToast, onDone }) {
     try { await savePrefs('usagePresets', presets.filter((x) => x.name !== p.name)); onToast(`پیش‌فرضِ «${p.name}» حذف شد`); }
     catch (e) { onToast(e.message); }
   };
+  const reload = (sh) => { setSheet(sh); setQty(Object.fromEntries(allUsageLines(sh).map((l) => [l.key, l.quantity]))); };
+  const confirm = async (on) => {
+    setBusy(true);
+    try { reload(await api(`/stock/visits/${visit.id}/usage/confirm`, { method: 'POST', body: { confirmed: on } })); onToast(on ? 'مصرفی تأییدِ نهایی شد' : 'تأیید برداشته شد'); }
+    catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
+  const damage = async () => {
+    const { line, n } = damaging;
+    setBusy(true);
+    try {
+      const r = await api(`/stock/visits/${visit.id}/usage/damage`, { method: 'POST', body: { setLotId: line.setLotId, itemId: line.itemId, quantity: n } });
+      setSheet(r); setDamaging(null);
+      onToast(r.writtenOff ? `${num(n)} ${line.name} از ست و از موجودی کم شد` : `${num(n)} ${line.name} به «خرابی‌ها» رفت تا انبار تصمیم بگیرد`);
+    } catch (e) { onToast(e.message); } finally { setBusy(false); }
+  };
   const submit = async () => {
     setBusy(true);
     try {
@@ -1052,10 +1072,17 @@ export function ConsumeSheet({ visit, onClose, onToast, onDone }) {
         <div key={l.key} className="tk-line tk-uline2">
           <div className="tk-uinfo"><b>{l.name}</b><small>{usageSub(l)}</small></div>
           <Stepper value={val(l)} onChange={(n) => setVal(l, n)} max={l.limit ?? null} unit={l.mode === 'use' ? 'بار' : l.unit} label={l.name} disabled={locked} />
+          {l.source === 'set' && l.mode === 'use' && !locked && (
+            <button type="button" className="tk-ghost tk-broke" onClick={() => setDamaging({ line: l, n: 1 })} aria-label={`ثبتِ خرابیِ ${l.name}`}>خراب شد</button>
+          )}
         </div>
       ))}
     </div>
   );
+  /* کیف/انبار: فقط آنچه عدد دارد پیدا است؛ بقیه پشتِ «+ قلمِ دیگر» با جستجو (ب-۱). */
+  const wh = sheet?.warehouse ?? [];
+  const whShown = wh.filter((l) => val(l) > 0 || l.quantity > 0);
+  const whRest = wh.filter((l) => !whShown.includes(l) && (!moreQ.trim() || l.name.includes(moreQ.trim())));
 
   return (
     <Overlay backdrop="tk-overlay" panel="tk-sheet" as="section" onClose={onClose} closable={!busy}>
@@ -1066,7 +1093,11 @@ export function ConsumeSheet({ visit, onClose, onToast, onDone }) {
       {!sheet ? <div className="tk-empty">در حال بارگذاری…</div> : (
         <div className="tk-sheet-body">
           {sheet.awaiting && <p className="tk-note warn">اول «تحویل گرفتم» یا «با مغایرت» را روی ست بزنید؛ ستی که هنوز نگرفته‌اید مصرف ندارد.</p>}
-          {!sheet.editable && <p className="tk-note">حوالهٔ این عمل بسته شده؛ مصرفیِ ثبت‌شده فقط خواندنی است.</p>}
+          {sheet.invoiced ? <p className="tk-note">برای این بیمار فاکتورِ <bdi dir="ltr">{sheet.invoiced}</bdi> صادر شده؛ مصرفی فقط خواندنی است.</p>
+            : sheet.confirmed && !sheet.editable ? <p className="tk-note ok">مصرفیِ این بیمار تأییدِ نهایی شده{sheet.confirmed.by ? ` (${sheet.confirmed.by}، ${clock(sheet.confirmed.at)})` : ''}؛ برای اصلاح به شرکت خبر دهید.</p>
+            : !sheet.editable ? <p className="tk-note">حوالهٔ این عمل بسته شده؛ مصرفیِ ثبت‌شده فقط خواندنی است.</p> : null}
+          {sheet.confirmed && sheet.editable && <p className="tk-note ok">تأییدِ نهایی{sheet.confirmed.by ? `: ${sheet.confirmed.by}، ${clock(sheet.confirmed.at)}` : ''} — شما به‌عنوانِ کاربرِ شرکت هنوز می‌توانید اصلاح کنید.</p>}
+          {sheet.suggested && !locked && <p className="tk-note">عددها از «مصرفیِ پیش‌فرض» پر شده‌اند؛ عددِ واقعیِ این بیمار را اصلاح و ثبت کنید.</p>}
 
           {lines.length === 0 ? (
             <p className="tk-note">کالایی برای ثبتِ مصرفی نیست — در انبار برای کالا تیکِ «نمایش در پنلِ کارشناسی» را بزنید، یا ستِ همین عمل را تحویل بگیرید.</p>
@@ -1095,18 +1126,76 @@ export function ConsumeSheet({ visit, onClose, onToast, onDone }) {
               )}
               {sheet.sets.map((b) => group(`set:${b.setLotId}`, <>از ستِ <bdi dir="ltr">{b.serialNo || b.name}</bdi> (همراهِ همین عمل) · حوالهٔ <bdi dir="ltr">{b.code}</bdi></>, b.lines))}
               {sheet.transfers.map((b) => group(`transfer:${b.transferId}`, <>ارسالیِ حوالهٔ <bdi dir="ltr">{b.code}</bdi> (خارج از ست)</>, b.lines))}
-              {group('warehouse', 'مصرفی‌های پنلِ کارشناسی (از کیف/انبار)', sheet.warehouse)}
+              {group('warehouse', 'از کیف/انبار', whShown)}
+              {!locked && wh.length > whShown.length && (
+                <div className="tk-group">
+                  {!more ? (
+                    <button type="button" className="tk-chip dash" onClick={() => setMore(true)}>+ قلمِ دیگر از کیف/انبار</button>
+                  ) : (
+                    <>
+                      <input className="tk-search" value={moreQ} onChange={(e) => setMoreQ(e.target.value)} placeholder="جستجوی قلم…" aria-label="جستجوی قلمِ دیگر" />
+                      {whRest.map((l) => (
+                        <div key={l.key} className="tk-line tk-uline2">
+                          <div className="tk-uinfo"><b>{l.name}</b><small>{usageSub(l)}</small></div>
+                          <Stepper value={val(l)} onChange={(n) => setVal(l, n)} max={l.limit ?? null} unit={l.mode === 'use' ? 'بار' : l.unit} label={l.name} />
+                        </div>
+                      ))}
+                      {!whRest.length && moreQ.trim() && <p className="tk-note">قلمی با این نام نیست.</p>}
+                    </>
+                  )}
+                </div>
+              )}
               <p className="tk-note">
                 {consumed.length ? `جمع: ${consumed.map((l) => `${num(val(l))} ${l.name}`).join(' و ')} از موجودی کم می‌شود` : 'هنوز چیزی از موجودی کم نمی‌شود'}
                 {counted.length ? `؛ ${counted.map((l) => l.name).join(' و ')} فقط شمرده می‌شود` : ''}. اصلاح تا بسته‌شدنِ حواله ممکن است.
               </p>
+              {sheet.history?.length > 0 && (
+                <details className="tk-uhist">
+                  <summary>سابقهٔ ثبت و اصلاح ({num(sheet.history.length)})</summary>
+                  <ul>
+                    {sheet.history.map((h, i) => (
+                      <li key={i}>
+                        <b>{h.kind === 'edit' ? 'ثبت/اصلاح' : h.kind === 'confirm' ? 'تأییدِ نهایی' : 'برداشتنِ تأیید'}</b>
+                        {' · '}{h.by ?? 'نامعلوم'} · {faDate(h.at)} {clock(h.at)}
+                        {h.changes.length > 0 && <small>{h.changes.map((c) => `${c.name}: ${num(c.from)} ← ${num(c.to)}`).join('، ')}</small>}
+                      </li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+              {sheet.canConfirm && (
+                <button type="button" className="tk-ghost tk-uconfirm" disabled={busy} onClick={() => confirm(!sheet.confirmed)}>
+                  {sheet.confirmed ? 'برداشتنِ تأییدِ نهایی' : 'تأییدِ نهاییِ مصرفی'}
+                </button>
+              )}
               {!locked && (
-                <button type="button" className="tk-save" disabled={busy} onClick={submit}>{busy ? 'در حال ثبت…' : 'ثبتِ مصرفی'}</button>
+                /* نوارِ ثبتِ چسبان (ب-۱) — روی گوشی ته برگه گم نمی‌شود؛ خلاصه همان «جمع»ِ بالای آن است. */
+                <div className="tk-savebar">
+                  <button type="button" className="tk-save" disabled={busy} onClick={submit}>{busy ? 'در حال ثبت…' : 'ثبتِ مصرفی'}</button>
+                </div>
               )}
             </>
           )}
         </div>
       )}
+      <AnimatePresence>
+        {damaging && (
+          <Overlay backdrop="tk-overlay" panel="tk-sheet sm" as="section" onClose={() => !busy && setDamaging(null)} closable={!busy}>
+            <header className="tk-sheet-head">
+              <b>خرابی — {damaging.line.name}</b>
+              <button type="button" className="tk-x" onClick={() => setDamaging(null)} aria-label="بستن"><Close width="17" height="17" /></button>
+            </header>
+            <div className="tk-sheet-body">
+              <p className="tk-note">از ست بیرون می‌آید و به «خرابی‌ها»ی انبار می‌رود تا اسقاط یا تعمیر شود.</p>
+              <div className="tk-line tk-uline2">
+                <div className="tk-uinfo"><b>چند عدد خراب شد؟</b></div>
+                <Stepper value={damaging.n} onChange={(n) => setDamaging((d) => ({ ...d, n: Math.max(1, n) }))} unit={damaging.line.unit} label="تعدادِ خراب" />
+              </div>
+              <button type="button" className="tk-save" disabled={busy} onClick={damage}>{busy ? 'در حال ثبت…' : 'ثبتِ خرابی'}</button>
+            </div>
+          </Overlay>
+        )}
+      </AnimatePresence>
     </Overlay>
   );
 }

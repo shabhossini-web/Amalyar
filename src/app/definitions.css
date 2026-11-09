@@ -352,3 +352,24 @@
 .df-moved b { font-size: 14px; }
 .df-moved p { margin: 0; font-size: 12.5px; line-height: 1.9; color: var(--text2); }
 .df-moved .df-add { text-decoration: none; }
+
+/* ── مصرفیِ پیش‌فرضِ هر بیمار (ب-۳) ── */
+.df-usage { display: grid; gap: 12px; }
+.df-usage h2 { margin: 0; font-size: 17px; }
+.df-usage-list { display: grid; gap: 8px; }
+.df-usage-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) 84px auto 44px; align-items: center; gap: 8px;
+  padding: 8px 12px; border-radius: 12px; border: 1px solid var(--card-border); background: var(--row-bg);
+}
+.df-usage-row b { min-width: 0; overflow-wrap: anywhere; }
+.df-usage-q input { width: 100%; min-height: 44px; text-align: center; border-radius: 10px; border: 1px solid var(--card-border); background: var(--field-bg); color: var(--text1); font: inherit; }
+.df-usage-u { color: var(--text3); font-size: 13px; }
+.df-usage-x { min-width: 44px; min-height: 44px; border-radius: 10px; border: 1px solid rgba(248, 113, 113, .35); background: transparent; color: var(--red-text); cursor: pointer; display: grid; place-items: center; }
+.df-usage-x:focus-visible, .df-usage-q input:focus-visible, .df-usage-hits button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
+.df-usage-hits { display: grid; gap: 6px; margin-top: 6px; }
+.df-usage-hits button {
+  display: flex; justify-content: space-between; gap: 8px; text-align: start; min-height: 44px; padding: 8px 12px; cursor: pointer;
+  border-radius: 10px; border: 1px solid var(--card-border); background: rgba(var(--veil-rgb), .04); color: var(--text1); font: inherit;
+}
+.df-usage-hits span { color: var(--text3); font-size: 13px; }
+.df-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

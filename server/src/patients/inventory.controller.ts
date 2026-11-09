@@ -6,7 +6,7 @@ import { PermissionGuard } from '../auth/permission.guard';
 import { RequirePermissions } from '../auth/permission.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { InventoryService } from './inventory.service';
-import { AdjustDto, LotCreateDto, LotPatchDto, MovementDto, QuantityNoteDto, ReleaseDto, ReturnCountDto, SetBuildDto, StockAssistantDto, SetFillDto, SetMoveDto, TransferReceiptDto, TransferReceiveDto, TransferSendDto, TransferUsageDto, VisitUsageDto } from './dto/inventory.dto';
+import { AdjustDto, LotCreateDto, LotPatchDto, MovementDto, QuantityNoteDto, ReleaseDto, ReturnCountDto, SetBuildDto, StockAssistantDto, UsageConfirmDto, UsageDamageDto, UsageDefaultsDto, SetFillDto, SetMoveDto, TransferReceiptDto, TransferReceiveDto, TransferSendDto, TransferUsageDto, VisitUsageDto } from './dto/inventory.dto';
 import { SetStockService } from './set-stock.service';
 import { StockAssistantService } from './stock-assistant.service';
 import { VisitUsageService } from './usage.service';
@@ -307,6 +307,38 @@ export class InventoryController {
   @Post('visits/:visitId/usage')
   saveUsage(@Param('visitId', ParseIntPipe) visitId: number, @Body() dto: VisitUsageDto, @CurrentUser() user: any) {
     return this.usages.save(visitId, dto, user);
+  }
+
+  /// «مصرفیِ پیش‌فرضِ هر بیمار» (ب-۳) — خواندن برای هر انباری، نوشتن با مجوزِ تعریفِ کالا.
+  @RequirePermissions('inventory.read')
+  @Get('usage-defaults')
+  usageDefaults() {
+    return this.usages.defaults();
+  }
+
+  @RequirePermissions('inventory.items')
+  @Post('usage-defaults')
+  @HttpCode(200)
+  saveUsageDefaults(@Body() dto: UsageDefaultsDto, @CurrentUser() user: any) {
+    return this.usages.saveDefaults(dto.lines, user);
+  }
+
+  /// «تأییدِ نهاییِ» مصرفیِ بیمار (ب-۲) — سرور سطحِ سوپروایزر+ را می‌سنجد.
+  @Feature('tech')
+  @RequirePermissions('stock.consume')
+  @HttpCode(200)
+  @Post('visits/:visitId/usage/confirm')
+  confirmUsage(@Param('visitId', ParseIntPipe) visitId: number, @Body() dto: UsageConfirmDto, @CurrentUser() user: any) {
+    return this.usages.confirm(visitId, dto.confirmed, user);
+  }
+
+  /// «خراب شد»ِ قلمِ داخلِ ستِ همراهِ عمل، از برگهٔ مصرفی (ب-۱).
+  @Feature('tech')
+  @RequirePermissions('stock.consume')
+  @HttpCode(200)
+  @Post('visits/:visitId/usage/damage')
+  damageUsage(@Param('visitId', ParseIntPipe) visitId: number, @Body() dto: UsageDamageDto, @CurrentUser() user: any) {
+    return this.usages.damage(visitId, dto, user);
   }
 
   @RequirePermissions('inventory.write')

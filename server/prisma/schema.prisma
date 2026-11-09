@@ -1316,6 +1316,9 @@ model Visit {
   /// (the surgeon-prescribed items).
   requiredItems Json? @map("required_items")
   surgeonInstructions String? @map("surgeon_instructions")
+  /// «تأییدِ نهاییِ مصرفی» (ب-۲، مالک ۱۴۰۵/۰۸/۱۸): پس از آن کارشناس فقط می‌بیند؛ کاربرِ شرکت (سوپروایزر+) اصلاح یا برمی‌دارد.
+  usageConfirmedAt   DateTime? @map("usage_confirmed_at")
+  usageConfirmedById Int?      @map("usage_confirmed_by_id")
   invoices       InvoiceDocument[]
   labOrders      LabOrder[]
   imagingOrders  ImagingOrder[]
