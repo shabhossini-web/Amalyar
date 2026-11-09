@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsISO8601, IsOptional, IsString, MaxLength, Min, MinLength, ValidateIf, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsArray, IsBoolean, IsIn, IsInt, IsISO8601, IsOptional, IsString, MaxLength, Min, MinLength, ValidateIf, ValidateNested } from 'class-validator';
 
 export class LotCreateDto {
   @Type(() => Number) @IsInt({ message: 'کالای انتخابی نامعتبر است' })
@@ -275,4 +275,10 @@ export class VisitUsageDto {
   @IsArray({ message: 'ردیف‌های مصرفی نامعتبر است' }) @ArrayMinSize(1, { message: 'دستِ‌کم یک ردیف لازم است' })
   @ValidateNested({ each: true }) @Type(() => VisitUsageLineDto)
   lines!: VisitUsageLineDto[];
+}
+
+/** دستیارِ انباردار — تاریخچهٔ گفتگو؛ سرور خودش پاک‌سازی می‌کند (فقط user/assistantِ متنی). */
+export class StockAssistantDto {
+  @IsArray({ message: 'پیام‌ها نامعتبرند' }) @ArrayMinSize(1, { message: 'پیامی برای دستیار نیست' }) @ArrayMaxSize(60, { message: 'گفتگو طولانی است؛ از نو شروع کنید' })
+  messages!: any[];
 }

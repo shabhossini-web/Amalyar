@@ -169,3 +169,4 @@ sms-filter-ui
 sms-filter-probe
 visit-delete-release
 set-build-ui
+stock-assistant

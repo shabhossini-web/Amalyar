@@ -4,9 +4,10 @@ import { api } from '../lib/api.js';
 import { faDate, isoToJStr, jStr, jStrToIso, jToday, toEnDigits } from '../lib/jalali.js';
 import JDate from './JDate.jsx';
 import './inventory.css';
-import { Alert, Box, Boxes, Close, Pencil, Plus, Route, Tag, Trash, Wave } from '../ui/icons.jsx';
+import { Alert, Box, Boxes, Close, Pencil, Plus, Route, Sparkle, Tag, Trash, Wave } from '../ui/icons.jsx';
 import './users.css'; // کلیدِ دوحالتهٔ `us-switch` (قانونِ ۲۱: صریح ایمپورت)
 import PageHeader from '../ui/PageHeader.jsx';
+import StockAssistant from './StockAssistant.jsx';
 import Tabs from '../ui/Tabs.jsx';
 import Overlay, { ConfirmDialog } from '../ui/Overlay.jsx';
 import { useStagger } from '../ui/stagger.js';
@@ -55,6 +56,11 @@ export default function Inventory() {
   const openSet = (serial) => { setSetFocus(serial ?? ''); setTab('sets'); };
   /* «کالا ذخیره شد → موجودیِ اولیه؟» (الف-۱) */
   const [stockFor, setStockFor] = useState(null);
+  /* دستیارِ انباردار (الف-۴) — فقط وقتی دستیارِ هوشِ مصنوعیِ شرکت پیکربندی شده. */
+  const [aiOn, setAiOn] = useState(false);
+  const [assistant, setAssistant] = useState(false);
+  const [rev, setRev] = useState(0); // پس از ثبت از دستیار، تبِ باز دوباره بار شود
+  useEffect(() => { api('/stock/assistant/status').then((r) => setAiOn(!!r.enabled)).catch(() => setAiOn(false)); }, []);
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -93,7 +99,13 @@ export default function Inventory() {
   return (
     <div className="iv">
       <div className="iv-bg" aria-hidden="true" />
-      <PageHeader tool="inventory" sub="موجودی جمعِ دفترِ حرکت است — هر ورود و مصرف ردیفِ خودش را دارد و پاک نمی‌شود." />
+      <PageHeader tool="inventory" sub="موجودی جمعِ دفترِ حرکت است — هر ورود و مصرف ردیفِ خودش را دارد و پاک نمی‌شود.">
+        {aiOn && (
+          <button type="button" className="iv-ai" onClick={() => setAssistant(true)}>
+            <Sparkle width="16" height="16" aria-hidden="true" /> دستیارِ انباردار
+          </button>
+        )}
+      </PageHeader>
 
       <Tabs
         label="بخش‌های انبار"
@@ -109,9 +121,9 @@ export default function Inventory() {
       />
 
       {tab === 'items' ? (
-        <Items onToast={setToast} onOpenSet={openSet} onStock={setStockFor} />
+        <Items key={`i${rev}`} onToast={setToast} onOpenSet={openSet} onStock={setStockFor} />
       ) : tab === 'sets' ? (
-        <Sets onToast={setToast} focus={setFocus} />
+        <Sets key={`s${rev}`} onToast={setToast} focus={setFocus} />
       ) : tab === 'assets' ? (
         <Assets onToast={setToast} />
       ) : tab === 'transfers' ? (
@@ -241,6 +253,10 @@ export default function Inventory() {
             onError={setToast}
           />
         )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {assistant && <StockAssistant onClose={() => setAssistant(false)} onChanged={() => { setRev((n) => n + 1); load(); }} />}
       </AnimatePresence>
 
       {toast && <div className="iv-toast" role="status">{toast}</div>}

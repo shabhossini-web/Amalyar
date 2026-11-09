@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseIntPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, ParseIntPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { FeatureGuard } from '../auth/feature.guard';
 import { Feature } from '../auth/feature.decorator';
@@ -6,8 +6,9 @@ import { PermissionGuard } from '../auth/permission.guard';
 import { RequirePermissions } from '../auth/permission.decorator';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { InventoryService } from './inventory.service';
-import { AdjustDto, LotCreateDto, LotPatchDto, MovementDto, QuantityNoteDto, ReleaseDto, ReturnCountDto, SetBuildDto, SetFillDto, SetMoveDto, TransferReceiptDto, TransferReceiveDto, TransferSendDto, TransferUsageDto, VisitUsageDto } from './dto/inventory.dto';
+import { AdjustDto, LotCreateDto, LotPatchDto, MovementDto, QuantityNoteDto, ReleaseDto, ReturnCountDto, SetBuildDto, StockAssistantDto, SetFillDto, SetMoveDto, TransferReceiptDto, TransferReceiveDto, TransferSendDto, TransferUsageDto, VisitUsageDto } from './dto/inventory.dto';
 import { SetStockService } from './set-stock.service';
+import { StockAssistantService } from './stock-assistant.service';
 import { VisitUsageService } from './usage.service';
 import { DefinitionsService } from './definitions.service';
 import { ItemCreateDto, ItemPatchDto } from './definitions.controller';
@@ -22,7 +23,7 @@ import { ItemCreateDto, ItemPatchDto } from './definitions.controller';
 @UseGuards(JwtAuthGuard, FeatureGuard, PermissionGuard)
 @Feature('inventory')
 export class InventoryController {
-  constructor(private inv: InventoryService, private sets: SetStockService, private defs: DefinitionsService, private usages: VisitUsageService) {}
+  constructor(private inv: InventoryService, private sets: SetStockService, private assistant: StockAssistantService, private defs: DefinitionsService, private usages: VisitUsageService) {}
 
   // ── کالاها (کاتالوگ) — از تعاریفِ پایه به انبار آمده (مالک، ۱۴۰۵/۰۷/۱۱) ──
 
@@ -52,6 +53,21 @@ export class InventoryController {
   @Delete('items/:id')
   removeItem(@Param('id', ParseIntPipe) id: number) {
     return this.defs.deleteItem(id);
+  }
+
+  // ── دستیارِ انباردار (الف-۴): فقط می‌خواند و پیش‌نویس می‌دهد؛ ثبت با مسیرهای عادیِ همین کنترلر ──
+
+  @RequirePermissions('inventory.read')
+  @Get('assistant/status')
+  assistantStatus() {
+    return this.assistant.status();
+  }
+
+  @RequirePermissions('inventory.read')
+  @HttpCode(200)
+  @Post('assistant')
+  assistantAsk(@Body() dto: StockAssistantDto) {
+    return this.assistant.ask(dto.messages);
   }
 
   // ── ست به‌عنوانِ بستهٔ موجودی (بستهٔ ب) ──
